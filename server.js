@@ -35,7 +35,8 @@ const storage = multer.diskStorage({
         cb(null, uploadPath);
     },
     filename: (req, file, cb) => {
-        cb(null, Date.now() + path.extname(file.originalname));
+        const info = path.parse(file.originalname);
+        cb(null, `${info.name}(${Date.now()})${info.ext}`);
     }
 });
 
@@ -87,29 +88,28 @@ const updateCache = async (dirPath) => {
                 filename: '/uploads/' + path.join(dirPath, file),
                 thumbnail: thumbnail,
                 lastModified: stats.mtime,
-                size: stats.size
+                size: stats.size,
+                type: 'file'
             };
         }
     }));
 
-    
     fileInfos.sort((a, b) => {
         const isFolder = file => file.type === 'folder';
         const isVideo = file => ['mp4', 'webm', 'ogg', 'ts'].includes(file.filename.split('.').pop().toLowerCase());
         const isImage = file => ['jpg', 'jpeg', 'png', 'gif'].includes(file.filename.split('.').pop().toLowerCase());
-    
+
         if (isFolder(a) && !isFolder(b)) return -1;
         if (!isFolder(a) && isFolder(b)) return 1;
-        
+
         if (isVideo(a) && !isVideo(b)) return -1;
         if (!isVideo(a) && isVideo(b)) return 1;
-        
+
         if (isImage(a) && !isImage(b)) return -1;
         if (!isImage(a) && isImage(b)) return 1;
-    
+
         return new Date(b.lastModified) - new Date(a.lastModified);
     });
-    
 
     cache[dirPath] = fileInfos;
 };
@@ -136,9 +136,9 @@ app.post('/upload', upload.single('file'), async (req, res) => {
             await generateThumbnail(filePath, thumbnailPath);
             invalidateCache(currentPath); // 更新缓存
             await updateCache(currentPath); // 更新缓存
-            res.send({ 
-                filename: '/uploads/' + currentPath + '/' + req.file.filename, 
-                thumbnail: '/thumbnails/' + currentPath + '/' + req.file.filename + '.png' 
+            res.send({
+                filename: '/uploads/' + currentPath + '/' + req.file.filename,
+                thumbnail: '/thumbnails/' + currentPath + '/' + req.file.filename + '.png'
             });
         } catch (err) {
             console.error('Error generating thumbnail:', err);
@@ -154,15 +154,23 @@ app.post('/upload', upload.single('file'), async (req, res) => {
 // 获取文件列表
 app.get('/files', async (req, res) => {
     const reqPath = req.query.path || '';
-    
+    const page = parseInt(req.query.page) || 0;
+    const pageSize = parseInt(req.query.pageSize); // 每页文件数
+
     // 从缓存中获取数据
     if (cache[reqPath]) {
-        return res.send(cache[reqPath]);
+        if (!pageSize || pageSize === -1) {
+            return res.send(cache[reqPath]);
+        }
+        return res.send(cache[reqPath].slice(page * pageSize, (page + 1) * pageSize));
     }
 
     try {
         await updateCache(reqPath);
-        res.send(cache[reqPath]);
+        if (!pageSize || pageSize === -1) {
+            return res.send(cache[reqPath]);
+        }
+        return res.send(cache[reqPath].slice(page * pageSize, (page + 1) * pageSize));
     } catch (err) {
         console.error('Error fetching file list:', err);
         res.status(500).send('Failed to fetch file list.');
@@ -193,38 +201,91 @@ async function generateThumbnail(filePath, thumbnailPath) {
     });
 }
 
-// 删除文件
-app.post('/delete', (req, res) => {
-    const { filename, path: currentPath } = req.body;
+// 删除文件或文件夹
+app.post('/delete', async (req, res) => {
+    const { filename, path: currentPath, type } = req.body;
     const filePath = path.join(UPLOAD_DIR, currentPath, filename);
 
-    fs.unlink(filePath, async (err) => {
+    const deleteRecursively = async (filePath) => {
+        if (fs.lstatSync(filePath).isDirectory()) {
+            fs.readdirSync(filePath).forEach((file, index) => {
+                const curPath = path.join(filePath, file);
+                deleteRecursively(curPath);
+            });
+            fs.rmdirSync(filePath);
+        } else {
+            fs.unlinkSync(filePath);
+        }
+    };
+
+    try {
+        await deleteRecursively(filePath);
+        invalidateCache(currentPath); // 更新缓存
+        await updateCache(currentPath); // 更新缓存
+        res.send({ message: `${type} deleted successfully` });
+    } catch (err) {
+        console.error(`Error deleting ${type}:`, err);
+        res.status(500).send({ message: `Failed to delete ${type}` });
+    }
+});
+
+// 新建文件夹
+app.post('/createFolder', (req, res) => {
+    const { path: currentPath, folderName } = req.body;
+    const folderPath = path.join(UPLOAD_DIR, currentPath, folderName);
+
+    if (fs.existsSync(folderPath)) {
+        return res.status(400).send({ message: 'Folder already exists' });
+    }
+
+    fs.mkdir(folderPath, { recursive: true }, async (err) => {
         if (err) {
-            console.error('Error deleting file:', err);
-            return res.status(500).send({ message: 'Failed to delete file' });
+            console.error('Error creating folder:', err);
+            return res.status(500).send({ message: 'Failed to create folder' });
         }
 
-        const thumbnailPath = path.join(THUMB_DIR, currentPath, filename + '.png');
-        fs.unlink(thumbnailPath, async (err) => {
-            if (err && err.code !== 'ENOENT') {
-                console.error('Error deleting thumbnail:', err);
-                return res.status(500).send({ message: 'Failed to delete thumbnail' });
-            }
+        invalidateCache(currentPath); // 更新缓存
+        await updateCache(currentPath); // 更新缓存
 
-            invalidateCache(currentPath); // 更新缓存
-            await updateCache(currentPath); // 更新缓存
+        res.send({ message: 'Folder created successfully' });
+    });
+});
 
-            res.send({ message: 'File deleted successfully' });
-        });
+// 重命名文件或文件夹
+app.post('/rename', (req, res) => {
+    const { path: currentPath, oldName, newName, type } = req.body;
+    const oldPath = path.join(UPLOAD_DIR, currentPath, oldName);
+    const newPath = path.join(UPLOAD_DIR, currentPath, newName);
+
+    if (fs.existsSync(newPath)) {
+        return res.status(400).send({ message: `${type} with the same name already exists` });
+    }
+
+    fs.rename(oldPath, newPath, async (err) => {
+        if (err) {
+            console.error(`Error renaming ${type}:`, err);
+            return res.status(500).send({ message: `Failed to rename ${type}` });
+        }
+
+        invalidateCache(currentPath); // 更新缓存
+        await updateCache(currentPath); // 更新缓存
+
+        res.send({ message: `${type} renamed successfully` });
     });
 });
 
 app.post('/updateCache', async (req, res) => {
-    const currentPath = req.body.path || ''; 
-    invalidateCache(currentPath); // 更新缓存
-    await updateCache(currentPath); // 更新缓存
-    res.send(cache[currentPath]);
-})
+    try {
+        const currentPath = req.body.path || '';
+        invalidateCache(currentPath); // 更新缓存，这里需要确保该函数能处理可能的异常
+        await updateCache(currentPath); // 更新缓存，这里需要确保该函数能处理可能的异常
+        // res.send(cache[currentPath]);
+        res.send({ message: 'Update cache successfully' });
+    } catch (error) {
+        console.error('Error updating cache:', error);
+        res.status(500).send('Failed to update cache');
+    }
+});
 
 // 根路径返回 index.html
 app.get('/', (req, res) => {

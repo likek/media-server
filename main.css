@@ -1,0 +1,254 @@
+html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+}
+
+.main {
+    display: flex;
+    flex-direction: column;
+
+    height: 100%;
+    width: 100%;
+}
+
+.top {
+    padding: 0 6px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 4px;
+}
+
+.media {
+    /* flex: 1; */
+    overflow: auto;
+
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    justify-content: start;
+    padding: 10px;
+    background-color: #f9f9f9; 
+    /* align-items: flex-start; */
+}
+
+.media-item {
+    cursor: pointer;
+    padding: 15px;
+    border: 1px solid #ddd;
+    border-radius: 8px; 
+    background-color: #fff; 
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); 
+    width: 320px; 
+    min-height: 100px; 
+    overflow: hidden; 
+    text-align: left; 
+    transition: transform 0.3s ease; 
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+
+.media-item:hover {
+    transform: translateY(-5px); 
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2); 
+}
+
+img, video {
+    width: 100%;
+    height: 240px; 
+    border-radius: 4px; 
+    margin-bottom: 10px; 
+    vertical-align: middle;
+}
+
+.media-item p {
+    margin: 5px 0;
+    color: #333; 
+    font-size: 12px; 
+    line-height: 1.4; 
+    word-wrap: break-word;
+    word-break: break-all;
+    vertical-align: middle;
+}
+
+.media-item button {
+    display: inline-block;
+    margin-top: 10px;
+    background-color: #ff4d4d; 
+    color: #fff; 
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.3s ease; 
+
+    padding: 0 8px;
+    font-size: 10px;
+    height: 18px;
+    line-height: 18px;
+}
+
+.media-item button:hover {
+    background-color: #ff1a1a; 
+}
+
+.media-item a {
+    display: inline-block;
+    margin-top: 10px;
+    background-color: #3498db; 
+    color: #fff; 
+    border-radius: 4px;
+    text-decoration: none; 
+    transition: background-color 0.3s ease; 
+
+    padding: 0 8px;
+    font-size: 10px;
+    height: 18px;
+    line-height: 18px;
+}
+
+.media-item a:hover {
+    background-color: #0056b3; 
+}
+
+p {
+    margin: 0;
+}
+
+button, input[type='file'] {
+    display: inline-block;
+    padding: 4px 8px;
+    font-size: 12px;
+    font-weight: bold;
+    text-align: center;
+    text-decoration: none;
+    color: #fff;
+    background-color: #3498db;
+    border: none;
+    border-radius: 5px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    transition: background-color 0.3s, box-shadow 0.3s;
+    cursor: pointer;
+}
+
+input[type='file'] {
+    padding: 2px 4px;
+    width: 180px;
+    font-size: 12px;
+}
+
+button:hover {
+    background-color: #2980b9;
+    box-shadow: 0 6px 8px rgba(0, 0, 0, 0.1);
+}
+
+button:active {
+    background-color: #2471a3;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.path {
+    padding: 0 0 4px 0;
+    border-bottom: 1px solid #ccc;
+    text-align: right;
+}
+
+#progressBar {
+    vertical-align: middle;
+    margin: 0 2px 0 0;
+}
+
+#progressBarValue {
+    display: inline-block;
+    color: #999;
+    font-size: 10px;
+    vertical-align: middle;
+}
+
+.media-item .rename-button {
+    margin-left: 10px;
+    padding: 5px 10px;
+    background-color: #ffc107; 
+    color: #fff; 
+    border-radius: 4px;
+    text-decoration: none; 
+    transition: background-color 0.3s ease; 
+    cursor: pointer;
+}
+
+.media-item .rename-button:hover {
+    background-color: #e0a800; 
+}
+
+a[download] {
+    margin: 10px 0 0 10px;
+}
+
+.toast {
+    visibility: hidden; /* 隐藏 */
+    min-width: 250px;
+    margin-left: -125px;
+    background-color: #f0f8ff; /* 浅背景色 */
+    color: #000; /* 文字颜色 */
+    text-align: center;
+    border-radius: 2px;
+    padding: 16px;
+    position: fixed;
+    z-index: 1;
+    left: 50%;
+    top: 20px; /* 靠顶部 */
+    font-size: 17px;
+    box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.1);
+    border: 1px solid #ddd;
+}
+
+/* 显示toast通知 */
+.toast.show {
+    visibility: visible;
+    -webkit-animation: fadein 0.5s, fadeout 0.5s 2.5s;
+    animation: fadein 0.5s, fadeout 0.5s 2.5s;
+}
+
+/* 不同类型的样式 */
+.toast.info {
+    background-color: #d9edf7;
+    color: #31708f;
+}
+
+.toast.success {
+    background-color: #dff0d8;
+    color: #3c763d;
+}
+
+.toast.warn {
+    background-color: #fcf8e3;
+    color: #8a6d3b;
+}
+
+.toast.error {
+    background-color: #f2dede;
+    color: #a94442;
+}
+
+@-webkit-keyframes fadein {
+    from { top: 0; opacity: 0; }
+    to { top: 20px; opacity: 1; }
+}
+
+@keyframes fadein {
+    from { top: 0; opacity: 0; }
+    to { top: 20px; opacity: 1; }
+}
+
+@-webkit-keyframes fadeout {
+    from { top: 20px; opacity: 1; }
+    to { top: 0; opacity: 0; }
+}
+
+@keyframes fadeout {
+    from { top: 20px; opacity: 1; }
+    to { top: 0; opacity: 0; }
+}
+
