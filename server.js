@@ -1,0 +1,266 @@
+const express = require('express');
+const multer = require('multer');
+const cors = require('cors');
+const fs = require('fs');
+const path = require('path');
+const ffmpeg = require('fluent-ffmpeg');
+
+const app = express();
+const PORT = 3000;
+const UPLOAD_DIR = path.join(__dirname, 'uploads');
+const THUMB_DIR = path.join(__dirname, 'thumbnails');
+
+// 创建上传和缩略图目录
+if (!fs.existsSync(UPLOAD_DIR)) {
+    fs.mkdirSync(UPLOAD_DIR);
+}
+
+if (!fs.existsSync(THUMB_DIR)) {
+    fs.mkdirSync(THUMB_DIR);
+}
+
+// 缓存对象
+const cache = {};
+
+// 配置 multer
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        const currentPath = req.query.path || '';
+        const uploadPath = path.join(UPLOAD_DIR, currentPath);
+
+        if (!fs.existsSync(uploadPath)) {
+            fs.mkdirSync(uploadPath, { recursive: true });
+        }
+
+        cb(null, uploadPath);
+    },
+    filename: (req, file, cb) => {
+        cb(null, Date.now() + path.extname(file.originalname));
+    }
+});
+
+const upload = multer({ storage });
+
+// 提供静态文件服务
+app.use(cors());
+app.use('/uploads', express.static(UPLOAD_DIR));
+app.use('/thumbnails', express.static(THUMB_DIR));
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use(express.static(path.join(__dirname)));
+app.use(pathNormalizer);
+
+// 缓存管理函数
+const updateCache = async (dirPath) => {
+    const fullPath = path.join(UPLOAD_DIR, dirPath);
+    const files = await new Promise((resolve, reject) => {
+        fs.readdir(fullPath, (err, files) => {
+            if (err) return reject(err);
+            resolve(files);
+        });
+    });
+
+    const fileInfos = await Promise.all(files.map(async (file) => {
+        const filePath = path.join(fullPath, file);
+        const stats = await fs.promises.stat(filePath);
+
+        if (stats.isDirectory()) {
+            return {
+                type: 'folder',
+                filename: file,
+                path: path.join(dirPath, file).replace(/\\/g, '/'),
+                lastModified: stats.mtime,
+                size: stats.size
+            };
+        } else {
+            const thumbnailPath = path.join(THUMB_DIR, dirPath, file + '.png');
+            let thumbnail = null;
+
+            if (fs.existsSync(thumbnailPath)) {
+                thumbnail = '/thumbnails/' + path.join(dirPath, file + '.png');
+            } else if (isVideo(file)) {
+                await generateThumbnail(filePath, thumbnailPath);
+                thumbnail = '/thumbnails/' + path.join(dirPath, file + '.png');
+            }
+
+            return {
+                filename: '/uploads/' + path.join(dirPath, file),
+                thumbnail: thumbnail,
+                lastModified: stats.mtime,
+                size: stats.size
+            };
+        }
+    }));
+
+    
+    fileInfos.sort((a, b) => {
+        const isFolder = file => file.type === 'folder';
+        const isVideo = file => ['mp4', 'webm', 'ogg', 'ts'].includes(file.filename.split('.').pop().toLowerCase());
+        const isImage = file => ['jpg', 'jpeg', 'png', 'gif'].includes(file.filename.split('.').pop().toLowerCase());
+    
+        if (isFolder(a) && !isFolder(b)) return -1;
+        if (!isFolder(a) && isFolder(b)) return 1;
+        
+        if (isVideo(a) && !isVideo(b)) return -1;
+        if (!isVideo(a) && isVideo(b)) return 1;
+        
+        if (isImage(a) && !isImage(b)) return -1;
+        if (!isImage(a) && isImage(b)) return 1;
+    
+        return new Date(b.lastModified) - new Date(a.lastModified);
+    });
+    
+
+    cache[dirPath] = fileInfos;
+};
+
+const invalidateCache = (dirPath) => {
+    delete cache[dirPath];
+};
+
+// 上传文件并生成缩略图
+app.post('/upload', upload.single('file'), async (req, res) => {
+    const currentPath = req.query.path || ''; // 从请求体获取当前路径，默认为空
+    const filePath = path.join(UPLOAD_DIR, currentPath, req.file.filename);
+
+    // 确保缩略图目录存在
+    const thumbnailDir = path.join(THUMB_DIR, currentPath);
+    if (!fs.existsSync(thumbnailDir)) {
+        fs.mkdirSync(thumbnailDir, { recursive: true });
+    }
+
+    // 如果是视频文件，生成缩略图
+    if (req.file.mimetype.startsWith('video/')) {
+        const thumbnailPath = path.join(thumbnailDir, req.file.filename + '.png');
+        try {
+            await generateThumbnail(filePath, thumbnailPath);
+            invalidateCache(currentPath); // 更新缓存
+            await updateCache(currentPath); // 更新缓存
+            res.send({ 
+                filename: '/uploads/' + currentPath + '/' + req.file.filename, 
+                thumbnail: '/thumbnails/' + currentPath + '/' + req.file.filename + '.png' 
+            });
+        } catch (err) {
+            console.error('Error generating thumbnail:', err);
+            res.send({ filename: '/uploads/' + currentPath + '/' + req.file.filename });
+        }
+    } else {
+        invalidateCache(currentPath); // 更新缓存
+        await updateCache(currentPath); // 更新缓存
+        res.send({ filename: '/uploads/' + currentPath + '/' + req.file.filename });
+    }
+});
+
+// 获取文件列表
+app.get('/files', async (req, res) => {
+    const reqPath = req.query.path || '';
+    
+    // 从缓存中获取数据
+    if (cache[reqPath]) {
+        return res.send(cache[reqPath]);
+    }
+
+    try {
+        await updateCache(reqPath);
+        res.send(cache[reqPath]);
+    } catch (err) {
+        console.error('Error fetching file list:', err);
+        res.status(500).send('Failed to fetch file list.');
+    }
+});
+
+// 生成视频文件缩略图
+async function generateThumbnail(filePath, thumbnailPath) {
+    // 确保缩略图目录存在
+    const thumbnailDir = path.dirname(thumbnailPath);
+    if (!fs.existsSync(thumbnailDir)) {
+        fs.mkdirSync(thumbnailDir, { recursive: true });
+    }
+
+    return new Promise((resolve, reject) => {
+        ffmpeg(filePath)
+            .screenshots({
+                count: 1,
+                folder: thumbnailDir,
+                filename: path.basename(thumbnailPath),
+                size: '320x240'
+            })
+            .on('end', () => resolve(true))
+            .on('error', err => {
+                console.error('Error generating thumbnail:', err);
+                resolve(false);
+            });
+    });
+}
+
+// 删除文件
+app.post('/delete', (req, res) => {
+    const { filename, path: currentPath } = req.body;
+    const filePath = path.join(UPLOAD_DIR, currentPath, filename);
+
+    fs.unlink(filePath, async (err) => {
+        if (err) {
+            console.error('Error deleting file:', err);
+            return res.status(500).send({ message: 'Failed to delete file' });
+        }
+
+        const thumbnailPath = path.join(THUMB_DIR, currentPath, filename + '.png');
+        fs.unlink(thumbnailPath, async (err) => {
+            if (err && err.code !== 'ENOENT') {
+                console.error('Error deleting thumbnail:', err);
+                return res.status(500).send({ message: 'Failed to delete thumbnail' });
+            }
+
+            invalidateCache(currentPath); // 更新缓存
+            await updateCache(currentPath); // 更新缓存
+
+            res.send({ message: 'File deleted successfully' });
+        });
+    });
+});
+
+app.post('/updateCache', async (req, res) => {
+    const currentPath = req.body.path || ''; 
+    invalidateCache(currentPath); // 更新缓存
+    await updateCache(currentPath); // 更新缓存
+    res.send(cache[currentPath]);
+})
+
+// 根路径返回 index.html
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'index.html'));
+});
+
+app.listen(PORT, () => {
+    console.log(`Server is running on http://localhost:${PORT}`);
+});
+
+function pathNormalizer(req, res, next) {
+    const originalSend = res.send;
+    res.send = function (body) {
+        if (typeof body === 'object') {
+            const normalizePaths = (obj) => {
+                if (Array.isArray(obj)) {
+                    return obj.map(normalizePaths);
+                } else if (obj !== null && typeof obj === 'object') {
+                    for (let key in obj) {
+                        if (typeof obj[key] === 'string') {
+                            obj[key] = obj[key].replace(/\\/g, '/');
+                        } else if (typeof obj[key] === 'object') {
+                            obj[key] = normalizePaths(obj[key]);
+                        }
+                    }
+                    return obj;
+                }
+                return obj;
+            };
+            body = normalizePaths(body);
+        }
+        return originalSend.call(this, body);
+    };
+    next();
+}
+
+function isVideo(filename) {
+    return filename.endsWith('.mp4') || filename.endsWith('.ts');
+}
