@@ -187,6 +187,7 @@ async function generateThumbnail(filePath, thumbnailPath) {
 
     return new Promise((resolve, reject) => {
         ffmpeg(filePath)
+            // windows上是取视频中间位置帧
             .screenshots({
                 count: 1,
                 folder: thumbnailDir,
@@ -198,6 +199,16 @@ async function generateThumbnail(filePath, thumbnailPath) {
                 console.error('Error generating thumbnail:', err);
                 resolve(false);
             });
+
+            // 下面是强制取第1帧
+            // .on('end', () => resolve(true))
+            // .on('error', err => {
+            //     console.error('Error generating thumbnail:', err);
+            //     resolve(false);
+            // })
+            // .output(path.join(thumbnailDir, path.basename(thumbnailPath)))
+            // .outputOptions('-vf', 'thumbnail', '-frames:v', '1', '-s', '320x240')
+            // .run();
     });
 }
 
