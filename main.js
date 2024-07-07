@@ -137,13 +137,32 @@
                 }
                 video.controls = true;
                 if(['ts'].includes(fileExt)) {
-                    const source = document.createElement('source');
+                    // const source = document.createElement('source');
 
-                    source.src = baseServer + file.filename;
-                    source.type = 'video/mp2t';
+                    // source.src = baseServer + file.filename;
+                    // source.type = 'video/mp2t';
         
-                    video.appendChild(source);
-                    video.load(); // 加载新的source
+                    // video.appendChild(source);
+                    video.addEventListener('click', async (e) => {
+                        if (!videoHelper.isLoading(video) && !videoHelper.isReady(video)) {
+                            e.preventDefault()
+                            e.stopPropagation()
+                            if (!video.__mOverlay) {
+                                const container = video.parentElement;
+                                const loadingOverlay = document.createElement('div');
+                                loadingOverlay.classList.add('loading-overlay');
+                                loadingOverlay.innerText = '加载中...';
+                                video.__mOverlay = loadingOverlay;
+                                container.appendChild(loadingOverlay);
+                            }
+                            video.__mOverlay.style.display = 'flex';
+                            await videoHelper.loadTs(video, baseServer + file.filename, (error) => {
+                                showToast(`视频加载失败`, 'error')
+                            })
+                            video.__mOverlay.style.display = 'none';
+                            videoHelper.play(video)
+                        }
+                    })
                 } else {
                     video.src = baseServer + file.filename;
                 }
@@ -164,7 +183,7 @@
             div.appendChild(fileInfoElement);
     
             const footer = document.createElement('div');
-            footer.style = 'display: flex;justify-content: space-between;';
+            footer.style = `display: flex;justify-content: ${file.type === 'folder' ? 'end' : 'space-between'};`;
             const deleteButton = document.createElement('button');
             deleteButton.innerText = '删除';
             deleteButton.addEventListener('click', (e) => {
