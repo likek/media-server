@@ -58,6 +58,9 @@
         renderedFilesCount = 0;
         totalFiles = [];
         currentPathElem.innerHTML = `${currentPath || '/'}`;
+        currentPathElem.onclick = () => {
+            copyText(currentPathElem.innerText)
+        }
         btnRoot.style.display = currentPath === '' ? 'none' : '';
         backButton.style.display = currentPath === '' ? 'none' : '';
 
@@ -183,8 +186,9 @@
             div.appendChild(fileInfoElement);
     
             const footer = document.createElement('div');
-            footer.style = `display: flex;justify-content: ${file.type === 'folder' ? 'end' : 'space-between'};`;
+            footer.style = `display: flex;justify-content: ${'space-between'};`;
             const deleteButton = document.createElement('button');
+            deleteButton.style.marginRight = 'auto';
             deleteButton.innerText = '删除';
             deleteButton.addEventListener('click', (e) => {
                 e.stopPropagation();
@@ -195,6 +199,28 @@
                 }
             });
             footer.appendChild(deleteButton);
+
+            const moveButton = document.createElement('button');
+            moveButton.innerText = '移动';
+            moveButton.className = 'move-button';
+        
+            moveButton.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const targetFolder = prompt('请输入目标文件夹').trim();
+                if (targetFolder === '') {
+                    showToast('目标文件及不能为空', 'warn');
+                } else if (targetFolder === currentPath) {
+                    showToast('不能移动到相同目录', 'warn');
+                } else {
+                    if (file.type === 'folder') {
+                        moveFileOrFolder(file.filename, targetFolder, currentPath);
+                    } else {
+                        moveFileOrFolder(file.filename.substring(file.filename.lastIndexOf('/') + 1), targetFolder, currentPath);
+                    }
+                }
+            });
+
+            footer.appendChild(moveButton)
 
             if (file.type !== 'folder') {
                 const a = document.createElement('a');
@@ -358,6 +384,37 @@
             console.error('Error sending request:', error);
         }
     }
+    function moveFileOrFolder(filename, targetFolder, currentPath) {
+        const url = `${baseServer}move`;
+        const body = JSON.stringify({
+            filename,
+            targetFolder,
+            currentPath,
+        });
+    
+        fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showToast('File moved successfully', 'success');
+                delete fileCache[currentPath];
+                delete fileCache[targetFolder.replace(/^\/+/, '')];
+                loadMedia(currentPath);
+            } else {
+                showToast(data.message || 'Error moving file', 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Error moving file:', error);
+            showToast('Error moving file', 'error');
+        });
+    }
 
     function triggerFileUpload() {
         fileInput.click();
@@ -383,6 +440,27 @@
             toast.classList.remove('show');
         }, 3000);
     }
+
+    function copyText(text) {
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        document.body.appendChild(textarea);
+        textarea.select();
+        let error;
+        try {
+            document.execCommand('copy');
+            console.log('Text copied to clipboard:', text);
+        } catch (err) {
+            error = err;
+            console.error('Failed to copy text to clipboard:', err);
+        }
+    
+        document.body.removeChild(textarea);
+        if (!error) {
+            showToast('拷贝成功')
+        }
+    }
+    
 
     document.addEventListener('DOMContentLoaded', () => {
         loadMedia();

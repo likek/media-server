@@ -113,8 +113,12 @@ video {
     line-height: 18px;
 }
 
+button.move-button {
+    background-color: #e6a23c;
+}
+
 .media-item button:hover {
-    background-color: #ff1a1a; 
+    background-color: #d18b2d; 
 }
 
 .media-item a {

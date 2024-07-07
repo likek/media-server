@@ -298,6 +298,34 @@ app.post('/updateCache', async (req, res) => {
     }
 });
 
+app.post('/move', (req, res) => {
+    const { filename, targetFolder, currentPath } = req.body;
+
+    const sourcePath = path.join(__dirname, 'uploads', currentPath, filename);
+    const destinationPath = path.join(__dirname, 'uploads', targetFolder, filename);
+
+    if (!fs.existsSync(sourcePath)) {
+        return res.status(400).json({ success: false, message: 'Source file/folder does not exist' });
+    }
+
+    if (!fs.existsSync(path.join(__dirname, 'uploads', targetFolder))) {
+        return res.status(400).json({ success: false, message: 'Target folder does not exist' });
+    }
+
+    fs.rename(sourcePath, destinationPath, async (err) => {
+        if (err) {
+            console.error('Error moving file/folder:', err);
+            return res.status(500).json({ success: false, message: 'Error moving file/folder' });
+        }
+
+        invalidateCache(currentPath); // 更新缓存
+        await updateCache(currentPath); // 更新缓存
+        invalidateCache(targetFolder.replace(/^\/+/, '')); // 更新缓存
+        await updateCache(targetFolder.replace(/^\/+/, '')); // 更新缓存
+        res.json({ success: true });
+    });
+});
+
 // 根路径返回 index.html
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
