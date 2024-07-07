@@ -270,3 +270,15 @@ a[download] {
     to { top: 0; opacity: 0; }
 }
 
+
+/* 不足两列 */
+@media (max-width: 732px) {
+    .media {
+        justify-content: center;
+    }
+
+    .media-item {
+        width: 100%; 
+        min-height: 0;
+    }
+}
