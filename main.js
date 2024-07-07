@@ -1,4 +1,5 @@
-const mediaContainer = document.getElementById('mediaContainer');
+    const mediaContainer = document.getElementById('mediaContainer');
+    const topContainer = document.getElementById('top');
     const currentPathElem = document.getElementById('currentPath');
     const backButton = document.getElementById('btnBackDir');
     const progressBar = document.getElementById('progressBar');
@@ -81,7 +82,7 @@ const mediaContainer = document.getElementById('mediaContainer');
     }
 
     function checkAndRenderInitialFiles() {
-        while (mediaContainer.scrollHeight <= window.innerHeight && renderedFilesCount < totalFiles.length) {
+        while (mediaContainer.scrollHeight <= window.innerHeight - topContainer.offsetHeight && renderedFilesCount < totalFiles.length) {
             renderMoreFiles();
         }
     }
@@ -131,11 +132,21 @@ const mediaContainer = document.getElementById('mediaContainer');
                 div.addEventListener('click', () => loadMedia(file.path));
             } else if (['mp4', 'webm', 'ogg', 'ts'].includes(fileExt)) {
                 const video = document.createElement('video');
-                video.src = baseServer + file.filename;
                 if (file.thumbnail) {
                     video.poster = baseServer + file.thumbnail;
                 }
                 video.controls = true;
+                if(['ts'].includes(fileExt)) {
+                    const source = document.createElement('source');
+
+                    source.src = baseServer + file.filename;
+                    source.type = 'video/mp2t';
+        
+                    video.appendChild(source);
+                    video.load(); // 加载新的source
+                } else {
+                    video.src = baseServer + file.filename;
+                }
                 div.appendChild(video);
             } else if (['jpg', 'jpeg', 'png', 'gif'].includes(fileExt)) {
                 const img = document.createElement('img');
@@ -251,7 +262,6 @@ const mediaContainer = document.getElementById('mediaContainer');
 
     mediaContainer.addEventListener('scroll', () => {
         if (mediaContainer.clientHeight + mediaContainer.scrollTop >= mediaContainer.scrollHeight - 50) {
-            console.log('next')
             renderMoreFiles();
         }
     });
@@ -353,8 +363,12 @@ const mediaContainer = document.getElementById('mediaContainer');
         setTimeout(() => {
             toast.classList.remove('show');
         }, 3000);
-    }    
+    }
 
     document.addEventListener('DOMContentLoaded', () => {
         loadMedia();
     });
+
+    window.onresize = () => {
+        checkAndRenderInitialFiles()
+    }
