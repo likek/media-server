@@ -82,6 +82,11 @@ img, video {
     vertical-align: middle;
 }
 
+video {
+    object-fit: cover;
+    background: linear-gradient(to bottom, white, black);
+}
+
 .media-item p {
     margin: 5px 0;
     color: #333; 
