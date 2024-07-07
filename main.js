@@ -59,7 +59,7 @@
         totalFiles = [];
         currentPathElem.innerHTML = `${currentPath || '/'}`;
         currentPathElem.onclick = () => {
-            copyText(currentPathElem.innerText)
+            copyText(currentPathElem)
         }
         btnRoot.style.display = currentPath === '' ? 'none' : '';
         backButton.style.display = currentPath === '' ? 'none' : '';
@@ -441,25 +441,40 @@
         }, 3000);
     }
 
-    function copyText(text) {
-        const textarea = document.createElement('textarea');
-        textarea.value = text;
-        document.body.appendChild(textarea);
-        textarea.select();
-        let error;
-        try {
-            document.execCommand('copy');
-            console.log('Text copied to clipboard:', text);
-        } catch (err) {
-            error = err;
-            console.error('Failed to copy text to clipboard:', err);
-        }
-    
-        document.body.removeChild(textarea);
-        if (!error) {
-            showToast('拷贝成功')
+    function copyText(div) {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(() => {
+                console.log('Text copied to clipboard:', text);
+                showToast('复制成功')
+            }).catch(err => {
+                console.error('Failed to copy text to clipboard:', err);
+            });
+        } else {
+            // const textarea = document.createElement('textarea');
+            // textarea.value = text;
+            // textarea.style.position = 'fixed';
+            // textarea.style.top = '30px';
+            // textarea.style.left = '30px';
+            // textarea.style.width = '0';
+            // textarea.style.height = '0';
+            // document.body.appendChild(textarea);
+            // textarea.focus();
+            // textarea.select();
+            // try {
+            //     document.execCommand('copy');
+            //     console.log('Text copied to clipboard:', text);
+            // } catch (err) {
+            //     console.error('Failed to copy text to clipboard:', err);
+            // }
+            // document.body.removeChild(textarea);
+            const range = document.createRange();
+            range.selectNodeContents(div);
+            const selection = window.getSelection();
+            selection.removeAllRanges();
+            selection.addRange(range);
         }
     }
+    
     
 
     document.addEventListener('DOMContentLoaded', () => {
