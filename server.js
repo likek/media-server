@@ -326,6 +326,49 @@ app.post('/move', (req, res) => {
     });
 });
 
+app.post('/convert', (req, res) => {
+    const { inputFilePath, outputFilePath } = req.body;
+
+    const uploadsDir = path.join(__dirname, 'uploads');
+    const absoluteInputPath = path.join(uploadsDir, inputFilePath);
+    const absoluteOutputPath = path.join(uploadsDir, outputFilePath);
+
+    if (!fs.existsSync(absoluteInputPath)) {
+        return res.status(400).json({ message: 'Input file does not exist' });
+    }
+
+    if (fs.existsSync(absoluteOutputPath)) {
+        return res.status(400).json({ message: 'Output file already exists' });
+    }
+
+    ffmpeg(absoluteInputPath)
+        // .output(absoluteOutputPath)
+        // .on('end', async () => {
+        //     invalidateCache(currentPath); // 更新缓存
+        //     await updateCache(currentPath); // 更新缓存
+        //     res.json({ outputFilePath: outputFilePath });
+        // })
+        // .on('error', (err) => {
+        //     console.error('Error during conversion:', err);
+        //     res.status(500).json({ message: 'Conversion failed' });
+        // })
+        // .run();
+
+        .outputOptions('-c:v', 'h264_nvenc', '-preset', 'fast', '-b:v', '2M', '-threads', '8')
+        // .outputOptions('-threads', '8')
+        .save(absoluteOutputPath)
+        .on('end', async () => {
+            const currentPath = path.dirname(inputFilePath);
+            invalidateCache(currentPath); // 更新缓存
+            await updateCache(currentPath); // 更新缓存
+            res.json({ outputFilePath: outputFilePath });
+        })
+        .on('error', (err) => {
+            console.error('Error during conversion:', err);
+            res.status(500).json({ message: 'Conversion failed' });
+        })
+});
+
 // 根路径返回 index.html
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));

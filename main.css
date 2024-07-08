@@ -99,7 +99,7 @@ video {
 
 .media-item button {
     display: inline-block;
-    margin-top: 10px;
+    margin: 10px 10px 0 0;
     background-color: #ff4d4d; 
     color: #fff; 
     border: none;
@@ -127,7 +127,7 @@ button.move-button {
 
 .media-item a {
     display: inline-block;
-    margin-top: 10px;
+    margin: 10px 0 0 10px;
     background-color: #3498db; 
     color: #fff; 
     border-radius: 4px;

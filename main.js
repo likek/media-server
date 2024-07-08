@@ -99,7 +99,8 @@
     
             const fileNameElement = document.createElement('p');
             const textSpan = document.createElement('span');
-            textSpan.textContent = file.filename.substring(file.filename.lastIndexOf('/') + 1);
+            const filename = file.filename.substring(file.filename.lastIndexOf('/') + 1)
+            textSpan.textContent = filename;
             if (file.format) {
                 textSpan.textContent += ` (${file.format})`;
             }
@@ -120,7 +121,7 @@
                 if (file.type === 'folder') {
                     renameFile(file.filename, currentPath, file.type);
                 } else {
-                    renameFile(file.filename.substring(file.filename.lastIndexOf('/') + 1), currentPath, file.type);
+                    renameFile(filename, currentPath, file.type);
                 }
             });
             div.appendChild(fileNameElement);
@@ -150,20 +151,12 @@
                         if (!videoHelper.isLoading(video) && !videoHelper.isReady(video)) {
                             e.preventDefault()
                             e.stopPropagation()
-                            if (!video.__mOverlay) {
-                                const container = video.parentElement;
-                                const loadingOverlay = document.createElement('div');
-                                loadingOverlay.classList.add('loading-overlay');
-                                loadingOverlay.innerText = '加载中...';
-                                video.__mOverlay = loadingOverlay;
-                                container.appendChild(loadingOverlay);
-                            }
-                            video.__mOverlay.style.display = 'flex';
+                            showOverlay(div)
                             await videoHelper.loadTs(video, baseServer + file.filename, (error) => {
                                 showToast(`视频加载失败`, 'error')
                             })
-                            video.__mOverlay.style.display = 'none';
-                            videoHelper.play(video)
+                            hideOverlay(div);
+                            videoHelper.play(video);
                         }
                     })
                 } else {
@@ -196,10 +189,25 @@
                 if (file.type === 'folder') {
                     deleteFile(file.filename, currentPath, file.type);
                 } else {
-                    deleteFile(file.filename.substring(file.filename.lastIndexOf('/') + 1), currentPath, file.type);
+                    deleteFile(filename, currentPath, file.type);
                 }
             });
             footer.appendChild(deleteButton);
+
+            if(file.type !== 'folder' && ['ts'].includes(fileExt)) { 
+                const convertButton = document.createElement('button');
+                convertButton.innerText = '转mp4';
+                convertButton.className = 'move-button';
+                convertButton.addEventListener('click', () => {
+                    const originPath = `${currentPath}/${filename}`
+                    const targetPath = originPath.replace(/\.[^/.]+$/, '_ts.mp4')
+                    showOverlay(div, '格式转换中...')
+                    convertFile(originPath, targetPath).finally(() => {
+                        hideOverlay(div)
+                    })
+                })
+                footer.appendChild(convertButton)
+            }
 
             const moveButton = document.createElement('button');
             moveButton.innerText = '移动';
@@ -216,7 +224,7 @@
                     if (file.type === 'folder') {
                         moveFileOrFolder(file.filename, targetFolder, currentPath);
                     } else {
-                        moveFileOrFolder(file.filename.substring(file.filename.lastIndexOf('/') + 1), targetFolder, currentPath);
+                        moveFileOrFolder(filename, targetFolder, currentPath);
                     }
                 }
             });
@@ -227,7 +235,7 @@
                 const a = document.createElement('a');
                 a.innerHTML = '下载';
                 a.href = baseServer + file.filename;
-                a.download = file.filename.substring(file.filename.lastIndexOf('/') + 1);
+                a.download = filename;
                 footer.appendChild(a);
             }
             div.appendChild(footer);
@@ -415,6 +423,52 @@
             console.error('Error moving file:', error);
             showToast('Error moving file', 'error');
         });
+    }
+
+    function convertFile(inputFilePath, outputFilePath) {
+        const url = `${baseServer}/convert`;
+        
+        return fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ inputFilePath, outputFilePath }),
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.outputFilePath) {
+                delete fileCache[currentPath];
+                loadMedia(currentPath);
+                showToast('File converted successfully.', 'success');
+            } else if (data.message === 'Output file already exists') {
+                showToast('Output file already exists. Please choose a different file name or path.', 'warn');
+            } else {
+                showToast('Conversion failed', 'warn');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showToast('Error during conversion', 'error');
+        });
+    }
+
+    function showOverlay(div, text) {
+        if (!div.__mOverlay) {
+            const container = div;
+            const loadingOverlay = document.createElement('div');
+            loadingOverlay.classList.add('loading-overlay');
+            loadingOverlay.innerText = text || '加载中...';
+            div.__mOverlay = loadingOverlay;
+            container.appendChild(loadingOverlay);
+        }
+        div.__mOverlay.style.display = 'flex';
+    }
+
+    function hideOverlay(div) {
+        if(div.__mOverlay) {
+            div.__mOverlay.style.display = 'none';
+        }
     }
 
     function triggerFileUpload() {
