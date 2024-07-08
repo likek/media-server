@@ -1,0 +1,263 @@
+import request from "./request";
+
+const folderInfoCache = {}
+
+// 获取文件列表
+export const getFiles = async (id = null, query = null, page = 0, pageSize = -1, filters = {}) => {
+  const params = { id, query, page, pageSize, ...filters };
+  const response = await request.p('/user/files', params)
+  return response
+}
+
+export const getNextVideo = async (id) => {
+  const response = await request.p('/user/nextVideo', { id })
+  return response
+}
+
+// 获取文件夹详细信息
+export const getFolderInfo = async (id) => {
+  if (!id) return null;
+  if (folderInfoCache[id]) {
+    return folderInfoCache[id];
+  }
+  const params = { id };
+  const response = await request.p('/user/folderInfo', params)
+  folderInfoCache[id] = response
+  return response
+}
+
+// 更新缓存
+export const updateCache = async (id = null) => {
+  const params = { id, recursive: true };
+  const response = await request.p('/user/updateCache', params)
+  return response
+}
+
+export const cleanDb = async (id = null, options = {}) => {
+  const params = { id, ...options };
+  const response = await request.p('/user/cleanDb', params, {
+    timeout: 30 * 60 * 1000
+  })
+  return response
+}
+
+export const checkFiles = async (id = null, options = {}) => {
+  const params = { id, ...options };
+  const response = await request.p('/user/checkFiles', params, {
+    timeout: 30 * 60 * 1000
+  })
+  return response
+}
+
+// 创建文件夹
+export const createNewFolder = async (folderName, parentId = null) => {
+  const params = { folderName, parentId };
+  const response = await request.p('/user/createFolder', params)
+  return response
+}
+
+// 重命名文件或文件夹
+export const renameFile = async (id, newName, type) => {
+  const params = { id, newName, type };
+  const response = await request.p('/user/rename', params)
+  return response
+}
+
+// 删除文件或文件夹
+export const deleteFileOrFolder = async (id, type) => {
+  const params = { id, type };
+  const response = await request.p('/user/delete', params)
+  return response
+}
+
+// 上传文件
+export const uploadFileToServer = async (file, parentId, onProgress, options = {}) => {
+  const formData = new FormData()
+  formData.append('file', file)
+  
+  const hasParentId = parentId !== null && parentId !== undefined && parentId !== ''
+  const encryptedQueryMeta = {}
+  if (hasParentId) {
+    encryptedQueryMeta.parentId = parentId
+  }
+  if (file?.name) {
+    encryptedQueryMeta.resourceName = file.name
+  }
+  const encryptedMeta = { ...encryptedQueryMeta }
+    
+  const response = await request.p('/user/upload', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data'
+    },
+    encryptedQueryMeta: Object.keys(encryptedQueryMeta).length ? encryptedQueryMeta : undefined,
+    encryptedMeta: Object.keys(encryptedMeta).length ? encryptedMeta : undefined,
+    timeout: 3 * 60 * 60 * 1000,
+    signal: options.signal,
+    onUploadProgress: (progressEvent) => {
+      const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total)
+      if (onProgress) onProgress(percentCompleted)
+    }
+  })
+  
+  return response
+}
+
+export const uploadFolderTreeToServer = async (files, parentId, rootFolderName, onProgress, options = {}) => {
+  const fileEntries = Array.from(files || []).map((item) => {
+    if (item instanceof File) {
+      return {
+        file: item,
+        relativePath: item.webkitRelativePath || item.name
+      }
+    }
+    return {
+      file: item?.file,
+      relativePath: item?.relativePath || item?.file?.webkitRelativePath || item?.file?.name || ''
+    }
+  }).filter(entry => entry.file instanceof File)
+
+  if (fileEntries.length === 0) {
+    throw new Error('请选择文件夹')
+  }
+
+  const formData = new FormData()
+  fileEntries.forEach((entry) => {
+    formData.append('files', entry.file)
+  })
+  const normalizedRootFolderName = rootFolderName || fileEntries[0]?.relativePath?.split('/')?.[0] || 'folder'
+
+  const hasParentId = parentId !== null && parentId !== undefined && parentId !== ''
+  const encryptedQueryMeta = {}
+  if (hasParentId) {
+    encryptedQueryMeta.parentId = parentId
+  }
+  if (normalizedRootFolderName) {
+    encryptedQueryMeta.resourceName = normalizedRootFolderName
+  }
+  const encryptedMeta = {
+    ...encryptedQueryMeta,
+    relativePaths: fileEntries.map(entry => entry.relativePath),
+    rootFolderName: normalizedRootFolderName
+  }
+
+  const response = await request.p('/user/uploadTree', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data'
+    },
+    encryptedQueryMeta: Object.keys(encryptedQueryMeta).length ? encryptedQueryMeta : undefined,
+    encryptedMeta,
+    timeout: 3 * 60 * 60 * 1000,
+    signal: options.signal,
+    onUploadProgress: (progressEvent) => {
+      const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total)
+      if (onProgress) onProgress(percentCompleted)
+    }
+  })
+
+  return response
+}
+
+// 从文本链接下载
+export const downloadFromText = async (text, folderId) => {
+  const response = await request.p('/user/downloadFromText', { text, folderId }, {
+    timeout: 3 * 60 * 60 * 1000
+  })
+  return response
+}
+
+// 移动文件
+export const moveFile = async (sourceId, targetId) => {
+  const params = { sourceId, targetId };
+  const response = await request.p('/user/move', params)
+  return response
+}
+
+// 解压文件
+export const unzipFile = async (fileId) => {
+  const response = await request.p('/user/unzip', { fileId })
+  return response
+}
+
+// 读取文本文件
+export const readTextFile = async (id, start = 0, numLines = 50) => {
+  const response = await request.p('/user/readTextFile', { id, start, numLines })
+  return response
+}
+
+// 转换文本文件编码
+export const convertTextEncoding = async (id) => {
+  const response = await request.p('/user/convertTxtEncoding', { id })
+  return response
+}
+
+// 转换TS文件为MP4
+export const convertFileToMp4 = async (inputFileId, outputFileSuffix = 'mp4') => {
+  const response = await request.p('/user/convert', { inputFileId, outputFileSuffix })
+  return response
+}
+
+// 转换MP4文件为HLS
+export const convertToHls = async (id) => {
+  const response = await request.p('/media/convertToHls', { id }, {
+    timeout: 3 * 60 * 60 * 1000
+  })
+  return response
+}
+
+// iv可选
+export const registerUser = async (iv) => {
+  const response = await request.p('/user/register', { iv })
+  return response
+}
+
+export const getRealtimeStatus = async () => {
+  const response = await request.p('/user/realtimeStatus', {})
+  return response
+}
+
+export const cancelRealtimeUploadTask = async (taskId) => {
+  const response = await request.p('/user/cancelUploadTask', { taskId })
+  return response
+}
+
+export const updateThumbnail = async (id, time) => {
+  const response = await request.p('/user/updateThumbnail', { id, time })
+  return response
+}
+
+export const saveVideoFrame = async (id, time) => {
+  const response = await request.p('/user/saveVideoFrame', { id, time })
+  return response
+}
+
+export const setFolderCover = async (fileId) => {
+  const response = await request.p('/user/setFolderCover', { fileId })
+  return response
+}
+
+export const searchByImage = async (file, folderId = null, topK = 30) => {
+  const formData = new FormData()
+  formData.append('file', file)
+  const encryptedMeta = {
+    topK
+  }
+  if (folderId !== null && folderId !== undefined) {
+    encryptedMeta.folderId = folderId
+  }
+
+  const response = await request.p('/user/searchByImage', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data'
+    },
+    encryptedMeta,
+    timeout: 5 * 60 * 1000
+  })
+  return response
+}
+
+export const rebuildImageHash = async (max = 200) => {
+  const response = await request.p('/user/rebuildImageHash', { max }, {
+    timeout: 30 * 60 * 1000
+  })
+  return response
+}

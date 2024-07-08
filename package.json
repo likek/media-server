@@ -3,16 +3,42 @@
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
+  "type": "module",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server --path ../okk",
+    "dev": "NODE_ENV=development PORT=6666 node server --path ../okk",
+    "build:server-bundle": "./build-server-bundle",
+    "build:release": "./build-release"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "aes_crypto_wasm": "./rust/aes_crypto_wasm/dist/nodejs",
+    "axios": "^1.7.4",
+    "better-sqlite3": "^11.10.0",
+    "chalk": "^5.3.0",
+    "compression": "^1.7.4",
+    "cookie": "^0.6.0",
+    "cookie-parser": "^1.4.6",
     "cors": "^2.8.5",
     "express": "^4.19.2",
+    "express-rate-limit": "^7.4.0",
+    "extract-zip": "^2.0.1",
     "fluent-ffmpeg": "^2.1.3",
-    "multer": "^1.4.5-lts.1"
+    "glob": "^11.0.0",
+    "@huggingface/transformers": "^4.2.0",
+    "iconv-lite": "^0.6.3",
+    "jschardet": "^3.1.3",
+    "multer": "^1.4.5-lts.1",
+    "nodejieba": "^3.4.4",
+    "p-limit": "^6.2.0",
+    "puppeteer": "^24.10.1",
+    "request-ip": "^3.3.0",
+    "sharp": "^0.34.3",
+    "useragent": "^2.3.0",
+    "uuid": "^10.0.0",
+    "ws": "^8.18.0"
   }
 }

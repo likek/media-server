@@ -1,0 +1,1695 @@
+<template>
+  <div class="file-explorer" v-loading="loading">
+    <div class="top-container">
+      <div class="top-form">
+        <el-form @submit.prevent="handleSearch">
+          <el-input v-model="searchInput" placeholder="在当前目录下搜索" class="search-input" clearable />
+        </el-form>
+        <el-tooltip content="高级筛选" placement="bottom">
+          <el-button @click="showSearchAdvanceDialog" class="filter-btn">
+            <el-icon><Filter /></el-icon>
+            <div class="red-dot" v-show="redDotShow"></div>
+          </el-button>
+        </el-tooltip>
+        <el-tooltip content="递归刷新当前目录" placement="bottom">
+          <el-button :disabled="isBackdoorActionDisabled('updateCache')" @click="refreshCache"><el-icon>
+              <Refresh />
+            </el-icon></el-button>
+        </el-tooltip>
+        <el-tooltip content="数据检查" placement="bottom">
+          <el-button :disabled="isBackdoorActionDisabled('cleanDb')" @click="confirmCleanDb"><el-icon>
+              <List />
+            </el-icon></el-button>
+        </el-tooltip>
+        <el-tooltip content="重建图片索引" placement="bottom">
+          <el-button :disabled="isBackdoorActionDisabled('rebuildImageHash')" @click="confirmRebuildImageHash"><el-icon>
+              <Collection />
+            </el-icon></el-button>
+        </el-tooltip>
+        <el-tooltip content="新建文件夹" placement="bottom">
+          <el-button @click="showCreateFolderDialog"><el-icon>
+              <FolderAdd />
+            </el-icon></el-button>
+        </el-tooltip>
+        <el-tooltip content="上传文件" placement="bottom">
+          <el-button @click="triggerFileUpload"><el-icon>
+              <UploadFilled />
+            </el-icon></el-button>
+        </el-tooltip>
+        <el-tooltip content="上传文件夹" placement="bottom">
+          <el-button @click="triggerFolderUpload">
+            <span class="toolbar-folder-upload-icon" aria-hidden="true">
+              <FolderOpened class="toolbar-folder-upload-icon__folder" />
+              <UploadFilled class="toolbar-folder-upload-icon__badge" />
+            </span>
+          </el-button>
+        </el-tooltip>
+        <el-tooltip content="以图搜图" placement="bottom">
+          <el-button @click="triggerImageSearch">
+            <span class="toolbar-image-search-icon" aria-hidden="true">
+              <Picture class="toolbar-image-search-icon__picture" />
+              <Search class="toolbar-image-search-icon__badge" />
+            </span>
+          </el-button>
+        </el-tooltip>
+        <el-tooltip content="文本链接下载" placement="bottom">
+          <el-button :disabled="isBackdoorActionDisabled('downloadFromText')" @click="showTextLinkUploadDialog">
+            <el-icon>
+              <Link />
+            </el-icon>
+          </el-button>
+        </el-tooltip>
+        <input ref="fileInput" type="file" multiple style="display: none" @change="uploadFile" />
+        <input ref="folderInput" type="file" webkitdirectory directory multiple style="display: none" @change="uploadFolder" />
+        <input ref="imageSearchInput" type="file" accept="image/*" style="display: none" @change="searchByImageFile" />
+      </div>
+      <!-- 面包屑导航 -->
+      <div class="path-navigation">
+        <el-breadcrumb separator="/">
+          <el-breadcrumb-item @click="navigateToRoot">
+            <el-icon>
+              <HomeFilled />
+            </el-icon>
+          </el-breadcrumb-item>
+          <template v-for="(folder, index) in breadcrumbPath" :key="folder.id">
+            <el-breadcrumb-item @click="navigateToFolder(folder.id)">{{ folder.name }}</el-breadcrumb-item>
+          </template>
+        </el-breadcrumb>
+      </div>
+    </div>
+
+    <div
+      ref="mediaContainer"
+      :class="['media-container', { 'is-drag-active': isDragActive }]"
+      @dragenter.prevent="handleDragEnter"
+      @dragover.prevent="handleDragOver"
+      @dragleave.prevent="handleDragLeave"
+      @drop.prevent="handleDropUpload"
+    >
+      <div v-if="isDragActive" class="upload-drop-hint">
+        <div class="upload-drop-hint__title">拖拽到这里上传</div>
+        <div class="upload-drop-hint__desc">目标目录：{{ currentFolderLabel }}</div>
+      </div>
+      <template v-if="files.length === 0">
+        <el-empty :description="'没有文件'" />
+      </template>
+      <template v-else>
+        <div class="media-grid">
+          <template v-for="file in files">
+            <template v-if="file.type === 'folder'">
+              <folder-item :allow-actions="['favorite', 'rename', 'move', 'delete']" :disabled-actions="disabledFolderActions" :key="file.id" :folder="file" :favorited="file.favorited" @navigate="navigateToFolder"
+                @rename="showRenameDialog" @move="showMoveDialog" @delete="confirmDelete" @favorite="refreshFavorites" />
+            </template>
+            <template v-else>
+              <file-item :allow-actions="getFileActions(file)" :disabled-actions="disabledFileActions" :key="file.id" :file="file" :imageList="imageList"
+                :imageIndex="imageList.findIndex(item => item.id === file.id)" :favorited="file.favorited"
+                @rename="showRenameDialog" @move="showMoveDialog" @download="downloadFile" @delete="confirmDelete"
+                @unzip="refreshCache" @viewText="viewTextFile" @convertTs="convertTsFile" @favorite="refreshFavorites" @navigate="navigateToFolder" @folderCoverUpdated="handleFolderCoverUpdated" @searchSimilar="searchSimilarByFile"/>
+            </template>
+          </template>
+        </div>
+      </template>
+    </div>
+
+    <upload-queue-panel
+      v-if="uploadTasks.length"
+      :tasks="uploadTasks"
+      :summary="uploadPanelSummary"
+      :completed-count="completedUploadCount"
+      :collapsed="isUploadPanelCollapsed"
+      @clear-completed="clearCompletedUploads"
+      @toggle="toggleUploadPanel"
+      @retry="retryUploadTask"
+      @cancel="cancelUploadTask"
+      @remove="removeUploadTask"
+    />
+
+    <!-- 创建文件夹对话框 -->
+    <el-dialog v-model="createFolderDialogVisible" title="新建文件夹" width="80%">
+      <el-input v-model="newFolderName" placeholder="请输入文件夹名称" />
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="createFolderDialogVisible = false">取消</el-button>
+          <el-button type="primary" @click="createFolder">确认</el-button>
+        </span>
+      </template>
+    </el-dialog>
+
+    <!-- 重命名对话框 -->
+    <el-dialog v-model="renameDialogVisible" title="重命名" width="80%">
+      <el-input v-model="newName" placeholder="请输入新名称" />
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="renameDialogVisible = false">取消</el-button>
+          <el-button type="primary" @click="renameItem">确认</el-button>
+        </span>
+      </template>
+    </el-dialog>
+
+    <!-- 文本链接上传对话框 -->
+    <el-dialog v-model="textLinkDialogVisible" title="从链接上传" width="80%">
+      <el-input v-model="linkText" type="textarea" :rows="10" placeholder="请输入链接，每行一个" />
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="textLinkDialogVisible = false">取消</el-button>
+          <el-button type="primary" @click="uploadFromLinks">确认</el-button>
+        </span>
+      </template>
+    </el-dialog>
+
+    <!-- 移动文件/文件夹对话框 -->
+    <el-dialog v-model="moveDialogVisible" title="移动到" width="80%">
+      <div class="move-dialog-content">
+        <p>选择目标文件夹:</p>
+        <el-tree
+          ref="folderTree"
+          :props="{
+            children: 'children',
+            label: 'filename'
+          }"
+          :load="loadNode"
+          lazy
+          check-strictly
+          :accordion="true"
+          node-key="id"
+          :highlight-current="true"
+          :expand-on-click-node="false"
+        >
+          <template #default="{ node, data }">
+            <span class="folder-tree-node">
+              <el-icon><Folder /></el-icon>
+              <span class="folder-tree-node_lavel">{{ node.label }}</span>
+            </span>
+          </template>
+        </el-tree>
+      </div>
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="moveDialogVisible = false">取消</el-button>
+          <el-button type="primary" @click="moveItem">确认</el-button>
+        </span>
+      </template>
+    </el-dialog>
+
+    <!-- 文本文件查看对话框 -->
+    <text-viewer-dialog v-model:visible="txtDialogVisible" :file="currentItem" v-if="currentItem" :num-lines="30" />
+    <!-- 高级过滤对话框 -->
+    <el-dialog v-model="dialogSearchAdvanceVisible" title="过滤" width="260px">
+      <el-form :model="advanceSearchForm" label-width="0">
+        <el-form-item label="" prop="type">
+          <el-radio-group v-model="advanceSearchForm.type" size="small" style="width: 100%">
+            <el-radio-button value="" label="">不限</el-radio-button>
+            <el-radio-button value="file">文件</el-radio-button>
+            <el-radio-button value="folder">文件夹</el-radio-button>
+          </el-radio-group>
+        </el-form-item>
+
+        <el-form-item label="" prop="space">
+          <el-radio-group v-model="advanceSearchForm.space" size="small" style="width: 100%">
+            <el-radio-button value="">不限</el-radio-button>
+            <el-radio-button value="children">当前目录</el-radio-button>
+            <el-radio-button value="level_1">当前一级</el-radio-button>
+          </el-radio-group>
+        </el-form-item>
+
+        <el-form-item label="" prop="query">
+          <el-input v-model="advanceSearchForm.query" placeholder="请输入关键字(可选)" />
+        </el-form-item>
+
+        <el-form-item label="" v-if="advanceSearchForm.type !== 'folder'" prop="mime_type">
+          <el-radio-group v-model="advanceSearchForm.mime_type" size="small" style="width: 100%">
+            <el-radio-button value="">不限</el-radio-button>
+            <el-radio-button value="image/">仅看图片</el-radio-button>
+            <el-radio-button value="video/">仅看视频</el-radio-button>
+          </el-radio-group>
+        </el-form-item>
+
+        <el-form-item label="" prop="start_date">
+          <el-date-picker
+            style="width: 100%"
+            placement="top"
+            :editable="false"
+            v-model="advanceSearchForm.start_date"
+            type="date"
+            placeholder="开始日期(可选)"
+            value-format="YYYY-MM-DD"
+          />
+        </el-form-item>
+
+        <el-form-item label="" prop="end_date">
+          <el-date-picker
+            style="width: 100%"
+            placement="top"
+            :editable="false"
+            v-model="advanceSearchForm.end_date"
+            type="date"
+            placeholder="结束日期(可选)"
+            value-format="YYYY-MM-DD"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="dialogSearchAdvanceVisible = false">取消</el-button>
+          <el-button type="primary" @click="handleSearchAdvanced">确认</el-button>
+        </span>
+      </template>
+    </el-dialog>
+
+  </div>
+</template>
+
+<script setup>
+import { ref, watch, onMounted, onUnmounted, nextTick, computed, h } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import FolderItem from '../components/FolderItem.vue'
+import FileItem from '../components/FileItem.vue'
+import TextViewerDialog from '../components/TextViewerDialog.vue'
+import UploadQueuePanel from '../components/UploadQueuePanel.vue'
+import { getFiles, updateCache, checkFiles, cleanDb, createNewFolder, renameFile, deleteFileOrFolder, uploadFileToServer, uploadFolderTreeToServer, downloadFromText, moveFile, convertFileToMp4, getFolderInfo, searchByImage, rebuildImageHash } from '../services/userApi'
+import { useBackdoorMenuAccess } from '../composables/useBackdoorMenuAccess'
+import { createEncryptedUrl } from '../utils/videoMiddleware'
+import { stashImageSearchResult, takeImageSearchResult } from '../utils/imageSearchCache'
+
+const stateCache = {}
+const BACKDOOR_TOP_ACTIONS = ['updateCache', 'cleanDb', 'rebuildImageHash', 'downloadFromText']
+const BACKDOOR_FILE_ACTIONS = ['rename', 'move', 'delete', 'converthls', 'setFolderCover']
+const BACKDOOR_FOLDER_ACTIONS = ['rename', 'move', 'delete']
+
+const router = useRouter()
+const route = useRoute()
+const { backdoorMenuAccessState, trackHomeTap } = useBackdoorMenuAccess()
+
+// 状态变量
+const files = ref([])
+const searchInput = ref('')
+const loading = ref(false)
+const fileInput = ref(null)
+const folderInput = ref(null)
+const imageSearchInput = ref(null)
+const uploadTasks = ref([])
+const isUploadPanelCollapsed = ref(false)
+const isDragActive = ref(false)
+const dragCounter = ref(0)
+const uploadQueueRunning = ref(false)
+const uploadTaskIdSeed = ref(0)
+let uploadRefreshTimer = null
+const isImageSearchRoute = (query) => {
+  return Boolean(query?.img_search)
+}
+const imageSearchActive = computed(() => {
+  return isImageSearchRoute(route.query)
+})
+const mediaContainer = ref(null) // 添加滚动容器的ref
+const breadcrumbPath = ref([]) // 存储面包屑导航路径
+
+// 分页状态
+const currentPage = ref(0)
+const pageSize = ref(5)
+const hasMoreFiles = ref(true)
+
+// 对话框状态
+const createFolderDialogVisible = ref(false)
+const newFolderName = ref('')
+const renameDialogVisible = ref(false)
+const newName = ref('')
+const currentItem = ref(null)
+const textLinkDialogVisible = ref(false)
+const linkText = ref('')
+const moveDialogVisible = ref(false)
+const folderTree = ref(null) // Ref for the tree component
+const dialogSearchAdvanceVisible = ref(false)
+const advanceSearchForm = ref({
+  query: '',
+  space: '',
+  type: '',
+  mime_type: '',
+  start_date: '',
+  end_date: ''
+})
+
+const redDotShow = computed(() => {
+  return route.query.query || route.query.end_date || route.query.start_date || route.query.mime_type || route.query.type || route.query.space
+})
+
+const currentFolderId = computed(() => route.params.id || null)
+const currentFolderLabel = computed(() => {
+  return breadcrumbPath.value.length > 0 ? breadcrumbPath.value[breadcrumbPath.value.length - 1].name : '根目录'
+})
+
+const queuedUploadCount = computed(() => {
+  return uploadTasks.value.filter(task => task.status === 'queued').length
+})
+
+const activeUploadCount = computed(() => {
+  return uploadTasks.value.filter(task => task.status === 'uploading').length
+})
+
+const failedUploadCount = computed(() => {
+  return uploadTasks.value.filter(task => task.status === 'failed').length
+})
+
+const completedUploadCount = computed(() => {
+  return uploadTasks.value.filter(task => task.status === 'success' || task.status === 'canceled').length
+})
+
+const uploadPanelSummary = computed(() => {
+  const parts = []
+  if (activeUploadCount.value > 0) parts.push(`上传中 ${activeUploadCount.value}`)
+  if (queuedUploadCount.value > 0) parts.push(`等待 ${queuedUploadCount.value}`)
+  if (failedUploadCount.value > 0) parts.push(`失败 ${failedUploadCount.value}`)
+  if (completedUploadCount.value > 0) parts.push(`完成 ${completedUploadCount.value}`)
+  return parts.join('，') || '暂无任务'
+})
+
+// 文本查看对话框状态
+const txtDialogVisible = ref(false)
+
+const imageList = computed(() => {
+  return files.value.filter(file => {
+    const ext = file.filename.split('.').pop().toLowerCase()
+    return ['jpg', 'jpeg', 'png', 'gif', 'webp', 'heic', 'heif', 'bmp'].includes(ext)
+  })
+})
+
+const isCanceledError = (error) => {
+  return error?.code === 'ERR_CANCELED' || error?.name === 'CanceledError'
+}
+
+const normalizeUploadError = (error) => {
+  if (isCanceledError(error)) {
+    return ''
+  }
+  return error?.response?.data?.message || error?.message || '上传失败'
+}
+
+const createUploadTask = (file, parentId, folderName, options = {}) => {
+  uploadTaskIdSeed.value += 1
+  return {
+    id: `upload-${Date.now()}-${uploadTaskIdSeed.value}`,
+    file,
+    parentId,
+    folderName,
+    kind: options.kind || 'file',
+    files: options.files || [],
+    rootFolderName: options.rootFolderName || '',
+    progress: 0,
+    status: 'queued',
+    error: '',
+    controller: null
+  }
+}
+
+const scheduleRefreshAfterUpload = (parentId) => {
+  if (String(parentId ?? '') !== String(currentFolderId.value ?? '')) {
+    return
+  }
+  if (uploadRefreshTimer) {
+    clearTimeout(uploadRefreshTimer)
+  }
+  uploadRefreshTimer = setTimeout(() => {
+    loadFiles()
+    uploadRefreshTimer = null
+  }, 500)
+}
+
+const runUploadTask = async (task) => {
+  task.status = 'uploading'
+  task.progress = 0
+  task.error = ''
+  task.controller = new AbortController()
+
+  try {
+    if (task.kind === 'folder') {
+      await uploadFolderTreeToServer(task.files, task.parentId, task.rootFolderName, (progress) => {
+        task.progress = Math.round(progress)
+      }, {
+        signal: task.controller.signal
+      })
+    } else {
+      await uploadFileToServer(task.file, task.parentId, (progress) => {
+        task.progress = Math.round(progress)
+      }, {
+        signal: task.controller.signal
+      })
+    }
+    task.progress = 100
+    task.status = 'success'
+    scheduleRefreshAfterUpload(task.parentId)
+  } catch (error) {
+    if (isCanceledError(error)) {
+      task.status = 'canceled'
+    } else {
+      task.status = 'failed'
+      task.error = normalizeUploadError(error)
+    }
+  } finally {
+    task.controller = null
+  }
+}
+
+const processUploadQueue = async () => {
+  if (uploadQueueRunning.value) {
+    return
+  }
+  uploadQueueRunning.value = true
+
+  try {
+    while (true) {
+      const nextTask = uploadTasks.value.find(task => task.status === 'queued')
+      if (!nextTask) {
+        break
+      }
+      await runUploadTask(nextTask)
+    }
+  } finally {
+    uploadQueueRunning.value = false
+  }
+}
+
+const enqueueUploadFiles = (fileList, parentId = currentFolderId.value, folderName = currentFolderLabel.value, options = {}) => {
+  const filesToUpload = Array.from(fileList || []).filter(file => file instanceof File)
+  if (filesToUpload.length === 0) {
+    return 0
+  }
+
+  const tasks = filesToUpload.map(file => createUploadTask(file, parentId, folderName))
+  uploadTasks.value.push(...tasks)
+  if (!options.silent) {
+    ElMessage.success(`已加入上传队列 ${tasks.length} 个文件`)
+  }
+  processUploadQueue()
+  return tasks.length
+}
+
+const normalizeFolderUploadEntries = (fileList) => {
+  return Array.from(fileList || []).map((item) => {
+    if (item instanceof File) {
+      return {
+        file: item,
+        relativePath: item.webkitRelativePath || item.name
+      }
+    }
+    if (item?.file instanceof File) {
+      return {
+        file: item.file,
+        relativePath: item.relativePath || item.file.webkitRelativePath || item.file.name
+      }
+    }
+    return null
+  }).filter(Boolean)
+}
+
+const enqueueUploadFolder = (fileList, parentId = currentFolderId.value, folderName = currentFolderLabel.value, options = {}) => {
+  const fileEntries = normalizeFolderUploadEntries(fileList)
+  if (fileEntries.length === 0) {
+    return null
+  }
+
+  const rootFolderName = fileEntries[0]?.relativePath?.split('/')?.[0]
+  if (!rootFolderName) {
+    ElMessage.warning('当前浏览器不支持文件夹上传')
+    return null
+  }
+
+  const totalSize = fileEntries.reduce((sum, entry) => sum + (entry.file.size || 0), 0)
+  const task = createUploadTask({
+    name: `${rootFolderName} (${fileEntries.length} 个文件)`,
+    size: totalSize
+  }, parentId, folderName, {
+    kind: 'folder',
+    files: fileEntries,
+    rootFolderName
+  })
+
+  uploadTasks.value.push(task)
+  if (!options.silent) {
+    ElMessage.success(`已加入文件夹上传队列：${rootFolderName}`)
+  }
+  processUploadQueue()
+  return task
+}
+
+const cancelUploadTask = (task) => {
+  if (task.status === 'queued') {
+    task.status = 'canceled'
+    return
+  }
+  if (task.status === 'uploading' && task.controller) {
+    task.controller.abort()
+  }
+}
+
+const retryUploadTask = (task) => {
+  task.status = 'queued'
+  task.progress = 0
+  task.error = ''
+  processUploadQueue()
+}
+
+const removeUploadTask = (taskId) => {
+  uploadTasks.value = uploadTasks.value.filter(task => task.id !== taskId)
+}
+
+const clearCompletedUploads = () => {
+  uploadTasks.value = uploadTasks.value.filter(task => !['success', 'canceled'].includes(task.status))
+}
+
+const toggleUploadPanel = () => {
+  isUploadPanelCollapsed.value = !isUploadPanelCollapsed.value
+}
+
+const isFileDragEvent = (event) => {
+  return Array.from(event.dataTransfer?.types || []).includes('Files')
+}
+
+const getDragEntries = (event) => {
+  return Array.from(event.dataTransfer?.items || [])
+    .map(item => item.webkitGetAsEntry?.())
+    .filter(Boolean)
+}
+
+const readFileEntry = (entry) => {
+  return new Promise((resolve, reject) => {
+    entry.file(resolve, reject)
+  })
+}
+
+const readDirectoryEntryBatch = (reader) => {
+  return new Promise((resolve, reject) => {
+    reader.readEntries(resolve, reject)
+  })
+}
+
+const collectDroppedDirectoryFiles = async (directoryEntry, basePath = '') => {
+  const currentBasePath = basePath ? `${basePath}/${directoryEntry.name}` : directoryEntry.name
+  const reader = directoryEntry.createReader()
+  const collectedFiles = []
+
+  while (true) {
+    const entries = await readDirectoryEntryBatch(reader)
+    if (!entries.length) {
+      break
+    }
+
+    for (const entry of entries) {
+      if (entry.isFile) {
+        const file = await readFileEntry(entry)
+        collectedFiles.push({
+          file,
+          relativePath: `${currentBasePath}/${file.name}`
+        })
+      } else if (entry.isDirectory) {
+        const childFiles = await collectDroppedDirectoryFiles(entry, currentBasePath)
+        collectedFiles.push(...childFiles)
+      }
+    }
+  }
+
+  return collectedFiles
+}
+
+const handleDragEnter = (event) => {
+  if (!isFileDragEvent(event)) {
+    return
+  }
+  dragCounter.value += 1
+  isDragActive.value = true
+}
+
+const handleDragOver = (event) => {
+  if (!isFileDragEvent(event)) {
+    return
+  }
+  isDragActive.value = true
+}
+
+const handleDragLeave = (event) => {
+  if (!isFileDragEvent(event)) {
+    return
+  }
+  dragCounter.value = Math.max(0, dragCounter.value - 1)
+  if (dragCounter.value === 0) {
+    isDragActive.value = false
+  }
+}
+
+const handleDropUpload = async (event) => {
+  if (!isFileDragEvent(event)) {
+    return
+  }
+  dragCounter.value = 0
+  isDragActive.value = false
+
+  const dragEntries = getDragEntries(event)
+  const topLevelFolders = dragEntries.filter(entry => entry.isDirectory)
+  const topLevelFileEntries = dragEntries.filter(entry => entry.isFile)
+
+  let queuedFolderCount = 0
+  let queuedFileCount = 0
+
+  for (const folderEntry of topLevelFolders) {
+    try {
+      const folderFiles = await collectDroppedDirectoryFiles(folderEntry)
+      if (folderFiles.length === 0) {
+        continue
+      }
+      const task = enqueueUploadFolder(folderFiles, currentFolderId.value, currentFolderLabel.value, { silent: true })
+      if (task) {
+        queuedFolderCount += 1
+      }
+    } catch (error) {
+      console.error('Error reading dropped folder:', error)
+      ElMessage.error(`读取拖拽文件夹失败：${folderEntry.name}`)
+    }
+  }
+
+  if (topLevelFileEntries.length > 0) {
+    const topLevelFiles = await Promise.all(topLevelFileEntries.map(entry => readFileEntry(entry)))
+    queuedFileCount += enqueueUploadFiles(topLevelFiles, currentFolderId.value, currentFolderLabel.value, { silent: true })
+  } else if (dragEntries.length === 0) {
+    const droppedFiles = Array.from(event.dataTransfer?.files || [])
+    queuedFileCount += enqueueUploadFiles(droppedFiles, currentFolderId.value, currentFolderLabel.value, { silent: true })
+  }
+
+  if (queuedFolderCount === 0 && queuedFileCount === 0) {
+    ElMessage.warning('没有可加入上传队列的内容')
+    return
+  }
+
+  const parts = []
+  if (queuedFolderCount > 0) parts.push(`${queuedFolderCount} 个文件夹`)
+  if (queuedFileCount > 0) parts.push(`${queuedFileCount} 个文件`)
+  ElMessage.success(`已加入上传队列：${parts.join('，')}`)
+}
+
+const backdoorLocked = computed(() => {
+  return !backdoorMenuAccessState.canRenderHiddenMenus
+})
+
+const disabledFileActions = computed(() => {
+  return backdoorLocked.value ? BACKDOOR_FILE_ACTIONS : []
+})
+
+const disabledFolderActions = computed(() => {
+  return backdoorLocked.value ? BACKDOOR_FOLDER_ACTIONS : []
+})
+
+const isBackdoorActionDisabled = (action) => {
+  return backdoorLocked.value && BACKDOOR_TOP_ACTIONS.includes(action)
+}
+
+// 显示高级搜索对话框
+const showSearchAdvanceDialog = () => {
+  // 高级搜索对话框
+  dialogSearchAdvanceVisible.value = true
+  if (searchInput.value) {
+    advanceSearchForm.value.query = searchInput.value
+  }
+  advanceSearchForm.value.end_date = route.query.end_date || ''
+  advanceSearchForm.value.start_date = route.query.start_date || ''
+  advanceSearchForm.value.type = route.query.type || ''
+  advanceSearchForm.value.mime_type = route.query.mime_type || ''
+  advanceSearchForm.value.space = route.query.space || ''
+}
+
+const handleSearchAdvanced = async () => {
+  if (advanceSearchForm.value.type === 'folder') {
+    advanceSearchForm.value.mime_type = ''
+  }
+  const filters = Object.entries(advanceSearchForm.value).reduce((acc, [key, value]) => {
+    if (typeof value !== 'undefined' && value !== '' && value !== null) {
+      acc[key] = value
+    }
+    return acc
+  }, {})
+  router.push({
+    name: 'folder',
+    params: {
+      id: route.params.id
+    },
+    query: filters
+  })
+  dialogSearchAdvanceVisible.value = false
+  // advanceSearchFormRef.value.resetFields()
+}
+
+// 刷新收藏列表
+const refreshFavorites = (file, isFavorited) => {
+  files.value.find(item => item.id === file.id).favorited = isFavorited
+}
+
+// 检查内容高度是否填满容器，如果不足且有更多文件，则自动加载更多
+const checkContentHeight = () => {
+  if (!mediaContainer.value || loading.value || !hasMoreFiles.value) return
+
+  const { scrollHeight, clientHeight } = mediaContainer.value
+
+  if (scrollHeight <= clientHeight && hasMoreFiles.value) {
+    loadMoreFiles()
+  }
+}
+
+// 加载文件列表
+const loadFiles = async (resetPage = true) => {
+  loading.value = true
+  try {
+    // 重置页码
+    if (resetPage) {
+      currentPage.value = 0
+    }
+
+    // 获取当前文件夹ID（如果有）
+    const folderId = route.params.id
+    const query = route.query.query
+    const space = route.query.space
+    const type = route.query.type
+    const mime_type = route.query.mime_type
+    const start_date = route.query.start_date
+    const end_date = route.query.end_date
+
+    const filters = {
+      space,
+      type,
+      mime_type,
+      start_date,
+      end_date
+    }
+    const response = await getFiles(folderId, query, currentPage.value, pageSize.value, filters)
+    if (route.params.id !== folderId || route.query.query !== query) {
+      console.warn(`路由已变更，不更新数据`)
+      loading.value = false
+      return
+    }
+
+    // 更新文件列表
+    files.value = response.files || []
+    
+    // 判断是否还有更多文件 - 使用total字段
+    const totalLoaded = (currentPage.value + 1) * pageSize.value
+    hasMoreFiles.value = totalLoaded < response.total
+  } catch (error) {
+    ElMessage.error('加载文件失败')
+    console.error('Error loading files:', error)
+  } finally {
+    loading.value = false
+
+    nextTick(() => {
+      // 检查首屏内容是否填满容器，如果不足且有更多文件，则自动加载更多
+      checkContentHeight()
+      const lastScrollTop = getCache(route.params.id, route.query)?.scrollTop || 0
+      mediaContainer.value.scrollTop = lastScrollTop
+    })
+  }
+}
+
+// 获取文件夹的完整路径信息（包括所有父文件夹）
+const loadFolderPath = async (folderId, leafId) => {
+  leafId = leafId || folderId
+  if (!folderId) {
+    breadcrumbPath.value = []
+    return
+  }
+
+  const path = []
+  let currentId = folderId
+
+  while (currentId) {
+    const folderInfo = await getFolderInfo(currentId, leafId)
+    if (leafId !== route.params.id) {
+      // 请求期间路由又一次发生变化
+      console.warn(`路由已变更，面包屑停止下一步请求, 当前请求的面包屑叶子节点${leafId}, 当前路由节点${route.params.id}`)
+      return
+    }
+    if (!folderInfo) break
+
+    path.unshift({
+      id: folderInfo.id,
+      name: folderInfo.filename
+    })
+
+    currentId = folderInfo.parent_id
+  }
+
+  breadcrumbPath.value = path
+}
+
+const updatePageByCache = (cacheData) => {
+  files.value = cacheData.files || []
+  currentPage.value = cacheData.currentPage || 0
+  hasMoreFiles.value = cacheData.hasMoreFiles ?? true
+  nextTick(() => {
+    // 检查首屏内容是否填满容器，如果不足且有更多文件，则自动加载更多
+    checkContentHeight()
+    mediaContainer.value.scrollTop = cacheData.scrollTop || 0
+  })
+}
+
+const setCache = (id, query, value) => {
+  id = id || ''
+  query = query || ''
+  query = JSON.stringify(query)
+  stateCache[id] = stateCache[id] || {}
+  stateCache[id][query] = stateCache[id][query] || {}
+  Object.assign(stateCache[id][query], value)
+}
+
+const getCache = (id, query) => {
+  id = id || ''
+  query = query || ''
+  query = JSON.stringify(query)
+  return stateCache[id]?.[query]
+}
+
+const patchFolderCoverInList = (list, folderId, coverFileId) => {
+  if (!Array.isArray(list)) return false
+  const target = list.find(item => item?.type === 'folder' && String(item.id) === String(folderId))
+  if (!target) return false
+  target.cover_file_id = coverFileId
+  return true
+}
+
+const patchFolderCoverInStateCache = (folderId, coverFileId) => {
+  Object.values(stateCache).forEach((queryCache) => {
+    if (!queryCache || typeof queryCache !== 'object') return
+    Object.values(queryCache).forEach((cacheData) => {
+      patchFolderCoverInList(cacheData?.files, folderId, coverFileId)
+    })
+  })
+}
+
+const applyImageSearchResults = (resultFiles = []) => {
+  files.value = Array.isArray(resultFiles) ? [...resultFiles] : []
+  currentPage.value = 0
+  hasMoreFiles.value = false
+  setCache(route.params.id, route.query, {
+    files: [...files.value],
+    currentPage: 0,
+    hasMoreFiles: false,
+    scrollTop: 0
+  })
+  nextTick(() => {
+    if (mediaContainer.value) {
+      mediaContainer.value.scrollTop = 0
+    }
+  })
+}
+
+const restorePendingImageSearchResult = (query) => {
+  if (!isImageSearchRoute(query)) return false
+  const cachedFiles = takeImageSearchResult(query?.img_search)
+  if (!cachedFiles) return false
+  applyImageSearchResults(cachedFiles)
+  return true
+}
+
+// 监听路由变化
+watch(() => route.params.id, async (newValue, oldValue) => {
+  const cacheData = getCache(route.params.id, route.query)
+  console.log('cacheData1', cacheData)
+  if (cacheData) {
+    updatePageByCache(cacheData)
+  } else if (restorePendingImageSearchResult(route.query)) {
+    // 已从跨页面缓存恢复图搜图结果
+  } else {
+    loadFiles()
+  }
+  // 加载面包屑导航路径
+  loadFolderPath(route.params.id)
+}, { immediate: true })
+
+watch(() => route.query, async (newValue, oldValue) => {
+  if (JSON.stringify(newValue) === JSON.stringify(oldValue)) return
+  searchInput.value = route.query.query
+  const cacheData = getCache(route.params.id, route.query)
+  console.log('cacheData', cacheData, newValue, oldValue)
+  if (cacheData) {
+    updatePageByCache(cacheData)
+  } else {
+    if (restorePendingImageSearchResult(newValue)) {
+      return
+    }
+    if (isImageSearchRoute(newValue)) {
+      return
+    }
+    loadFiles()
+  }
+})
+
+watch(() => files.value, (files) => {
+  setCache(route.params.id, route.query, {
+    files: [...files]
+  })
+})
+
+watch(() => currentPage.value, (newPage) => {
+  setCache(route.params.id, route.query, {
+    currentPage: newPage
+  })
+})
+
+watch(() => hasMoreFiles.value, (hasMore) => {
+  setCache(route.params.id, route.query, {
+    hasMoreFiles: hasMore
+  })
+})
+
+
+// 文件操作项：仅当文件的父文件夹不是当前正在浏览的文件夹时，才显示"所在文件夹"
+// （收藏/最多收藏等列表由各自视图单独配置 allow-actions，不受此影响）
+const baseFileActions = ['viewtext', 'unzip', 'convertts', 'favorite', 'rename', 'move', 'download', 'delete', 'converthls', 'setFolderCover', 'searchSimilar']
+const getFileActions = (file) => {
+  const parentId = file.parent_id
+  const currentFolderId = route.params.id ?? null
+  // 根目录下 parent_id 为 null 的文件就在当前目录；路由参数是字符串，统一转字符串比较
+  const isInCurrentFolder = parentId === null || typeof parentId === 'undefined' || String(parentId) === String(currentFolderId)
+  return isInCurrentFolder ? baseFileActions : [...baseFileActions, 'navigateParent']
+}
+
+// 搜索文件
+const handleSearch = async () => {
+  const query = searchInput.value?.trim()
+  router.push({
+    name: 'folder',
+    params: { id: route.params.id },
+    // 有搜索词时默认限定在当前目录（含子目录）内搜索；无搜索词时清空条件回到目录浏览
+    query: query ? { query, space: 'children' } : {}
+  })
+}
+
+// 刷新缓存
+const refreshCache = async () => {
+  try {
+    // 获取当前文件夹ID（如果有）
+    const folderId = route.params.id
+
+    await updateCache(folderId)
+    await loadFiles()
+    ElMessage.success('刷新数据成功')
+  } catch (error) {
+    ElMessage.error('刷新数据失败')
+    console.error('Error updating cache:', error)
+  }
+}
+
+const confirmCleanDb = async () => {
+  try {
+    await ElMessageBox.confirm('将先检查当前目录树中文件的实际格式与后缀名是否匹配，不匹配时会直接原地修正；随后再进行数据库清洗。是否继续？', '数据检查', {
+      type: 'warning'
+    })
+    loading.value = true
+    const folderId = route.params.id
+    const checkResp = await checkFiles(folderId, { maxFolders: 20000 })
+    const checkResult = checkResp.result || {}
+    const resp = await cleanDb(folderId, { dryRun: false, fixThumbnails: false, maxFolders: 20000 })
+    const r = resp.result || {}
+    ElMessage.success(`文件检查：扫描文件夹 ${checkResult.scannedFolders || 0} / 文件 ${checkResult.scannedFiles || 0}，修正后缀 ${checkResult.renamed || 0}；数据库清洗：删除 ${r.deleted || 0}（文件 ${r.deletedFiles || 0} / 文件夹 ${r.deletedFolders || 0}），清空缩略图 ${r.clearedThumbnails || 0}`)
+    await loadFiles()
+  } catch (error) {
+    if (error !== 'cancel') {
+      ElMessage.error('数据检查失败')
+      console.error('Error checking data:', error)
+    }
+  } finally {
+    loading.value = false
+  }
+}
+
+const handleFolderCoverUpdated = (_, result) => {
+  if (!result?.folderId || !result?.coverFileId) return
+  patchFolderCoverInList(files.value, result.folderId, result.coverFileId)
+  patchFolderCoverInStateCache(result.folderId, result.coverFileId)
+  setCache(route.params.id, route.query, {
+    files: [...files.value]
+  })
+}
+
+// 导航到文件夹
+const navigateToFolder = (folderId) => {
+  router.push({ name: 'folder', params: { id: folderId } })
+}
+
+// 导航到根目录
+const navigateToRoot = () => {
+  trackHomeTap()
+  router.push({ name: 'home' })
+}
+
+// 触发文件上传
+const triggerFileUpload = () => {
+  fileInput.value.click()
+}
+
+const triggerFolderUpload = () => {
+  folderInput.value.click()
+}
+
+const triggerImageSearch = () => {
+  imageSearchInput.value.click()
+}
+
+const runImageSearch = async (file) => {
+  if (!file) return
+
+  loading.value = true
+  try {
+    const folderId = null
+    const imgSearchToken = Date.now().toString()
+    const nav = {
+      name: route.name,
+      params: route.params,
+      query: { ...route.query, img_search: imgSearchToken }
+    }
+    if (imageSearchActive.value) {
+      router.replace(nav)
+    } else {
+      router.push(nav)
+    }
+    const response = await searchByImage(file, folderId, 80)
+    stashImageSearchResult(imgSearchToken, response.files || [])
+    applyImageSearchResults(response.files || [])
+    ElMessage.success(`找到 ${files.value.length} 个相似结果`)
+  } catch (error) {
+    ElMessage.error('以图搜图失败')
+    console.error('Error search by image:', error)
+  } finally {
+    loading.value = false
+    if (imageSearchInput.value) {
+      imageSearchInput.value.value = ''
+    }
+  }
+}
+
+const searchByImageFile = async (event) => {
+  const file = event.target.files[0]
+  try {
+    await runImageSearch(file)
+  } finally {
+    if (imageSearchInput.value) {
+      imageSearchInput.value.value = ''
+    }
+  }
+}
+
+const searchSimilarByFile = async (fileInfo) => {
+  if (!fileInfo?.id) return
+
+  try {
+    const response = await fetch(`/media/${fileInfo.id}`)
+    if (!response.ok) {
+      throw new Error(`Failed to fetch image: ${response.status}`)
+    }
+    const blob = await response.blob()
+    const queryFile = new File([blob], fileInfo.filename || `image-${fileInfo.id}`, {
+      type: blob.type || fileInfo.mime_type || 'application/octet-stream'
+    })
+    await runImageSearch(queryFile)
+  } catch (error) {
+    ElMessage.error('查相似失败')
+    console.error('Error searching similar image:', error)
+  }
+}
+
+const confirmRebuildImageHash = async () => {
+  try {
+    await ElMessageBox.confirm('将为未建立索引的图片生成特征，用于以图搜图。是否继续？', '重建图片索引', {
+      type: 'warning'
+    })
+    loading.value = true
+    const result = await rebuildImageHash(2000)
+    const hash = result.hash || {}
+    const embedding = result.embedding || {}
+    ElMessage.success(`扫描 ${result.scanned}，哈希成功 ${hash.success || 0} 失败 ${hash.failed || 0}，向量成功 ${embedding.success || 0} 失败 ${embedding.failed || 0}`)
+  } catch (error) {
+    if (error !== 'cancel') {
+      console.error('Error rebuild image hash:', error)
+      ElMessage.error('重建图片索引失败')
+    }
+  } finally {
+    loading.value = false
+  }
+}
+
+// 上传文件
+const uploadFile = async (event) => {
+  const selectedFiles = Array.from(event.target.files || [])
+  enqueueUploadFiles(selectedFiles)
+  if (fileInput.value) {
+    fileInput.value.value = ''
+  }
+}
+
+const uploadFolder = async (event) => {
+  const selectedFiles = Array.from(event.target.files || [])
+  enqueueUploadFolder(selectedFiles)
+  if (folderInput.value) {
+    folderInput.value.value = ''
+  }
+}
+
+// 显示创建文件夹对话框
+const showCreateFolderDialog = () => {
+  newFolderName.value = ''
+  createFolderDialogVisible.value = true
+}
+
+// 创建文件夹
+const createFolder = async () => {
+  if (!newFolderName.value.trim()) {
+    ElMessage.warning('请输入文件夹名称')
+    return
+  }
+
+  try {
+    // 获取当前文件夹ID（如果有）
+    const parentId = route.params.id || null
+
+    await createNewFolder(newFolderName.value, parentId)
+    createFolderDialogVisible.value = false
+    ElMessage.success('创建文件夹成功')
+    await loadFiles()
+  } catch (error) {
+    ElMessage.error('创建文件夹失败')
+    console.error('Error creating folder:', error)
+  }
+}
+
+// 显示重命名对话框
+const showRenameDialog = (item) => {
+  currentItem.value = item
+  newName.value = item.filename
+  renameDialogVisible.value = true
+}
+
+// 重命名文件或文件夹
+const renameItem = async () => {
+  if (!newName.value.trim()) {
+    ElMessage.warning('请输入新名称')
+    return
+  }
+
+  try {
+    await renameFile(currentItem.value.id, newName.value, currentItem.value.type)
+    renameDialogVisible.value = false
+    ElMessage.success('重命名成功')
+    await loadFiles()
+  } catch (error) {
+    ElMessage.error('重命名失败')
+    console.error('Error renaming item:', error)
+  }
+}
+
+// 确认删除
+const confirmDelete = (item) => {
+  ElMessageBox.confirm(
+    `确定要删除 ${item.filename} 吗？`,
+    '警告',
+    {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      type: 'warning',
+    }
+  )
+    .then(async () => {
+      try {
+        await deleteFileOrFolder(item.id, item.type)
+        ElMessage.success('删除成功')
+        await loadFiles()
+      } catch (error) {
+        ElMessage.error('删除失败')
+        console.error('Error deleting item:', error)
+      }
+    })
+    .catch(() => {
+      // 用户取消删除
+    })
+}
+
+// 显示文本链接上传对话框
+const showTextLinkUploadDialog = () => {
+  // 获取剪切板权限和内容
+  const clipboard = navigator.clipboard
+  linkText.value = ''
+  if (clipboard) {
+    clipboard.readText()
+      .then((clipboardText) => {
+        linkText.value = clipboardText
+      }).finally(() => {
+        textLinkDialogVisible.value = true
+      })
+  } else {
+    textLinkDialogVisible.value = true
+  }
+}
+
+// 从链接上传
+const uploadFromLinks = async () => {
+  if (!linkText.value.trim()) {
+    ElMessage.warning('请输入链接')
+    return
+  }
+
+  const text = linkText.value
+  // 获取当前文件夹ID（如果有）
+  const folderId = route.params.id || null
+
+  try {
+    textLinkDialogVisible.value = false
+    ElMessage.success('开始在后台提取资源，请稍后...')
+    const response = await downloadFromText(text, folderId)
+    ElMessage.success(`提取成功${response.successCount}条, 失败${response.failedLinks.length}条`)
+
+    // 下载完成后导航到目标文件夹
+    if (response.downloadId) {
+      router.push({ name: 'folder', params: { id: response.downloadId } })
+      return // 导航会触发路由变化，会自动加载文件，不需要再调用loadFiles
+    }
+
+    await loadFiles()
+  } catch (error) {
+    ElMessage.error('添加下载任务失败')
+    console.error('Error adding download tasks:', error)
+  }
+}
+
+// 移动文件或文件夹
+const moveItem = async () => {
+  const targetFolderNode = folderTree.value.getCurrentNode()
+  if (!targetFolderNode) {
+    ElMessage.warning('请选择目标文件夹')
+    return
+  }
+
+  if (currentItem.value.id === targetFolderNode.id) {
+    ElMessage.warning('目标文件夹不能是当前文件夹')
+    return
+  }
+
+  try {
+    // 获取目标文件夹的ID
+    const targetId = targetFolderNode.id
+    await moveFile(currentItem.value.id, targetId)
+    moveDialogVisible.value = false
+    ElMessage.success('移动成功')
+    await loadFiles()
+  } catch (error) {
+    ElMessage.error('移动失败')
+    console.error('Error moving item:', error)
+  }
+}
+
+// 显示移动对话框
+const showMoveDialog = (item) => {
+  currentItem.value = item
+  moveDialogVisible.value = true
+  nextTick(() => {
+    if (folderTree.value) {
+        const rootNode = folderTree.value.getNode(null);
+        if (rootNode) {
+            rootNode.loaded = false;
+        }
+    }
+  })
+}
+
+const loadNode = async (node, resolve) => {
+  if (node.level === 0) {
+    try {
+      const response = await getFiles(null, null, 0, 1000, { type: 'folder', space: 'level_1' }) // Fetch root level items
+      const folders = response.files
+        .map(folder => ({ ...folder, isLeaf: false }))
+      return resolve([{ id: 0, filename: '根目录', isLeaf: false, children: folders }])
+    } catch (error) {
+      ElMessage.error('加载根文件夹列表失败')
+      console.error('Error loading root folders for tree:', error)
+      return resolve([{ id: 0, filename: '根目录', isLeaf: false }])
+    }
+  }
+
+  const parentId = node.data.id
+  try {
+    const response = await getFiles(parentId, null, 0, 1000, { type: 'folder', space: 'level_1' })
+    const folders = response.files
+      .map(folder => ({ ...folder, isLeaf: false }))
+
+    resolve(folders)
+  } catch (error) {
+    ElMessage.error(`加载文件夹 ${node.data.filename} 的子列表失败`)
+    console.error('Error loading subfolders for tree:', error)
+    resolve([])
+  }
+}
+
+// 下载文件
+const downloadFile = (file) => {
+  const link = document.createElement('a')
+  const isVideo = (file.mime_type || '').startsWith('video/') || Boolean(file.m3u8_path)
+  const targetUrl = isVideo
+    ? createEncryptedUrl(`/media/${file.id}?download=1`)
+    : `/media/${file.id}`
+  link.href = targetUrl
+  link.download = file.filename || ''
+  link.rel = 'noopener'
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+}
+
+// 查看文本文件
+const viewTextFile = async (file) => {
+  try {
+    currentItem.value = file
+    txtDialogVisible.value = true
+  } catch (error) {
+    console.error('Error opening text file:', error)
+    ElMessageBox.alert('打开文件失败', '错误', { type: 'error' })
+  }
+}
+
+
+
+const convertTsFile = async (file) => {
+  convertFileToMp4(file.id).then(() => {
+    ElMessage.success('转换成功')
+    loadFiles()
+  }).catch((error) => {
+    ElMessage.error('转换失败')
+    console.error('Error converting file:', error)
+  })
+}
+
+// 加载更多文件
+const loadMoreFiles = async () => {
+  if (imageSearchActive.value) return
+  if (loading.value || !hasMoreFiles.value) return
+  loading.value = true
+
+  try {
+    // 获取当前文件夹ID（如果有）
+    const folderId = route.params.id
+    const query = route.query.query
+    const space = route.query.space
+    const type = route.query.type
+    const mime_type = route.query.mime_type
+    const start_date = route.query.start_date
+    const end_date = route.query.end_date
+
+    const filters = {
+      space,
+      type,
+      mime_type,
+      start_date,
+      end_date
+    }
+
+    const nextPage = currentPage.value + 1
+    const response = await getFiles(folderId, query, nextPage, pageSize.value, filters)
+
+    if (route.params.id === folderId && route.query.query === query) {
+      currentPage.value = nextPage
+
+      if (response.files && response.files.length > 0) {
+        files.value = [...files.value, ...response.files]
+        nextTick(() => {
+          if (mediaContainer.value) {
+            checkContentHeight()
+            nextTick(() => {
+              const lastScrollTop = getCache(route.params.id, route.query)?.scrollTop || 0
+              mediaContainer.value.scrollTop = lastScrollTop
+            })
+          }
+        })
+        // 判断是否还有更多文件 - 使用total字段
+        const totalLoaded = (currentPage.value + 1) * pageSize.value
+        hasMoreFiles.value = totalLoaded < response.total
+
+      } else {
+        hasMoreFiles.value = false
+      }
+    } else {
+      console.warn('路由已变更，不更新数据')
+    }
+  } catch (error) {
+    ElMessage.error('加载更多文件失败')
+    console.error('Error loading more files:', error)
+  } finally {
+    loading.value = false
+  }
+}
+
+// 检查滚动位置并加载更多文件
+const checkScrollPosition = () => {
+  if (imageSearchActive.value) return
+  setCache(route.params.id, route.query, {
+    scrollTop: mediaContainer.value.scrollTop
+  })
+  if (!mediaContainer.value || loading.value || !hasMoreFiles.value) {
+    return
+  }
+
+  const { scrollTop, scrollHeight, clientHeight } = mediaContainer.value
+  // 当滚动到距离底部100px以内时加载更多
+  if (scrollHeight - scrollTop - clientHeight < 100) {
+    loadMoreFiles()
+  }
+}
+
+const cacheScrollPosition = () => {
+  if (mediaContainer.value) {
+    setCache(route.params.id, route.query, {
+      scrollTop: mediaContainer.value.scrollTop
+    })
+  }
+}
+
+// 设置滚动事件监听
+onMounted(() => {
+  if (mediaContainer.value) {
+    mediaContainer.value.addEventListener('scroll', checkScrollPosition)
+    mediaContainer.value.addEventListener('scroll', cacheScrollPosition)
+  }
+})
+
+// 移除滚动事件监听
+onUnmounted(() => {
+  if (mediaContainer.value) {
+    mediaContainer.value.removeEventListener('scroll', checkScrollPosition)
+    mediaContainer.value.removeEventListener('scroll', cacheScrollPosition)
+  }
+  if (uploadRefreshTimer) {
+    clearTimeout(uploadRefreshTimer)
+    uploadRefreshTimer = null
+  }
+})
+</script>
+
+<style scoped>
+.file-explorer {
+  padding: 20px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+}
+
+.top-container {
+  margin-bottom: 20px;
+  margin-top: 10px;
+}
+
+.top-form {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.search-input {
+  width: 140px;
+}
+
+.toolbar-folder-upload-icon {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  color: currentColor;
+}
+
+.toolbar-folder-upload-icon__folder {
+  width: 18px;
+  height: 18px;
+}
+
+.toolbar-folder-upload-icon__badge {
+  position: absolute;
+  right: -4px;
+  bottom: -4px;
+  width: 13px;
+  height: 13px;
+}
+
+.toolbar-image-search-icon {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  color: currentColor;
+}
+
+.toolbar-image-search-icon__picture {
+  width: 18px;
+  height: 18px;
+}
+
+.toolbar-image-search-icon__badge {
+  position: absolute;
+  right: -4px;
+  bottom: -4px;
+  width: 13px;
+  height: 13px;
+}
+
+.path-navigation {
+  background-color: #f5f7fa;
+  padding: 8px 12px;
+  border-radius: 4px;
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.current-path {
+  cursor: pointer;
+  font-family: monospace;
+}
+
+.el-breadcrumb :deep(.el-breadcrumb__item) {
+  cursor: pointer;
+}
+
+.el-breadcrumb :deep(.el-breadcrumb__inner) {
+  color: #409eff;
+}
+
+.el-breadcrumb :deep(.el-breadcrumb__inner):hover {
+  color: #66b1ff;
+}
+
+@media (any-hover: hover) {
+  .el-breadcrumb :deep(.el-breadcrumb__inner):hover {
+    color: #66b1ff;
+  }
+}
+
+.copy-path-btn {
+  margin-left: 10px;
+}
+
+.media-container {
+  flex: 1;
+  position: relative;
+  overflow-y: auto;
+  padding: 4px;
+}
+
+.media-container.is-drag-active {
+  outline: 2px dashed #409eff;
+  outline-offset: -6px;
+  border-radius: 12px;
+  background: rgba(64, 158, 255, 0.06);
+}
+
+.upload-drop-hint {
+  position: absolute;
+  inset: 12px;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-radius: 12px;
+  background: rgba(64, 158, 255, 0.12);
+  color: #409eff;
+  pointer-events: none;
+}
+
+.upload-drop-hint__title {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.upload-drop-hint__desc {
+  font-size: 13px;
+}
+
+.media-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
+}
+
+.move-dialog-content {
+  margin-bottom: 20px;
+  max-height: calc(100vh - 360px);
+  overflow-y: auto;
+  padding-right: 4px;
+  box-sizing: border-box;
+}
+
+.move-dialog-content p {
+  margin-top: 0;
+}
+
+.loading-indicator {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-top: 20px;
+  padding: 10px 0;
+  color: #409eff;
+  font-size: 14px;
+}
+
+.loading-indicator .el-icon {
+  margin-right: 5px;
+}
+
+.folder-tree-node_lavel {
+  vertical-align: text-bottom;
+}
+
+.filter-btn {
+  position: relative;
+}
+
+.red-dot {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 8px;
+  height: 8px;
+  background: radial-gradient(circle, #ddddff 0%, #409eff 100%);;
+  border-radius: 50%;
+  z-index: 2;
+  box-shadow: 0 0 8px rgba(0, 0, 255, 0.6);
+}
+
+/* @keyframes pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.15); }
+  100% { transform: scale(1); }
+} */
+
+.red-dot {
+  animation: pulse 1.6s infinite;
+}
+</style>

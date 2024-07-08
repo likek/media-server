@@ -1,0 +1,88 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ESBUILD_BIN="$ROOT_DIR/front-end/node_modules/.bin/esbuild"
+OUTPUT_DIR="$ROOT_DIR/dist/server"
+MINIFY=1
+
+usage() {
+  cat <<'EOF'
+用法:
+  ./build-server-bundle [选项]
+
+功能:
+  1. 将后端源码 bundle 为单入口文件
+  2. 保留 node_modules 为外部依赖，降低原生模块打包风险
+  3. 产出到 ./dist/server/server.js，供 release 目录复用
+
+选项:
+  --output-dir <目录>    指定 bundle 输出目录，默认 ./dist/server
+  --no-minify            关闭压缩，便于排查 bundle 问题
+  -h, --help             查看帮助
+EOF
+}
+
+log() {
+  printf '\n==> %s\n' "$1"
+}
+
+die() {
+  printf '错误: %s\n' "$1" >&2
+  exit 1
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --output-dir)
+      [[ $# -ge 2 ]] || die "--output-dir 需要一个目录参数"
+      OUTPUT_DIR="$2"
+      shift 2
+      ;;
+    --no-minify)
+      MINIFY=0
+      shift
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      die "未知参数: $1"
+      ;;
+  esac
+done
+
+[[ -f "$ROOT_DIR/server.js" ]] || die "缺少 server.js"
+[[ -d "$ROOT_DIR/server" ]] || die "缺少 server 目录"
+[[ -f "$ROOT_DIR/serverConfig.js" ]] || die "缺少 serverConfig.js"
+[[ -x "$ESBUILD_BIN" ]] || die "未找到 esbuild，请先安装 front-end 依赖"
+
+rm -rf "$OUTPUT_DIR"
+mkdir -p "$OUTPUT_DIR"
+
+log "构建后端 bundle"
+
+build_args=(
+  "$ROOT_DIR/server.js"
+  --bundle
+  --platform=node
+  --format=esm
+  --target=node20
+  --packages=external
+  --outfile="$OUTPUT_DIR/server.js"
+  --charset=ascii
+  --legal-comments=none
+)
+
+if [[ "$MINIFY" -eq 1 ]]; then
+  build_args+=(--minify)
+fi
+
+"$ESBUILD_BIN" "${build_args[@]}"
+
+printf '%s\n' "$(date '+%Y-%m-%d %H:%M:%S')" >"$OUTPUT_DIR/BUILD_TIME"
+
+log "后端 bundle 完成"
+printf '输出文件: %s\n' "$OUTPUT_DIR/server.js"

@@ -1,0 +1,17 @@
+{
+  "name": "aes_crypto_wasm",
+  "type": "module",
+  "version": "0.1.0",
+  "files": [
+    "xxx_bg.wasm",
+    "xxx.js",
+    "xxx_bg.js",
+    "xxx.d.ts"
+  ],
+  "main": "xxx.js",
+  "types": "xxx.d.ts",
+  "sideEffects": [
+    "./xxx.js",
+    "./snippets/*"
+  ]
+}
