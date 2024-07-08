@@ -8,7 +8,7 @@
     const fileInput = document.getElementById('fileInput');
 
     let currentPath = '';
-    const baseServer = 'http://192.168.31.103:3000/';
+    const baseServer = '';
     const fileCache = {};
     let totalFiles = [];
     let renderedFilesCount = 0;
@@ -39,7 +39,7 @@
 
     async function updateCache() {
         try {
-            const response = await fetch(`${baseServer}updateCache`, {
+            const response = await fetch(`${baseServer}/updateCache`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -71,7 +71,7 @@
             checkAndRenderInitialFiles();
         } else {
             try {
-                const response = await fetch(`${baseServer}files?path=${encodeURIComponent(path)}`);
+                const response = await fetch(`${baseServer}/files?path=${encodeURIComponent(path)}`);
                 const files = await response.json();
                 totalFiles = files; // Cache the result
                 fileCache[currentPath] = files;
@@ -188,6 +188,7 @@
             const footer = document.createElement('div');
             footer.style = `display: flex;justify-content: ${'space-between'};`;
             const deleteButton = document.createElement('button');
+            deleteButton.className = 'delete-button';
             deleteButton.style.marginRight = 'auto';
             deleteButton.innerText = '删除';
             deleteButton.addEventListener('click', (e) => {
@@ -247,7 +248,7 @@
         }
     
         try {
-            const response = await fetch(`${baseServer}rename`, {
+            const response = await fetch(`${baseServer}/rename`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -276,7 +277,7 @@
         }
     
         try {
-            const response = await fetch(`${baseServer}createFolder`, {
+            const response = await fetch(`${baseServer}/createFolder`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -315,7 +316,7 @@
         const userConfirmed = confirm(`确定要删除文件 ${filename} 吗？`);
         if (userConfirmed) {
             try {
-                const response = await fetch(`${baseServer}delete`, {
+                const response = await fetch(`${baseServer}/delete`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -374,7 +375,7 @@
         });
 
         // 设置请求地址和方法
-        const url = `${baseServer}upload?path=${encodeURIComponent(currentPath)}`;
+        const url = `${baseServer}/upload?path=${encodeURIComponent(currentPath)}`;
         xhr.open('POST', url);
 
         try {
@@ -385,7 +386,7 @@
         }
     }
     function moveFileOrFolder(filename, targetFolder, currentPath) {
-        const url = `${baseServer}move`;
+        const url = `${baseServer}/move`;
         const body = JSON.stringify({
             filename,
             targetFolder,

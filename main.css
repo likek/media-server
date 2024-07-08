@@ -117,8 +117,12 @@ button.move-button {
     background-color: #e6a23c;
 }
 
-.media-item button:hover {
+.media-item button.move-button:hover {
     background-color: #d18b2d; 
+}
+
+.media-item button.delete-button:hover {
+    background-color: #f03030; 
 }
 
 .media-item a {
