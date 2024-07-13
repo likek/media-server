@@ -166,7 +166,15 @@
             } else if (['jpg', 'jpeg', 'png', 'gif'].includes(fileExt)) {
                 const img = document.createElement('img');
                 img.src = baseServer + file.filename;
+                img.className = 'image';
+                img.onclick = () => openImgModal(img);
                 div.appendChild(img);
+            } else if ('pdf' === fileExt) {
+                const a = document.createElement('a');
+                a.href = baseServer + file.filename;
+                a.innerText = filename
+                a.target = '_blank'
+                div.appendChild(a);
             }
     
             const fileInfoElement = document.createElement('p');
@@ -180,6 +188,7 @@
     
             const footer = document.createElement('div');
             footer.style = `display: flex;justify-content: ${'space-between'};`;
+            footer.classList.add('item-footer')
             const deleteButton = document.createElement('button');
             deleteButton.className = 'delete-button';
             deleteButton.style.marginRight = 'auto';
@@ -207,6 +216,50 @@
                     })
                 })
                 footer.appendChild(convertButton)
+            }
+
+            if (file.type !== 'folder' && (fileExt === 'zip' || fileExt === 'rar')) {
+                const unzipButton = document.createElement('button');
+                unzipButton.innerText = '解压';
+                unzipButton.className = 'move-button'
+                unzipButton.addEventListener('click', () => {
+                    showOverlay(div, '解压中...')
+                    unzipFile(`${currentPath}/${filename}`).finally(() => {
+                        hideOverlay(div)
+                    });
+                });
+                footer.appendChild(unzipButton);
+            }
+
+            if (file.type !== 'folder' && fileExt === 'txt') {
+                const viewButton = document.createElement('button');
+                viewButton.innerText = '查看';
+                viewButton.className = 'move-button'
+                viewButton.addEventListener('click', () => {
+                    viewTextFile(`${currentPath}/${filename}`, 0, 18);
+                });
+                footer.appendChild(viewButton);
+
+                const convertBtn = document.createElement('button');
+                convertBtn.innerText = '转换编码';
+                convertBtn.className = 'move-button'
+                convertBtn.addEventListener('click', () => {
+                    showOverlay(div, '编码转换中...')
+                    convertEncoding(`${currentPath}/${filename}`).then((data) => {
+                        showToast(data?.message || '转换编码成功', 'success')
+                    }).finally(() => {
+                        hideOverlay(div)
+                    })
+                });
+                footer.appendChild(convertBtn);
+            }
+
+            if (file.type !== 'folder' && ['mp3', 'wav'].includes(fileExt)) {
+                const audioPlayer = document.createElement('audio');
+                audioPlayer.classList.add('audio-player');
+                audioPlayer.controls = true;
+                audioPlayer.src = baseServer + file.filename;
+                div.appendChild(audioPlayer);
             }
 
             const moveButton = document.createElement('button');
@@ -529,7 +582,142 @@
             selection.addRange(range);
         }
     }
+
+    function unzipFile(zipFilePath) {
+        return fetch('/unzip', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ zipFilePath })
+        })
+        .then(response => response.json())
+        .then(data => {
+            showToast(data.message, 'success');
+            delete fileCache[currentPath];
+            loadMedia(currentPath); // 更新显示
+        })
+        .catch(error => {
+            console.error('Error during unzipping:', error);
+            showToast('Unzipping failed', 'error');
+        });
+    }
+
+    function getTxtContent(filePath, start, numLines) {
+        return fetch('/readTextFile', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json;charset=utf-8',
+                'Accept-Language': 'en,zh-cn'
+            },
+            body: JSON.stringify({ filePath, start, numLines, encoding: 'utf8' })
+        })
+        .then(response => response.json())
+        .catch(error => {
+            console.error('Error reading file:', error);
+            showToast('Error reading file', 'error');
+        });
+    }
+
+    function convertEncoding(filePath) {
+        return fetch('/convertTxtEncoding', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json;charset=utf-8',
+                'Accept-Language': 'en,zh-cn'
+            },
+            body: JSON.stringify({ filePath })
+        })
+        .then(response => {
+            return response.json()
+        })
+        .catch(error => {
+            console.error('Error convert encoding:', error);
+            showToast('Error convert encoding', 'error');
+        });
+    }
+
+    function viewTextFile(filePath, start, numLines) {
+        return getTxtContent(filePath, start, numLines).then((data) => {
+            if (data.content) {
+                openTxtModal(data.content, filePath, data.start, data.numLines)
+            } else {
+                showToast(data.message, 'error');
+            }
+        })
+    }
+
+    function openImgModal(img) {
+        const modal = document.getElementById("myModal");
+        const modalImg = document.getElementById("img01");
     
+        modal.style.display = "block";
+        modalImg.src = img.src;
+    }
+
+    function openTxtModal(txt, filePath, nextStart, numLines) {
+        const modal = document.getElementById("txtModal");
+        const modalTxt = document.getElementById("txtContent");
+        const btnTxtModelNext = document.getElementById('btnTxtModelNext')
+        const btnTxtModelClose = document.getElementById('btnTxtModelClose')
+        const btnTxtModelJump = document.getElementById('btnTxtModelJump')
+        const currPage = document.getElementById('currPage')
+        const txtFileName = document.getElementById('txtFileName')
+
+        txtFileName.innerText = filePath.substring(filePath.lastIndexOf('/') + 1)
+    
+        modal.style.display = "block";
+        modalTxt.innerText = txt;
+        modalTxt.__nextStart = nextStart;
+        modalTxt.__numLines = numLines
+        btnTxtModelNext.style.display = '';
+        currPage.innerText = Math.ceil((nextStart / numLines))
+
+        const txtContentCb = data => {
+            modalTxt.scrollTop = 0
+            modalTxt.innerText = data.content;
+            modalTxt.__nextStart = data.start;
+            modalTxt.__numLines = data.numLines
+            currPage.innerText = Math.ceil((modalTxt.__nextStart / modalTxt.__numLines))
+            if(data.isLastPage) {
+                btnTxtModelNext.style.display = 'none';
+            }
+        }
+
+        btnTxtModelNext.onclick = () => {
+            getTxtContent(filePath, modalTxt.__nextStart, modalTxt.__numLines).then(txtContentCb)
+        }
+
+        btnTxtModelJump.onclick = () => {
+            const targetPage = prompt('请输入页码').trim();
+            const currPage = Math.ceil((modalTxt.__nextStart / modalTxt.__numLines))
+            if (targetPage === '') {
+                showToast('页码不能为空', 'warn');
+            } else if (targetPage === currPage) {
+                showToast(`当前已是第${currPage}页`, 'warn');
+            } else if (!/\d+/.test(targetPage)) {
+                showToast(`页码必须为1数字`, 'warn');
+            } else {
+                const target = Number(targetPage)
+                if(target > 100000) {
+                    return showToast(`数值过大`, 'warn');
+                }
+                if (target <= 0) {
+                    return showToast(`数值过小`, 'warn');
+                }
+                getTxtContent(filePath, (target - 1) * (modalTxt.__numLines), modalTxt.__numLines).then(txtContentCb)
+            }
+        }
+
+        btnTxtModelClose.onclick = () => {
+            closeModal(modal)
+        }
+    }
+    
+    function closeModal(modal) {
+        modal = modal || document.getElementById("myModal");
+        modal.style.display = "none";
+    }
     
 
     document.addEventListener('DOMContentLoaded', () => {

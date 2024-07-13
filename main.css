@@ -125,7 +125,7 @@ button.move-button {
     background-color: #f03030; 
 }
 
-.media-item a {
+.media-item>item-footer>a {
     display: inline-block;
     margin: 10px 0 0 10px;
     background-color: #3498db; 
@@ -140,7 +140,7 @@ button.move-button {
     line-height: 18px;
 }
 
-.media-item a:hover {
+.media-item>item-footer>a:hover {
     background-color: #0056b3; 
 }
 
@@ -281,6 +281,96 @@ a[download] {
 @keyframes fadeout {
     from { top: 20px; opacity: 1; }
     to { top: 0; opacity: 0; }
+}
+
+
+.modal {
+    display: none; /* Hidden by default */
+    position: fixed; /* Stay in place */
+    z-index: 1; /* Sit on top */
+    left: 0;
+    top: 0;
+    width: 100%; /* Full width */
+    height: 100%; /* Full height */
+    overflow: auto; /* Enable scroll if needed */
+    background-color: rgb(0,0,0); /* Fallback color */
+    background-color: rgba(0,0,0,0.9); /* Black w/ opacity */
+}
+
+.modal-content {
+    margin: auto;
+    display: block;
+    margin-top: 1%;
+    height: 96%;
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    animation-name: zoom;
+    animation-duration: 0.6s;
+}
+
+.txt-modal {
+    display: none; /* Hidden by default */
+    position: fixed; /* Stay in place */
+    z-index: 1; /* Sit on top */
+    left: 0;
+    top: 0;
+    width: 100%; /* Full width */
+    height: 100%; /* Full height */
+    background-color: #fff; /* Fallback color */
+}
+
+.txt-modal-content {
+    margin: auto;
+    display: block;
+    height: 100%;
+    max-width: 100%;
+    max-height: calc(100% - 40px);
+    object-fit: contain;
+    background-color: #fff;
+    padding: 0 10px;
+    margin: 10px auto;
+    overflow: auto;
+}
+
+
+.txt-modal-btns {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    gap: 6px;
+}
+
+#txtFileName {
+    max-width: 400px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: no-warp;
+    margin-right: auto;
+}
+
+.grey-color {
+    color: #999;
+    font-size: 12px;
+    line-height: 24px;
+}
+
+.btn-txt-model-close {
+    
+}
+
+
+
+@keyframes zoom {
+    from {transform: scale(0)}
+    to {transform: scale(1)}
+}
+
+/* 100% Image Width on Smaller Screens */
+@media only screen and (max-width: 700px){
+    .modal-content {
+        width: 100%;
+    }
 }
 
 

@@ -4,6 +4,11 @@ const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
 const ffmpeg = require('fluent-ffmpeg');
+const extract = require('extract-zip');
+const iconv = require('iconv-lite');
+const jschardet = require('jschardet');
+const readline = require('readline');
+// var c_p = require("child_process");
 
 const app = express();
 const PORT = 3000;
@@ -35,7 +40,8 @@ const storage = multer.diskStorage({
         cb(null, uploadPath);
     },
     filename: (req, file, cb) => {
-        const info = path.parse(file.originalname);
+        const filename = Buffer.from(file.originalname, 'latin1').toString('utf-8')
+        const info = path.parse(filename);
         cb(null, `${info.name}(${Date.now()})${info.ext}`);
     }
 });
@@ -121,7 +127,8 @@ const invalidateCache = (dirPath) => {
 // 上传文件并生成缩略图
 app.post('/upload', upload.single('file'), async (req, res) => {
     const currentPath = req.query.path || ''; // 从请求体获取当前路径，默认为空
-    const filePath = path.join(UPLOAD_DIR, currentPath, req.file.filename);
+    const filename = Buffer.from(req.file.filename, 'latin1').toString('utf-8')
+    const filePath = path.join(UPLOAD_DIR, currentPath, filename);
 
     // 确保缩略图目录存在
     const thumbnailDir = path.join(THUMB_DIR, currentPath);
@@ -131,23 +138,23 @@ app.post('/upload', upload.single('file'), async (req, res) => {
 
     // 如果是视频文件，生成缩略图
     if (req.file.mimetype.startsWith('video/')) {
-        const thumbnailPath = path.join(thumbnailDir, req.file.filename + '.png');
+        const thumbnailPath = path.join(thumbnailDir, filename + '.png');
         try {
             await generateThumbnail(filePath, thumbnailPath);
             invalidateCache(currentPath); // 更新缓存
             await updateCache(currentPath); // 更新缓存
             res.send({
-                filename: '/uploads/' + currentPath + '/' + req.file.filename,
-                thumbnail: '/thumbnails/' + currentPath + '/' + req.file.filename + '.png'
+                filename: '/uploads/' + currentPath + '/' + filename,
+                thumbnail: '/thumbnails/' + currentPath + '/' + filename + '.png'
             });
         } catch (err) {
             console.error('Error generating thumbnail:', err);
-            res.send({ filename: '/uploads/' + currentPath + '/' + req.file.filename });
+            res.send({ filename: '/uploads/' + currentPath + '/' + filename });
         }
     } else {
         invalidateCache(currentPath); // 更新缓存
         await updateCache(currentPath); // 更新缓存
-        res.send({ filename: '/uploads/' + currentPath + '/' + req.file.filename });
+        res.send({ filename: '/uploads/' + currentPath + '/' + filename });
     }
 });
 
@@ -329,9 +336,8 @@ app.post('/move', (req, res) => {
 app.post('/convert', (req, res) => {
     const { inputFilePath, outputFilePath } = req.body;
 
-    const uploadsDir = path.join(__dirname, 'uploads');
-    const absoluteInputPath = path.join(uploadsDir, inputFilePath);
-    const absoluteOutputPath = path.join(uploadsDir, outputFilePath);
+    const absoluteInputPath = path.join(UPLOAD_DIR, inputFilePath);
+    const absoluteOutputPath = path.join(UPLOAD_DIR, outputFilePath);
 
     if (!fs.existsSync(absoluteInputPath)) {
         return res.status(400).json({ message: 'Input file does not exist' });
@@ -342,20 +348,7 @@ app.post('/convert', (req, res) => {
     }
 
     ffmpeg(absoluteInputPath)
-        // .output(absoluteOutputPath)
-        // .on('end', async () => {
-        //     invalidateCache(currentPath); // 更新缓存
-        //     await updateCache(currentPath); // 更新缓存
-        //     res.json({ outputFilePath: outputFilePath });
-        // })
-        // .on('error', (err) => {
-        //     console.error('Error during conversion:', err);
-        //     res.status(500).json({ message: 'Conversion failed' });
-        // })
-        // .run();
-
         .outputOptions('-c:v', 'h264_nvenc', '-preset', 'fast', '-b:v', '2M', '-threads', '8')
-        // .outputOptions('-threads', '8')
         .save(absoluteOutputPath)
         .on('end', async () => {
             const currentPath = path.dirname(inputFilePath);
@@ -367,6 +360,131 @@ app.post('/convert', (req, res) => {
             console.error('Error during conversion:', err);
             res.status(500).json({ message: 'Conversion failed' });
         })
+});
+
+app.post('/unzip', async (req, res) => {
+    const { zipFilePath } = req.body;
+
+    const absoluteZipPath = path.join(UPLOAD_DIR, zipFilePath);
+    const extractToPath = path.join(UPLOAD_DIR, path.dirname(zipFilePath));
+
+    if (!fs.existsSync(absoluteZipPath)) {
+        return res.status(400).json({ message: 'Zip file does not exist' });
+    }
+
+    const fileExtension = path.extname(zipFilePath).toLowerCase();
+
+    if (fileExtension === '.zip') {
+        extract(absoluteZipPath, { dir: extractToPath })
+            .then(() => {
+                invalidateCache(path.dirname(zipFilePath));
+                updateCache(path.dirname(zipFilePath));
+                res.json({ message: 'File unzipped successfully' });
+            })
+            .catch(err => {
+                console.error('Error during unzipping:', err);
+                res.status(500).json({ message: 'Unzipping failed' });
+            });
+    } else if (fileExtension === '.rar') {
+        res.status(500).json({ message: '暂不支持rar解压' });
+    } else {
+        res.status(400).json({ message: 'Unsupported file type' });
+    }
+});
+
+app.post('/readTextFile', (req, res) => {
+    const { filePath, start = 0, numLines = 50, encoding = 'utf8' } = req.body;
+    const absoluteFilePath = path.join(UPLOAD_DIR, filePath);
+
+    if (!fs.existsSync(absoluteFilePath)) {
+        return res.status(400).json({ message: 'File does not exist' });
+    }
+
+    let lineCount = 0;
+    let lines = [];
+    let totalLines = 0; // 记录文件总行数
+    const readStream = fs.createReadStream(absoluteFilePath, { encoding });
+    const rl = readline.createInterface({
+        input: readStream,
+        crlfDelay: Infinity,
+    });
+
+    rl.on('line', (line) => {
+        totalLines++; // 计算总行数
+        if (lineCount >= start && lines.length < numLines) {
+            lines.push(line);
+        }
+        lineCount++;
+    });
+
+    rl.on('close', () => {
+        const content = lines.join('\n');
+        const isLastPage = (start + lines.length) >= totalLines; // 判断是否为最后一页
+        res.setHeader('Content-Type', `application/json; charset=${encoding}`);
+        res.json({ content, start: start + lines.length, numLines, isLastPage });
+    });
+
+    rl.on('error', (err) => {
+        console.error('Error reading file:', err);
+        res.status(500).json({ message: 'Error reading file' });
+    });
+});
+
+function convertTxtEncoding(filePath, res) {
+    const extname = path.extname(filePath);
+    if (extname !== '.txt') {
+        console.log(filePath, '不是txt文件，跳过编码转换');
+        res.status(400).json({ message: '不是txt文件，跳过编码转换' });
+        return;
+    }
+
+    fs.readFile(filePath, (err, data) => {
+        if (err) {
+            console.error('读取文件失败:', err);
+            res.status(500).json({ message: '读取文件失败' });
+            return;
+        }
+
+        // 检测文件编码
+        const detectedEncoding = jschardet.detect(data).encoding;
+        if (!detectedEncoding) {
+            res.status(500).json({ message: '文件编码检测失败' });
+            return;
+        }
+
+        // 判断文件是否为UTF-8编码
+        if (detectedEncoding.toLowerCase() === 'utf-8') {
+            console.log(filePath, '已经是UTF-8编码');
+            res.json({ message: '已经是UTF-8编码' });
+            return;
+        }
+
+        // 将文件内容从原编码转换为UTF-8
+        const content = iconv.decode(data, detectedEncoding);
+        const utf8Content = iconv.encode(content, 'utf-8');
+
+        // 将转换后的内容写入文件
+        fs.writeFile(filePath, utf8Content, err => {
+            if (err) {
+                console.error('写入文件失败:', err);
+                res.status(500).json({ message: '写入文件失败' });
+                return;
+            }
+            console.log(filePath, '编码修改为UTF-8成功');
+            res.json({ message: '编码修改为UTF-8成功' });
+        });
+    });
+}
+
+app.post('/convertTxtEncoding', (req, res) => {
+    const { filePath } = req.body;
+    const absoluteFilePath = path.join(UPLOAD_DIR, filePath);
+
+    if (!fs.existsSync(absoluteFilePath)) {
+        return res.status(400).json({ message: 'File does not exist' });
+    }
+
+    convertTxtEncoding(absoluteFilePath, res);
 });
 
 // 根路径返回 index.html

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en,zh-cn">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -27,6 +27,22 @@
         </div>
         <div class="media" id="mediaContainer"></div>
     </div>
+    <div id="myModal" class="modal" onclick="closeModal()">
+        <img class="modal-content" id="img01">
+    </div>
+
+    <div id="txtModal" class="txt-modal" onclick="closeModal()">
+        <div class="txt-modal-btns">
+            <button id="btnTxtModelClose" class="btn-txt-model-close">关闭</button>
+            <div id="txtFileName" class="grey-color"></div>
+
+            <div class="grey-color">第<span id="currPage"></span>页</div>
+            <button id="btnTxtModelJump">跳转</button>
+            <button id="btnTxtModelNext" class="btn-txt-model-next">下一页</button>
+        </div>
+        <div class="txt-modal-content" id="txtContent"></div>
+    </div>
+
     <script src="lib/mux.min.js"></script>
     <script src="videoHelper.js"></script>
     <script src="main.js"></script>
