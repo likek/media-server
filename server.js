@@ -59,6 +59,9 @@ app.use(pathNormalizer);
 
 // 缓存管理函数
 const updateCache = async (dirPath) => {
+    if(dirPath === '/') {
+        dirPath = ''
+    }
     const fullPath = path.join(UPLOAD_DIR, dirPath);
     const files = await new Promise((resolve, reject) => {
         fs.readdir(fullPath, (err, files) => {
@@ -121,6 +124,9 @@ const updateCache = async (dirPath) => {
 };
 
 const invalidateCache = (dirPath) => {
+    if(dirPath === '/') {
+        dirPath = ''
+    }
     delete cache[dirPath];
 };
 
@@ -364,9 +370,9 @@ app.post('/convert', (req, res) => {
 
 app.post('/unzip', async (req, res) => {
     const { zipFilePath } = req.body;
-
+    const currentPath = path.dirname(zipFilePath)
     const absoluteZipPath = path.join(UPLOAD_DIR, zipFilePath);
-    const extractToPath = path.join(UPLOAD_DIR, path.dirname(zipFilePath));
+    const extractToPath = path.join(UPLOAD_DIR, currentPath);
 
     if (!fs.existsSync(absoluteZipPath)) {
         return res.status(400).json({ message: 'Zip file does not exist' });
@@ -376,9 +382,10 @@ app.post('/unzip', async (req, res) => {
 
     if (fileExtension === '.zip') {
         extract(absoluteZipPath, { dir: extractToPath })
-            .then(() => {
-                invalidateCache(path.dirname(zipFilePath));
-                updateCache(path.dirname(zipFilePath));
+            .then(async () => {
+                console.log(currentPath)
+                invalidateCache(currentPath);
+                await updateCache(currentPath);
                 res.json({ message: 'File unzipped successfully' });
             })
             .catch(err => {
@@ -433,7 +440,6 @@ app.post('/readTextFile', (req, res) => {
 function convertTxtEncoding(filePath, res) {
     const extname = path.extname(filePath);
     if (extname !== '.txt') {
-        console.log(filePath, '不是txt文件，跳过编码转换');
         res.status(400).json({ message: '不是txt文件，跳过编码转换' });
         return;
     }
@@ -454,7 +460,6 @@ function convertTxtEncoding(filePath, res) {
 
         // 判断文件是否为UTF-8编码
         if (detectedEncoding.toLowerCase() === 'utf-8') {
-            console.log(filePath, '已经是UTF-8编码');
             res.json({ message: '已经是UTF-8编码' });
             return;
         }
@@ -470,7 +475,6 @@ function convertTxtEncoding(filePath, res) {
                 res.status(500).json({ message: '写入文件失败' });
                 return;
             }
-            console.log(filePath, '编码修改为UTF-8成功');
             res.json({ message: '编码修改为UTF-8成功' });
         });
     });

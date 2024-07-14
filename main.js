@@ -13,6 +13,18 @@
     let totalFiles = [];
     let renderedFilesCount = 0;
     const pageSize = getRowCount();
+    
+    function getCache(path) {
+        return fileCache['uploads/' + path]
+    }
+
+    function setCache(path, value) {
+        fileCache['uploads/' + path] = value
+    }
+
+    function deleteCache(path) {
+        delete fileCache['uploads/' + path]
+    }
 
     hideProgressBar();
 
@@ -64,9 +76,9 @@
         btnRoot.style.display = currentPath === '' ? 'none' : '';
         backButton.style.display = currentPath === '' ? 'none' : '';
 
-        // Check cache
-        if (fileCache[currentPath]) {
-            totalFiles = fileCache[currentPath];
+        const cacheValue = getCache(currentPath)
+        if (cacheValue) {
+            totalFiles = cacheValue;
             renderFiles(totalFiles.slice(0, pageSize)); // Render the first page
             checkAndRenderInitialFiles();
         } else {
@@ -74,7 +86,7 @@
                 const response = await fetch(`${baseServer}/files?path=${encodeURIComponent(path)}`);
                 const files = await response.json();
                 totalFiles = files; // Cache the result
-                fileCache[currentPath] = files;
+                setCache(currentPath, files)
                 renderFiles(totalFiles.slice(0, pageSize)); // Render the first page
                 checkAndRenderInitialFiles();
             } catch (error) {
@@ -318,7 +330,7 @@
             });
             if(response.status === 200) {
                 showToast('File renamed successfully.', 'success');
-                delete fileCache[path]; // Invalidate cache
+                deleteCache(path)
                 loadMedia(path); // 重新加载媒体列表
             } else {
                 const data = await response.json();
@@ -347,7 +359,7 @@
             });
             if(response.status === 200) {
                 showToast('Folder created successfully.','success');
-                delete fileCache[currentPath]; // Invalidate cache
+                deleteCache(currentPath)
                 loadMedia(currentPath); // 重新加载媒体列表
             } else {
                 const data = await response.json();
@@ -385,7 +397,7 @@
                     body: JSON.stringify({ filename, path, type })
                 });
                 showToast('File deleted successfully.','success');
-                delete fileCache[currentPath]; // Invalidate cache
+                deleteCache(currentPath)
                 loadMedia(currentPath); // 重新加载媒体列表
             } catch (error) {
                 console.error('Error deleting file:', error);
@@ -418,7 +430,7 @@
         xhr.addEventListener('load', async () => {
             if (xhr.status === 200) {
                 showToast('File uploaded successfully.','success');
-                delete fileCache[currentPath]; // Invalidate cache
+                deleteCache(currentPath)
                 loadMedia(currentPath);
                 fileInput.value = '';
                 hideProgressBar();
@@ -465,8 +477,8 @@
         .then(data => {
             if (data.success) {
                 showToast('File moved successfully', 'success');
-                delete fileCache[currentPath];
-                delete fileCache[targetFolder.replace(/^\/+/, '')];
+                deleteCache(currentPath)
+                deleteCache(targetFolder.replace(/^\/+/, ''))
                 loadMedia(currentPath);
             } else {
                 showToast(data.message || 'Error moving file', 'error');
@@ -491,7 +503,7 @@
         .then(response => response.json())
         .then(data => {
             if (data.outputFilePath) {
-                delete fileCache[currentPath];
+                deleteCache(currentPath)
                 loadMedia(currentPath);
                 showToast('File converted successfully.', 'success');
             } else if (data.message === 'Output file already exists') {
@@ -594,7 +606,7 @@
         .then(response => response.json())
         .then(data => {
             showToast(data.message, 'success');
-            delete fileCache[currentPath];
+            deleteCache(currentPath)
             loadMedia(currentPath); // 更新显示
         })
         .catch(error => {
