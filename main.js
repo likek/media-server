@@ -49,6 +49,42 @@
         progressBarValue.style.display = '';
     }
 
+    async function handleSearch() {
+        const inputSearch = document.getElementById('inputSearch')
+        const query = inputSearch.value
+        if (!query.trim()) {
+            showToast('请输入搜索内容', 'warn')
+            return
+        }
+        const searchTips = document.getElementById('searchTips')
+        searchTips.style.opacity = '1';
+        searchTips.style.display = 'block';
+        setTimeout(() => {
+            searchTips.style.opacity = '0';
+            searchTips.style.display = 'none';
+        }, 2000)
+        try {
+            renderedFilesCount = 0;
+            totalFiles = [];
+            const response = await fetch(`${baseServer}/search`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ query, path: currentPath })
+            });
+            const files = await response.json();
+            totalFiles = files;
+            renderFiles(totalFiles.slice(0, pageSize)); // Render the first page
+            checkAndRenderInitialFiles();
+            btnRoot.style.display = '';
+            backButton.style.display = currentPath === '' ? 'none' : '';
+        } catch (error) {
+            console.error('Error loading media:', error);
+            alert('Failed to load media.');
+        }
+    }
+
     async function updateCache() {
         try {
             const response = await fetch(`${baseServer}/updateCache`, {

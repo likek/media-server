@@ -236,6 +236,33 @@ app.get('/files', async (req, res) => {
     }
 });
 
+app.post('/search', (req, res) => {
+    let { query, path } = req.body;
+
+    if (!query) {
+        return res.status(400).json({ message: 'Query is required' });
+    }
+
+    if (!path) {
+        path = ''
+    }
+
+    const result = [];
+    for(const folder of Object.keys(cache)) {
+        if (folder.startsWith(path)) {
+            const items = cache[folder]
+            items.forEach(item => {
+                if (item.filename.includes(query)) {
+                    result.push(item);
+                }
+            });
+        }
+    }
+
+    res.send(result);
+});
+
+
 // 生成视频文件缩略图
 async function generateThumbnail(filePath, thumbnailPath) {
     // 确保缩略图目录存在
