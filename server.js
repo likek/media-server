@@ -1,19 +1,26 @@
-const express = require('express');
-const multer = require('multer');
-const cors = require('cors');
-const fs = require('fs');
-const path = require('path');
-const ffmpeg = require('fluent-ffmpeg');
-const extract = require('extract-zip');
-const iconv = require('iconv-lite');
-const jschardet = require('jschardet');
-const readline = require('readline');
-// var c_p = require("child_process");
+import chalk from 'chalk';
+import express from 'express';
+import multer from 'multer';
+import cors from 'cors';
+import fs from 'fs';
+import path from 'path';
+import ffmpeg from 'fluent-ffmpeg';
+import extract from 'extract-zip';
+import iconv from 'iconv-lite'
+import jschardet from 'jschardet'
+import readline from 'readline'
+import morgan from 'morgan';
+import { fileURLToPath } from 'url';
+
+// 获取当前文件的目录名
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = 3000;
 const UPLOAD_DIR = path.join(__dirname, 'uploads');
 const THUMB_DIR = path.join(__dirname, 'thumbnails');
+const LOG_FILE = path.join(__dirname, 'log.txt');
 
 // 创建上传和缩略图目录
 if (!fs.existsSync(UPLOAD_DIR)) {
@@ -56,6 +63,45 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname)));
 app.use(pathNormalizer);
+
+// Custom token for Morgan to capture request body
+morgan.token('body', (req) => JSON.stringify(req.body));
+
+// Format log output
+const logFormat = (tokens, req, res) => {
+    const requestTime = new Date().toLocaleString();
+    const responseTime = new Date().toLocaleString();
+    const userIp = req.ip;
+    const requestMethod = req.method;
+    const requestUrl = req.originalUrl;
+    const requestBody = tokens.body(req, res);
+    const status = res.statusCode;
+
+    return [
+        chalk.blue(`[Request Time]: ${requestTime}`),
+        chalk.green(`[User IP]: ${userIp}`),
+        chalk.yellow(`[Request]: ${requestMethod} ${requestUrl}`),
+        chalk.cyan(`[Request Params]: ${requestBody}`),
+        chalk.red(`[Response Time]: ${responseTime}`),
+        chalk.magenta(`[Response Status]: ${status}`)
+    ].join(' | ');
+};
+
+const writeLogToFile = (logMessage) => {
+    fs.appendFile(LOG_FILE, logMessage + '\n', (err) => {
+        if (err) {
+            console.error('Failed to write log to file:', err);
+        }
+    });
+};
+
+app.use(morgan(logFormat));
+
+app.use((req, res, next) => {
+    const logMessage = logFormat(morgan, req, res);
+    writeLogToFile(logMessage);
+    next();
+});
 
 // 缓存管理函数
 const updateCache = async (dirPath) => {
