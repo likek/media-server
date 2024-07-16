@@ -168,9 +168,9 @@
                 }
                 e.stopPropagation();
                 if (file.type === 'folder') {
-                    renameFile(file.filename, currentPath, file.type);
+                    renameFile(file.filename, file.folder || currentPath, file.type);
                 } else {
-                    renameFile(filename, currentPath, file.type);
+                    renameFile(filename, file.folder || currentPath, file.type);
                 }
             });
             div.appendChild(fileNameElement);
@@ -245,9 +245,9 @@
             deleteButton.addEventListener('click', (e) => {
                 e.stopPropagation();
                 if (file.type === 'folder') {
-                    deleteFile(file.filename, currentPath, file.type);
+                    deleteFile(file.filename, file.folder || currentPath, file.type);
                 } else {
-                    deleteFile(filename, currentPath, file.type);
+                    deleteFile(filename, file.folder || currentPath, file.type);
                 }
             });
             footer.appendChild(deleteButton);
@@ -257,7 +257,7 @@
                 convertButton.innerText = '转mp4';
                 convertButton.className = 'move-button';
                 convertButton.addEventListener('click', () => {
-                    const originPath = `${currentPath}/${filename}`
+                    const originPath = `${(file.folder || currentPath)}/${filename}`
                     const targetPath = originPath.replace(/\.[^/.]+$/, '_ts.mp4')
                     showOverlay(div, '格式转换中...')
                     convertFile(originPath, targetPath).finally(() => {
@@ -320,13 +320,13 @@
                 const targetFolder = prompt('请输入目标文件夹').trim();
                 if (targetFolder === '') {
                     showToast('目标文件及不能为空', 'warn');
-                } else if (targetFolder === currentPath) {
+                } else if (targetFolder === (file.folder || currentPath)) {
                     showToast('不能移动到相同目录', 'warn');
                 } else {
                     if (file.type === 'folder') {
-                        moveFileOrFolder(file.filename, targetFolder, currentPath);
+                        moveFileOrFolder(file.filename, targetFolder, file.folder || currentPath);
                     } else {
-                        moveFileOrFolder(filename, targetFolder, currentPath);
+                        moveFileOrFolder(filename, targetFolder, file.folder || currentPath);
                     }
                 }
             });

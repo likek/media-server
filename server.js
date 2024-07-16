@@ -253,7 +253,10 @@ app.post('/search', (req, res) => {
             const items = cache[folder]
             items.forEach(item => {
                 if (item.filename.includes(query)) {
-                    result.push(item);
+                    result.push({
+                        ...item,
+                        folder
+                    });
                 }
             });
         }
