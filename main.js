@@ -58,6 +58,7 @@
                 },
                 body: JSON.stringify({ path: currentPath })
             });
+            deleteCache(currentPath)
             loadMedia(currentPath)
         } catch (error) {
             console.error('Error updating cache:', error);
