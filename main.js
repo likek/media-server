@@ -352,7 +352,7 @@
                 e.stopPropagation();
                 let targetFolder = prompt('请输入目标文件夹');
                 targetFolder = targetFolder && targetFolder.trim()
-                if (targetFolder === '') {
+                if (!targetFolder) {
                     showToast('目标文件及不能为空', 'warn');
                 } else if (targetFolder === (file.folder || currentPath)) {
                     showToast('不能移动到相同目录', 'warn');
@@ -774,7 +774,7 @@
         btnTxtModelJump.onclick = () => {
             const targetPage = prompt('请输入页码').trim();
             const currPage = Math.ceil((modalTxt.__nextStart / modalTxt.__numLines))
-            if (targetPage === '') {
+            if (!targetPage) {
                 showToast('页码不能为空', 'warn');
             } else if (targetPage === currPage) {
                 showToast(`当前已是第${currPage}页`, 'warn');
