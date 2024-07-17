@@ -772,7 +772,8 @@
         }
 
         btnTxtModelJump.onclick = () => {
-            const targetPage = prompt('请输入页码').trim();
+            let targetPage = prompt('请输入页码');
+            targetPage = (targetPage || '').trim()
             const currPage = Math.ceil((modalTxt.__nextStart / modalTxt.__numLines))
             if (!targetPage) {
                 showToast('页码不能为空', 'warn');
