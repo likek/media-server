@@ -2,7 +2,7 @@
 <html lang="en,zh-cn">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no">
     <title>Media Uploader</title>
     <link rel="stylesheet" href="main.css">
 </head>
@@ -11,9 +11,9 @@
     <input onchange="uploadFile()" type="file" id="fileInput" style="display: none;">
     <div class="main">
         <div class="top" id="top">
-            <div class="path">
-                <input id="inputSearch" type="text" maxlength="100">
-                <button class="btn-search" onclick="handleSearch()">
+            <div class="top-form">
+                <input id="inputSearch" type="text" maxlength="100" onkeypress="handleKeyPress(event)">
+                <button class="btn-search" onclick="handleSearch(event)">
                     <div id="searchTips" class="search-tips">注意:只会从服务端缓存搜索，浏览过的目录才有缓存</div>
                     搜索
                 </button>

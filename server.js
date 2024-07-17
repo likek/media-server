@@ -237,22 +237,23 @@ app.get('/files', async (req, res) => {
 });
 
 app.post('/search', (req, res) => {
-    let { query, path } = req.body;
+    let { query, path: searchPath } = req.body;
 
     if (!query) {
         return res.status(400).json({ message: 'Query is required' });
     }
 
-    if (!path) {
-        path = ''
+    if (!searchPath) {
+        searchPath = ''
     }
 
     const result = [];
-    for(const folder of Object.keys(cache)) {
-        if (folder.startsWith(path)) {
+    for (const folder of Object.keys(cache)) {
+        if (folder.startsWith(searchPath)) {
             const items = cache[folder]
             items.forEach(item => {
-                if (item.filename.includes(query)) {
+                const filename = path.basename(item.filename);
+                if (filename.includes(query)) {
                     result.push({
                         ...item,
                         folder

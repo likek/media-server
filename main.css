@@ -5,6 +5,11 @@ html, body {
     height: 100%;
 }
 
+p {
+    margin: 0;
+    padding: 0;
+}
+
 .main {
     display: flex;
     flex-direction: column;
@@ -35,7 +40,6 @@ html, body {
 }
 
 .media-item {
-    cursor: pointer;
     padding: 15px;
     border: 1px solid #ddd;
     border-radius: 8px; 
@@ -50,6 +54,10 @@ html, body {
     flex-direction: column;
     justify-content: space-between;
     position: relative;
+}
+
+button,a,.media-item-folder,.touchable {
+    cursor: pointer;
 }
 
 .loading-overlay {
@@ -113,11 +121,11 @@ video {
     line-height: 18px;
 }
 
-button.move-button {
+button.warn-button {
     background-color: #e6a23c;
 }
 
-.media-item button.move-button:hover {
+.media-item button.warn-button:hover {
     background-color: #d18b2d; 
 }
 
@@ -125,9 +133,9 @@ button.move-button {
     background-color: #f03030; 
 }
 
-.media-item>item-footer>a {
+.media-item>.item-footer>a {
     display: inline-block;
-    margin: 10px 0 0 10px;
+    margin: 10px 0 0 0;
     background-color: #3498db; 
     color: #fff; 
     border-radius: 4px;
@@ -140,12 +148,8 @@ button.move-button {
     line-height: 18px;
 }
 
-.media-item>item-footer>a:hover {
+.media-item>.item-footer>a:hover {
     background-color: #0056b3; 
-}
-
-p {
-    margin: 0;
 }
 
 button, input[type='file'] {
@@ -180,7 +184,8 @@ button:active {
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
-.path {
+.top-form {
+    display: block;
     padding: 0 0 4px 0;
     border-bottom: 1px solid #ccc;
     text-align: right;
@@ -211,10 +216,6 @@ button:active {
 
 .media-item .rename-button:hover {
     background-color: #e0a800; 
-}
-
-a[download] {
-    margin: 10px 0 0 10px;
 }
 
 .toast {

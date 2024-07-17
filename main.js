@@ -49,7 +49,10 @@
         progressBarValue.style.display = '';
     }
 
-    async function handleSearch() {
+    async function handleSearch(event) {
+        if(event) {
+            event.preventDefault()
+        }
         const inputSearch = document.getElementById('inputSearch')
         const query = inputSearch.value
         if (!query.trim()) {
@@ -145,9 +148,13 @@
             const fileExt = file.filename.split('.').pop().toLowerCase();
             const div = document.createElement('div');
             div.classList.add('media-item');
+            if(file.type === 'folder') {
+                div.classList.add('media-item-folder');
+            }
     
             const fileNameElement = document.createElement('p');
             const textSpan = document.createElement('span');
+            textSpan.classList.add('touchable');
             const filename = file.filename.substring(file.filename.lastIndexOf('/') + 1)
             textSpan.textContent = filename;
             if (file.format) {
@@ -157,6 +164,7 @@
             fileNameElement.appendChild(textSpan);
 
             const iconEdit = document.createElement('img');
+            iconEdit.classList.add('touchable');
             iconEdit.src = 'assets/icon_edit.png';
             iconEdit.style.width = '12px';
             iconEdit.style.height = '12px';
@@ -182,7 +190,10 @@
                 folderIcon.style.height = '20px';
                 folderIcon.style.margin = '0 4px 0 0';
                 fileNameElement.insertBefore(folderIcon, textSpan);
-                div.addEventListener('click', () => loadMedia(file.path));
+                div.addEventListener('click', (e) => {
+                    e.stopPropagation()
+                    loadMedia(file.path)
+                });
             } else if (['mp4', 'webm', 'ogg', 'ts'].includes(fileExt)) {
                 const video = document.createElement('video');
                 if (file.thumbnail) {
@@ -197,9 +208,9 @@
         
                     // video.appendChild(source);
                     video.addEventListener('click', async (e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
                         if (!videoHelper.isLoading(video) && !videoHelper.isReady(video)) {
-                            e.preventDefault()
-                            e.stopPropagation()
                             showOverlay(div)
                             await videoHelper.loadTs(video, baseServer + file.filename, (error) => {
                                 showToast(`视频加载失败`, 'error')
@@ -226,14 +237,14 @@
                 div.appendChild(a);
             }
     
-            const fileInfoElement = document.createElement('p');
             if (file.type !== 'folder') {
+                const fileInfoElement = document.createElement('p');
                 fileInfoElement.textContent = `修改日期: ${new Date(file.lastModified).toLocaleString()}`;
                 const sizeInMB = (file.size / (1024 * 1024)).toFixed(2);
                 fileInfoElement.textContent += ` 大小: ${sizeInMB} MB`;
+                fileInfoElement.style = 'font-size: 10px; color: #666;margin: 0 0 4px 0';
+                div.appendChild(fileInfoElement);
             }
-            fileInfoElement.style = 'font-size: 10px; color: #666;margin: 0 0 4px 0';
-            div.appendChild(fileInfoElement);
     
             const footer = document.createElement('div');
             footer.style = `display: flex;justify-content: ${'space-between'};`;
@@ -255,8 +266,9 @@
             if(file.type !== 'folder' && ['ts'].includes(fileExt)) { 
                 const convertButton = document.createElement('button');
                 convertButton.innerText = '转mp4';
-                convertButton.className = 'move-button';
+                convertButton.className = 'warn-button';
                 convertButton.addEventListener('click', () => {
+                    e.stopPropagation()
                     const originPath = `${(file.folder || currentPath)}/${filename}`
                     const targetPath = originPath.replace(/\.[^/.]+$/, '_ts.mp4')
                     showOverlay(div, '格式转换中...')
@@ -270,31 +282,52 @@
             if (file.type !== 'folder' && (fileExt === 'zip' || fileExt === 'rar')) {
                 const unzipButton = document.createElement('button');
                 unzipButton.innerText = '解压';
-                unzipButton.className = 'move-button'
-                unzipButton.addEventListener('click', () => {
+                unzipButton.className = 'warn-button'
+                unzipButton.addEventListener('click', (e) => {
+                    e.stopPropagation()
                     showOverlay(div, '解压中...')
-                    unzipFile(`${currentPath}/${filename}`).finally(() => {
+                    unzipFile(`${file.folder || currentPath}/${filename}`).finally(() => {
                         hideOverlay(div)
                     });
                 });
                 footer.appendChild(unzipButton);
             }
 
-            if (file.type !== 'folder' && fileExt === 'txt') {
-                const viewButton = document.createElement('button');
-                viewButton.innerText = '查看';
-                viewButton.className = 'move-button'
-                viewButton.addEventListener('click', () => {
-                    viewTextFile(`${currentPath}/${filename}`, 0, 18);
+            if (file.folder && file.folder !== currentPath) {
+                const fileInfoElement = document.createElement('p');
+
+                const label = document.createElement('span');
+                label.innerText = '所在目录: ';
+                label.style = 'font-size: 10px; color: #666;';
+
+                const value = document.createElement('a');
+                value.innerText = `/${file.folder}`
+                value.style = 'font-size: 10px;color: blue;text-decoration: underline;';
+
+                value.addEventListener('click', (e) => {
+                    e.stopPropagation()
+                    loadMedia(file.folder);
                 });
-                footer.appendChild(viewButton);
+
+                fileInfoElement.append(label)
+                fileInfoElement.append(value)
+                div.appendChild(fileInfoElement);
+            }
+
+            if (file.type !== 'folder' && fileExt === 'txt') {
+                div.addEventListener('click', (e) => {
+                    e.stopPropagation()
+                    viewTextFile(`${file.folder || currentPath}/${filename}`, 0, 18);
+                });
+                div.classList.add('touchable')
 
                 const convertBtn = document.createElement('button');
                 convertBtn.innerText = '转换编码';
-                convertBtn.className = 'move-button'
-                convertBtn.addEventListener('click', () => {
+                convertBtn.className = 'warn-button'
+                convertBtn.addEventListener('click', (event) => {
+                    event.stopPropagation()
                     showOverlay(div, '编码转换中...')
-                    convertEncoding(`${currentPath}/${filename}`).then((data) => {
+                    convertEncoding(`${file.folder || currentPath}/${filename}`).then((data) => {
                         showToast(data?.message || '转换编码成功', 'success')
                     }).finally(() => {
                         hideOverlay(div)
@@ -313,11 +346,12 @@
 
             const moveButton = document.createElement('button');
             moveButton.innerText = '移动';
-            moveButton.className = 'move-button';
+            moveButton.className = 'warn-button';
         
             moveButton.addEventListener('click', (e) => {
                 e.stopPropagation();
-                const targetFolder = prompt('请输入目标文件夹').trim();
+                let targetFolder = prompt('请输入目标文件夹');
+                targetFolder = targetFolder && targetFolder.trim()
                 if (targetFolder === '') {
                     showToast('目标文件及不能为空', 'warn');
                 } else if (targetFolder === (file.folder || currentPath)) {
@@ -760,6 +794,12 @@
 
         btnTxtModelClose.onclick = () => {
             closeModal(modal)
+        }
+    }
+
+    function handleKeyPress(event) {
+        if (event.key === 'Enter') {
+            handleSearch();
         }
     }
     
