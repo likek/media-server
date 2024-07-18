@@ -99,6 +99,7 @@
             });
             deleteCache(currentPath)
             loadMedia(currentPath)
+            showToast('刷新数据成功', 'success')
         } catch (error) {
             console.error('Error updating cache:', error);
             alert('Failed to update cache.');
@@ -123,7 +124,13 @@
             checkAndRenderInitialFiles();
         } else {
             try {
-                const response = await fetch(`${baseServer}/files?path=${encodeURIComponent(path)}`);
+                const response = await fetch(`${baseServer}/files`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ path })
+                });
                 const files = await response.json();
                 totalFiles = files; // Cache the result
                 setCache(currentPath, files)
@@ -372,6 +379,7 @@
                 a.innerHTML = '下载';
                 a.href = baseServer + file.filename;
                 a.download = filename;
+                a.onclick = (e) => e.stopPropagation()
                 footer.appendChild(a);
             }
             div.appendChild(footer);

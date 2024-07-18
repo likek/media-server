@@ -21,6 +21,7 @@ const PORT = 3000;
 const UPLOAD_DIR = path.join(__dirname, 'uploads');
 const THUMB_DIR = path.join(__dirname, 'thumbnails');
 const LOG_FILE = path.join(__dirname, 'log.txt');
+const cacheFilePath = path.join(__dirname, 'cache.json');
 
 // 创建上传和缩略图目录
 if (!fs.existsSync(UPLOAD_DIR)) {
@@ -30,9 +31,6 @@ if (!fs.existsSync(UPLOAD_DIR)) {
 if (!fs.existsSync(THUMB_DIR)) {
     fs.mkdirSync(THUMB_DIR);
 }
-
-// 缓存对象
-const cache = {};
 
 // 配置 multer
 const storage = multer.diskStorage({
@@ -103,6 +101,25 @@ app.use((req, res, next) => {
     next();
 });
 
+// 缓存对象
+let cache = {};
+// 尝试从cache.json文件中读取缓存
+function loadCache() {
+    if (fs.existsSync(cacheFilePath)) {
+        const data = fs.readFileSync(cacheFilePath, 'utf8');
+        try {
+            cache = JSON.parse(data);
+            console.log('Cache loaded from cache.json');
+        } catch (error) {
+            console.error('Error parsing cache.json:', error);
+        }
+    } else {
+        console.log('No cache.json found, initializing empty cache');
+    }
+}
+
+loadCache();
+
 // 缓存管理函数
 const updateCache = async (dirPath) => {
     if(dirPath === '/') {
@@ -167,6 +184,7 @@ const updateCache = async (dirPath) => {
     });
 
     cache[dirPath] = fileInfos;
+    fs.writeFileSync(cacheFilePath, JSON.stringify(cache), 'utf8');
 };
 
 const invalidateCache = (dirPath) => {
@@ -178,7 +196,7 @@ const invalidateCache = (dirPath) => {
 
 // 上传文件并生成缩略图
 app.post('/upload', upload.single('file'), async (req, res) => {
-    const currentPath = req.query.path || ''; // 从请求体获取当前路径，默认为空
+    const currentPath = req.query.path || '';
     const filename = Buffer.from(req.file.filename, 'latin1').toString('utf-8')
     const filePath = path.join(UPLOAD_DIR, currentPath, filename);
 
@@ -211,10 +229,10 @@ app.post('/upload', upload.single('file'), async (req, res) => {
 });
 
 // 获取文件列表
-app.get('/files', async (req, res) => {
-    const reqPath = req.query.path || '';
-    const page = parseInt(req.query.page) || 0;
-    const pageSize = parseInt(req.query.pageSize); // 每页文件数
+app.post('/files', async (req, res) => {
+    const reqPath = req.body.path || '';
+    const page = parseInt(req.body.page) || 0;
+    const pageSize = parseInt(req.body.pageSize); // 每页文件数
 
     // 从缓存中获取数据
     if (cache[reqPath]) {

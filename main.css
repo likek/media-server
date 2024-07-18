@@ -107,7 +107,7 @@ video {
 
 .media-item button {
     display: inline-block;
-    margin: 10px 10px 0 0;
+    margin: 10px 0 0 10px;
     background-color: #ff4d4d; 
     color: #fff; 
     border: none;
@@ -129,13 +129,17 @@ button.warn-button {
     background-color: #d18b2d; 
 }
 
+.media-item button.delete-button {
+    margin-left: 0;
+}
+
 .media-item button.delete-button:hover {
     background-color: #f03030; 
 }
 
 .media-item>.item-footer>a {
     display: inline-block;
-    margin: 10px 0 0 0;
+    margin: 10px 0 0 10px;
     background-color: #3498db; 
     color: #fff; 
     border-radius: 4px;
