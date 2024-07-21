@@ -34,6 +34,37 @@ if (!fs.existsSync(THUMB_DIR)) {
     fs.mkdirSync(THUMB_DIR);
 }
 
+// Custom token for Morgan to capture request body
+morgan.token('body', (req) => JSON.stringify(req.body));
+
+// Format log output
+const logFormat = (tokens, req, res) => {
+    const requestTime = new Date().toLocaleString();
+    const responseTime = new Date().toLocaleString();
+    const userIp = normalizeIp(req.ip);
+    const requestMethod = req.method;
+    const requestUrl = req.originalUrl;
+    const requestBody = tokens.body(req, res);
+    const status = res.statusCode;
+
+    return [
+        chalk.blue(`[Request Time]: ${requestTime}`),
+        chalk.green(`[User IP]: ${userIp}`),
+        chalk.yellow(`[Request]: ${requestMethod} ${requestUrl}`),
+        chalk.cyan(`[Request Params]: ${requestBody}`),
+        chalk.red(`[Response Time]: ${responseTime}`),
+        chalk.magenta(`[Response Status]: ${status}`)
+    ].join(' | ');
+};
+
+const writeLogToFile = (logMessage) => {
+    fs.appendFile(LOG_FILE, logMessage + '\n', (err) => {
+        if (err) {
+            console.error('Failed to write log to file:', err);
+        }
+    });
+};
+
 
 const loadPermissions = () => {
     try {
@@ -47,8 +78,15 @@ const loadPermissions = () => {
 
 loadPermissions();
 
+const normalizeIp = (ip) => {
+    if (ip.startsWith('::ffff:')) {
+        return ip.substring(7);
+    }
+    return ip;
+};
+
 const checkPermissions = (req, res, next) => {
-    const userIp = req.ip;
+    const userIp = normalizeIp(req.ip);
     const requestUrl = req.originalUrl.split('?')[0];
     loadPermissions();
     const allowedIps = permissions[requestUrl];
@@ -66,9 +104,6 @@ const checkPermissions = (req, res, next) => {
 
     res.status(403).json({ message: '请联系管理员为你添加该权限' });
 };
-
-app.use(checkPermissions);
-
 // 配置 multer
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
@@ -99,37 +134,6 @@ app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname)));
 app.use(pathNormalizer);
 
-// Custom token for Morgan to capture request body
-morgan.token('body', (req) => JSON.stringify(req.body));
-
-// Format log output
-const logFormat = (tokens, req, res) => {
-    const requestTime = new Date().toLocaleString();
-    const responseTime = new Date().toLocaleString();
-    const userIp = req.ip;
-    const requestMethod = req.method;
-    const requestUrl = req.originalUrl;
-    const requestBody = tokens.body(req, res);
-    const status = res.statusCode;
-
-    return [
-        chalk.blue(`[Request Time]: ${requestTime}`),
-        chalk.green(`[User IP]: ${userIp}`),
-        chalk.yellow(`[Request]: ${requestMethod} ${requestUrl}`),
-        chalk.cyan(`[Request Params]: ${requestBody}`),
-        chalk.red(`[Response Time]: ${responseTime}`),
-        chalk.magenta(`[Response Status]: ${status}`)
-    ].join(' | ');
-};
-
-const writeLogToFile = (logMessage) => {
-    fs.appendFile(LOG_FILE, logMessage + '\n', (err) => {
-        if (err) {
-            console.error('Failed to write log to file:', err);
-        }
-    });
-};
-
 app.use(morgan(logFormat));
 
 app.use((req, res, next) => {
@@ -137,6 +141,8 @@ app.use((req, res, next) => {
     writeLogToFile(logMessage);
     next();
 });
+
+app.use(checkPermissions);
 
 // 缓存对象
 let cache = {};
