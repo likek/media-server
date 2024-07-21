@@ -22,6 +22,8 @@ const UPLOAD_DIR = path.join(__dirname, 'uploads');
 const THUMB_DIR = path.join(__dirname, 'thumbnails');
 const LOG_FILE = path.join(__dirname, 'log.txt');
 const cacheFilePath = path.join(__dirname, 'cache.json');
+const permissionsFilePath = path.join(__dirname, 'permission.json');
+let permissions = {};
 
 // 创建上传和缩略图目录
 if (!fs.existsSync(UPLOAD_DIR)) {
@@ -31,6 +33,41 @@ if (!fs.existsSync(UPLOAD_DIR)) {
 if (!fs.existsSync(THUMB_DIR)) {
     fs.mkdirSync(THUMB_DIR);
 }
+
+
+const loadPermissions = () => {
+    try {
+        const data = fs.readFileSync(permissionsFilePath, 'utf8');
+        permissions = JSON.parse(data);
+    } catch (err) {
+        console.error('Failed to load permissions, using default permissions:', err);
+        permissions = {};
+    }
+};
+
+loadPermissions();
+
+const checkPermissions = (req, res, next) => {
+    const userIp = req.ip;
+    const requestUrl = req.originalUrl.split('?')[0];
+    loadPermissions();
+    const allowedIps = permissions[requestUrl];
+    if (!allowedIps) {
+        return next();
+    }
+
+    if (allowedIps === '*') {
+        return next();
+    }
+
+    if (allowedIps.includes(userIp)) {
+        return next();
+    }
+
+    res.status(403).json({ message: '请联系管理员为你添加该权限' });
+};
+
+app.use(checkPermissions);
 
 // 配置 multer
 const storage = multer.diskStorage({
@@ -250,7 +287,7 @@ app.post('/files', async (req, res) => {
         return res.send(cache[reqPath].slice(page * pageSize, (page + 1) * pageSize));
     } catch (err) {
         console.error('Error fetching file list:', err);
-        res.status(500).send('Failed to fetch file list.');
+        res.status(500).send({ message: 'Failed to fetch file list.' });
     }
 });
 
@@ -402,7 +439,7 @@ app.post('/updateCache', async (req, res) => {
         res.send({ message: 'Update cache successfully' });
     } catch (error) {
         console.error('Error updating cache:', error);
-        res.status(500).send('Failed to update cache');
+        res.status(500).send({message: 'Failed to update cache'});
     }
 });
 
@@ -413,17 +450,17 @@ app.post('/move', (req, res) => {
     const destinationPath = path.join(__dirname, 'uploads', targetFolder, filename);
 
     if (!fs.existsSync(sourcePath)) {
-        return res.status(400).json({ success: false, message: 'Source file/folder does not exist' });
+        return res.status(400).json({ message: 'Source file/folder does not exist' });
     }
 
     if (!fs.existsSync(path.join(__dirname, 'uploads', targetFolder))) {
-        return res.status(400).json({ success: false, message: 'Target folder does not exist' });
+        return res.status(400).json({ message: 'Target folder does not exist' });
     }
 
     fs.rename(sourcePath, destinationPath, async (err) => {
         if (err) {
             console.error('Error moving file/folder:', err);
-            return res.status(500).json({ success: false, message: 'Error moving file/folder' });
+            return res.status(500).json({ message: 'Error moving file/folder' });
         }
 
         invalidateCache(currentPath); // 更新缓存
@@ -478,10 +515,9 @@ app.post('/unzip', async (req, res) => {
     if (fileExtension === '.zip') {
         extract(absoluteZipPath, { dir: extractToPath })
             .then(async () => {
-                console.log(currentPath)
                 invalidateCache(currentPath);
                 await updateCache(currentPath);
-                res.json({ message: 'File unzipped successfully' });
+                res.json({ message: 'File unzipped successfully', success: true });
             })
             .catch(err => {
                 console.error('Error during unzipping:', err);
@@ -570,7 +606,7 @@ function convertTxtEncoding(filePath, res) {
                 res.status(500).json({ message: '写入文件失败' });
                 return;
             }
-            res.json({ message: '编码修改为UTF-8成功' });
+            res.json({ message: '编码修改为UTF-8成功', success: true });
         });
     });
 }

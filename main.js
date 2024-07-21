@@ -13,6 +13,7 @@
     let totalFiles = [];
     let renderedFilesCount = 0;
     const pageSize = getRowCount();
+    let latestCopiedText = '';
     
     function getCache(path) {
         return fileCache['uploads/' + path]
@@ -76,12 +77,17 @@
                 },
                 body: JSON.stringify({ query, path: currentPath })
             });
-            const files = await response.json();
-            totalFiles = files;
-            renderFiles(totalFiles.slice(0, pageSize)); // Render the first page
-            checkAndRenderInitialFiles();
-            btnRoot.style.display = '';
-            backButton.style.display = currentPath === '' ? 'none' : '';
+            if (response.status === 200) {
+                const files = await response.json();
+                totalFiles = files;
+                renderFiles(totalFiles.slice(0, pageSize)); // Render the first page
+                checkAndRenderInitialFiles();
+                btnRoot.style.display = '';
+                backButton.style.display = currentPath === '' ? 'none' : '';
+            } else {
+                const data = await response.json();
+                showToast(data.message, 'warn')
+            }
         } catch (error) {
             console.error('Error loading media:', error);
             alert('Failed to load media.');
@@ -97,9 +103,14 @@
                 },
                 body: JSON.stringify({ path: currentPath })
             });
-            deleteCache(currentPath)
-            loadMedia(currentPath)
-            showToast('刷新数据成功', 'success')
+            if (response.status === 200) {
+                deleteCache(currentPath)
+                loadMedia(currentPath)
+                showToast('刷新数据成功', 'success')
+            } else {
+                const data = await response.json();
+                showToast(data.message, 'warn')
+            }
         } catch (error) {
             console.error('Error updating cache:', error);
             alert('Failed to update cache.');
@@ -131,11 +142,16 @@
                     },
                     body: JSON.stringify({ path })
                 });
-                const files = await response.json();
-                totalFiles = files; // Cache the result
-                setCache(currentPath, files)
-                renderFiles(totalFiles.slice(0, pageSize)); // Render the first page
-                checkAndRenderInitialFiles();
+                if (response.status === 200) {
+                    const files = await response.json();
+                    totalFiles = files; // Cache the result
+                    setCache(currentPath, files)
+                    renderFiles(totalFiles.slice(0, pageSize)); // Render the first page
+                    checkAndRenderInitialFiles();
+                } else {
+                    const data = await response.json();
+                    showToast(data.message, 'warn')
+                }
             } catch (error) {
                 console.error('Error loading media:', error);
                 alert('Failed to load media.');
@@ -335,7 +351,11 @@
                     event.stopPropagation()
                     showOverlay(div, '编码转换中...')
                     convertEncoding(`${file.folder || currentPath}/${filename}`).then((data) => {
-                        showToast(data?.message || '转换编码成功', 'success')
+                        if (data.success) {
+                            showToast('转换编码成功', 'success')
+                        } else {
+                            showToast(data.message, 'warn')
+                        }
                     }).finally(() => {
                         hideOverlay(div)
                     })
@@ -357,7 +377,7 @@
         
             moveButton.addEventListener('click', (e) => {
                 e.stopPropagation();
-                let targetFolder = prompt('请输入目标文件夹');
+                let targetFolder = prompt('请输入目标文件夹', latestCopiedText || '');
                 targetFolder = targetFolder && targetFolder.trim()
                 if (!targetFolder) {
                     showToast('目标文件及不能为空', 'warn');
@@ -413,7 +433,7 @@
                 loadMedia(path); // 重新加载媒体列表
             } else {
                 const data = await response.json();
-                alert(data.message)
+                showToast(data.message, 'warn')
             }
         } catch (error) {
             console.error('Error renaming file:', error);
@@ -442,7 +462,7 @@
                 loadMedia(currentPath); // 重新加载媒体列表
             } else {
                 const data = await response.json();
-                alert(data.message)
+                showToast(data.message, 'warn')
             }
         } catch (error) {
             console.error('Error creating folder:', error);
@@ -475,9 +495,14 @@
                     },
                     body: JSON.stringify({ filename, path, type })
                 });
-                showToast('File deleted successfully.','success');
-                deleteCache(currentPath)
-                loadMedia(currentPath); // 重新加载媒体列表
+                if (response.status === 200) {
+                    showToast('File deleted successfully.','success');
+                    deleteCache(currentPath)
+                    loadMedia(currentPath); // 重新加载媒体列表
+                } else {
+                    const data = await response.json();
+                    showToast(data.message, 'warn')
+                }
             } catch (error) {
                 console.error('Error deleting file:', error);
             }
@@ -585,10 +610,8 @@
                 deleteCache(currentPath)
                 loadMedia(currentPath);
                 showToast('File converted successfully.', 'success');
-            } else if (data.message === 'Output file already exists') {
-                showToast('Output file already exists. Please choose a different file name or path.', 'warn');
             } else {
-                showToast('Conversion failed', 'warn');
+                showToast(data.message, 'warn');
             }
         })
         .catch(error => {
@@ -641,36 +664,38 @@
     }
 
     function copyText(div) {
+        const txt = div.innerText
+        copyToClipboard(txt);
+        latestCopiedText = txt
+    }
+
+    function copyToClipboard(text) {    
         if (navigator.clipboard && navigator.clipboard.writeText) {
-            navigator.clipboard.writeText(text).then(() => {
-                console.log('Text copied to clipboard:', text);
-                showToast('复制成功')
-            }).catch(err => {
-                console.error('Failed to copy text to clipboard:', err);
+            navigator.clipboard.writeText(text).then(function() {
+                showToast('复制成功', 'success');
+            }).catch(function(err) {
+                console.error('navigator.clipboard 写入失败: ', err);
+                fallbackCopyToClipboard(text);
             });
         } else {
-            // const textarea = document.createElement('textarea');
-            // textarea.value = text;
-            // textarea.style.position = 'fixed';
-            // textarea.style.top = '30px';
-            // textarea.style.left = '30px';
-            // textarea.style.width = '0';
-            // textarea.style.height = '0';
-            // document.body.appendChild(textarea);
-            // textarea.focus();
-            // textarea.select();
-            // try {
-            //     document.execCommand('copy');
-            //     console.log('Text copied to clipboard:', text);
-            // } catch (err) {
-            //     console.error('Failed to copy text to clipboard:', err);
-            // }
-            // document.body.removeChild(textarea);
-            const range = document.createRange();
-            range.selectNodeContents(div);
-            const selection = window.getSelection();
-            selection.removeAllRanges();
-            selection.addRange(range);
+            fallbackCopyToClipboard(text);
+        }
+
+        function fallbackCopyToClipboard(text) {
+            const textarea = document.createElement('textarea');
+            textarea.value = text;
+            textarea.style.position = 'fixed';  // 避免页面滚动
+            textarea.style.top = '-9999px';
+            document.body.appendChild(textarea);
+            textarea.select();
+            textarea.setSelectionRange(0, 99999); // 适配移动设备
+            try {
+                document.execCommand('copy');
+                showToast('复制成功', 'success');
+            } catch (err) {
+                showToast('复制失败', 'warn');
+            }
+            document.body.removeChild(textarea);
         }
     }
 
@@ -684,9 +709,13 @@
         })
         .then(response => response.json())
         .then(data => {
-            showToast(data.message, 'success');
-            deleteCache(currentPath)
-            loadMedia(currentPath); // 更新显示
+            if (data.success) {
+                showToast(data.message, 'success');
+                deleteCache(currentPath)
+                loadMedia(currentPath); // 更新显示
+            } else {
+                showToast(data.message, 'warn')
+            }
         })
         .catch(error => {
             console.error('Error during unzipping:', error);
@@ -765,13 +794,17 @@
         currPage.innerText = Math.ceil((nextStart / numLines))
 
         const txtContentCb = data => {
-            modalTxt.scrollTop = 0
-            modalTxt.innerText = data.content;
-            modalTxt.__nextStart = data.start;
-            modalTxt.__numLines = data.numLines
-            currPage.innerText = Math.ceil((modalTxt.__nextStart / modalTxt.__numLines))
-            if(data.isLastPage) {
-                btnTxtModelNext.style.display = 'none';
+            if (data.content) {
+                modalTxt.scrollTop = 0
+                modalTxt.innerText = data.content;
+                modalTxt.__nextStart = data.start;
+                modalTxt.__numLines = data.numLines
+                currPage.innerText = Math.ceil((modalTxt.__nextStart / modalTxt.__numLines))
+                if(data.isLastPage) {
+                    btnTxtModelNext.style.display = 'none';
+                }
+            } else {
+                showToast(data.message, 'warn')
             }
         }
 
