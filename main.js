@@ -117,26 +117,16 @@
         }
     }
 
-    async function loadMedia(path = '') {
-        currentPath = path;
+    async function loadMedia(path = '', password) {
         renderedFilesCount = 0;
         totalFiles = [];
-        currentPathElem.innerHTML = `${currentPath || '/'}`;
-        currentPathElem.onclick = () => {
-            copyText(currentPathElem)
-        }
-        btnRoot.style.display = currentPath === '' ? 'none' : '';
-        backButton.style.display = currentPath === '' ? 'none' : '';
 
-        const paths = currentPath.split('/')
-        const title = `${paths[paths.length - 2] ? paths[paths.length - 2] + '/' : ''}${paths[paths.length - 1]}` || '/'
-
-        const cacheValue = getCache(currentPath)
+        const cacheValue = getCache(path)
         if (cacheValue) {
             totalFiles = cacheValue;
             renderFiles(totalFiles.slice(0, pageSize)); // Render the first page
             checkAndRenderInitialFiles();
-            document.title = title
+            updateCurrentPath(path)
         } else {
             try {
                 const response = await fetch(`${baseServer}/files`, {
@@ -144,17 +134,25 @@
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({ path })
+                    body: JSON.stringify({ path, pw: password })
                 });
+                const data = await response.json();
                 if (response.status === 200) {
-                    const files = await response.json();
-                    totalFiles = files; // Cache the result
-                    setCache(currentPath, files)
+                    totalFiles = data; // Cache the result
+                    setCache(path, data)
                     renderFiles(totalFiles.slice(0, pageSize)); // Render the first page
                     checkAndRenderInitialFiles();
-                    document.title = title
+                    updateCurrentPath(path)
+                } else if (response.status === 403 && data.lock) {
+                    showToast(data.message, 'warn')
+
+                    const pw = prompt('请输入文件夹密码');
+                    if (!pw) {
+                        showToast('密码不能为空', 'warn')
+                    } else {
+                        loadMedia(path, pw)
+                    }
                 } else {
-                    const data = await response.json();
                     showToast(data.message, 'warn')
                 }
             } catch (error) {
@@ -162,6 +160,20 @@
                 alert('Failed to load media.');
             }
         }
+    }
+
+    function updateCurrentPath(path) {
+        currentPath = path;
+        currentPathElem.innerHTML = `${currentPath || '/'}`;
+        currentPathElem.onclick = () => {
+            copyText(currentPathElem)
+        }
+        btnRoot.style.display = currentPath === '' ? 'none' : '';
+        backButton.style.display = currentPath === '' ? 'none' : '';
+
+        const paths = path.split('/')
+        const title = `${paths[paths.length - 2] ? paths[paths.length - 2] + '/' : ''}${paths[paths.length - 1]}` || '/'
+        document.title = title
     }
 
     function checkAndRenderInitialFiles() {
