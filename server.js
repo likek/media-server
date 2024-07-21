@@ -17,7 +17,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const PORT = 80;
+const PORT = 7777;
 const UPLOAD_DIR = path.join(__dirname, 'uploads');
 const THUMB_DIR = path.join(__dirname, 'thumbnails');
 const LOG_FILE = path.join(__dirname, 'log.txt');
@@ -165,8 +165,8 @@ loadCache();
 
 // 缓存管理函数
 const updateCache = async (dirPath) => {
-    if(dirPath === '/') {
-        dirPath = ''
+    if(dirPath.startsWith('/')) {
+        dirPath = dirPath.slice(1)
     }
     const fullPath = path.join(UPLOAD_DIR, dirPath);
     const files = await new Promise((resolve, reject) => {
@@ -231,8 +231,8 @@ const updateCache = async (dirPath) => {
 };
 
 const invalidateCache = (dirPath) => {
-    if(dirPath === '/') {
-        dirPath = ''
+    if(dirPath.startsWith('/')) {
+        dirPath = dirPath.slice(1)
     }
     delete cache[dirPath];
 };
@@ -430,6 +430,7 @@ app.post('/rename', (req, res) => {
         }
 
         invalidateCache(currentPath); // 更新缓存
+        invalidateCache(`${currentPath}/${oldName}`) // 如果rename的是文件夹，则该文件夹对应的缓存不应该再继续存在
         await updateCache(currentPath); // 更新缓存
 
         res.send({ message: `${type} renamed successfully` });
@@ -470,6 +471,7 @@ app.post('/move', (req, res) => {
         }
 
         invalidateCache(currentPath); // 更新缓存
+        invalidateCache(`${currentPath}/${filename}`) // 如果是文件夹，则该文件夹对应的缓存不应该再继续存在
         await updateCache(currentPath); // 更新缓存
         invalidateCache(targetFolder.replace(/^\/+/, '')); // 更新缓存
         await updateCache(targetFolder.replace(/^\/+/, '')); // 更新缓存
