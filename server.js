@@ -9,7 +9,6 @@ import extract from 'extract-zip';
 import iconv from 'iconv-lite'
 import jschardet from 'jschardet'
 import readline from 'readline'
-import morgan from 'morgan';
 import { fileURLToPath } from 'url';
 import requestIp from 'request-ip'
 
@@ -35,22 +34,31 @@ if (!fs.existsSync(THUMB_DIR)) {
     fs.mkdirSync(THUMB_DIR);
 }
 
-// Custom token for Morgan to capture request body
-morgan.token('body', (req) => JSON.stringify(req.body));
+import Searcher from './ip2region.js'
+const dbPath =  path.join(__dirname, 'ip2region.xdb');
+const vectorIndex = Searcher.loadVectorIndexFromFile(dbPath)
+const searcher = Searcher.newWithVectorIndex(dbPath, vectorIndex)
 
 // Format log output
-const logFormat = (tokens, req, res) => {
+const logFormat = async (req, res) => {
     const requestTime = new Date().toLocaleString();
     const responseTime = new Date().toLocaleString();
     const userIp = normalizeIp(req.clientIp || req.ip);
     const requestMethod = req.method;
     const requestUrl = req.originalUrl;
-    const requestBody = tokens.body(req, res);
+    const requestBody = JSON.stringify(req.body);
     const status = res.statusCode;
+    let region = ''
+    try {
+        region = (await searcher.search(userIp))?.region || 'unkown'
+    } catch(e) {
+        console.error('获取ip属地出错: ', e)
+    }
 
     return [
         chalk.blue(`[Request Time]: ${requestTime}`),
         chalk.green(`[User IP]: ${userIp}`),
+        chalk.green(`[IP Region]: ${region}`),
         chalk.yellow(`[Request]: ${requestMethod} ${requestUrl}`),
         chalk.cyan(`[Request Params]: ${requestBody}`),
         chalk.red(`[Response Time]: ${responseTime}`),
@@ -136,10 +144,14 @@ app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname)));
 app.use(pathNormalizer);
 
-app.use(morgan(logFormat));
+app.use(async (req, res, next) => {
+    const logMessage = await logFormat(req, res);
+    console.log(logMessage)
+    next()
+});
 
-app.use((req, res, next) => {
-    const logMessage = logFormat(morgan, req, res);
+app.use(async (req, res, next) => {
+    const logMessage = await logFormat(req, res);
     writeLogToFile(logMessage);
     next();
 });
