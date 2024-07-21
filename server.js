@@ -17,7 +17,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const PORT = 3000;
+const PORT = 80;
 const UPLOAD_DIR = path.join(__dirname, 'uploads');
 const THUMB_DIR = path.join(__dirname, 'thumbnails');
 const LOG_FILE = path.join(__dirname, 'log.txt');

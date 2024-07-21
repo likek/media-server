@@ -128,11 +128,15 @@
         btnRoot.style.display = currentPath === '' ? 'none' : '';
         backButton.style.display = currentPath === '' ? 'none' : '';
 
+        const paths = currentPath.split('/')
+        const title = `${paths[paths.length - 2] ? paths[paths.length - 2] + '/' : ''}${paths[paths.length - 1]}` || '/'
+
         const cacheValue = getCache(currentPath)
         if (cacheValue) {
             totalFiles = cacheValue;
             renderFiles(totalFiles.slice(0, pageSize)); // Render the first page
             checkAndRenderInitialFiles();
+            document.title = title
         } else {
             try {
                 const response = await fetch(`${baseServer}/files`, {
@@ -148,6 +152,7 @@
                     setCache(currentPath, files)
                     renderFiles(totalFiles.slice(0, pageSize)); // Render the first page
                     checkAndRenderInitialFiles();
+                    document.title = title
                 } else {
                     const data = await response.json();
                     showToast(data.message, 'warn')
