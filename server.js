@@ -145,14 +145,11 @@ app.use(express.static(path.join(__dirname)));
 app.use(pathNormalizer);
 
 app.use(async (req, res, next) => {
-    const logMessage = await logFormat(req, res);
-    console.log(logMessage)
-    next()
-});
-
-app.use(async (req, res, next) => {
-    const logMessage = await logFormat(req, res);
-    writeLogToFile(logMessage);
+    res.on('finish', async () => {
+        const logMessage = await logFormat(req, res);
+        console.log(logMessage)
+        writeLogToFile(logMessage);
+    })
     next();
 });
 
