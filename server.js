@@ -11,6 +11,7 @@ import jschardet from 'jschardet'
 import readline from 'readline'
 import morgan from 'morgan';
 import { fileURLToPath } from 'url';
+import requestIp from 'request-ip'
 
 // 获取当前文件的目录名
 const __filename = fileURLToPath(import.meta.url);
@@ -41,7 +42,7 @@ morgan.token('body', (req) => JSON.stringify(req.body));
 const logFormat = (tokens, req, res) => {
     const requestTime = new Date().toLocaleString();
     const responseTime = new Date().toLocaleString();
-    const userIp = normalizeIp(req.ip);
+    const userIp = normalizeIp(req.clientIp || req.ip);
     const requestMethod = req.method;
     const requestUrl = req.originalUrl;
     const requestBody = tokens.body(req, res);
@@ -127,6 +128,7 @@ const upload = multer({ storage });
 
 // 提供静态文件服务
 app.use(cors());
+app.use(requestIp.mw());
 app.use('/uploads', express.static(UPLOAD_DIR));
 app.use('/thumbnails', express.static(THUMB_DIR));
 app.use(express.json());
