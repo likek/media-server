@@ -240,6 +240,7 @@
                     video.poster = baseServer + file.thumbnail;
                 }
                 video.controls = true;
+                video.playsInline = true
                 if(['ts'].includes(fileExt)) {
                     // const source = document.createElement('source');
 

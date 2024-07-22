@@ -156,7 +156,7 @@ app.use('/uploads', express.static(UPLOAD_DIR));
 app.use('/thumbnails', express.static(THUMB_DIR));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(express.static(path.join(__dirname)));
+app.use(express.static(path.join(__dirname, 'static')));
 app.use(pathNormalizer);
 
 app.use(async (req, res, next) => {
@@ -719,7 +719,7 @@ app.post('/convertTxtEncoding', (req, res) => {
 
 // 根路径返回 index.html
 app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'index.html'));
+    res.sendFile(path.join(__dirname, 'static', 'index.html'));
 });
 
 app.listen(PORT, () => {
