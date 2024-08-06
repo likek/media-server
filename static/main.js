@@ -182,6 +182,10 @@
         }
     }
 
+    function encodeUrl(url) {
+        return url.split('/').map(encodeURIComponent).join('/');
+    }
+
     function renderFiles(files) {
         const fragment = document.createDocumentFragment();
         files.forEach(file => {
@@ -266,13 +270,13 @@
                 div.appendChild(video);
             } else if (['jpg', 'jpeg', 'png', 'gif'].includes(fileExt)) {
                 const img = document.createElement('img');
-                img.src = baseServer + file.filename;
+                img.src = encodeUrl(baseServer + file.filename)
                 img.className = 'image';
                 img.onclick = () => openImgModal(img);
                 div.appendChild(img);
             } else if ('pdf' === fileExt) {
                 const a = document.createElement('a');
-                a.href = baseServer + file.filename;
+                a.href = encodeUrl(baseServer + file.filename);
                 a.innerText = filename
                 a.target = '_blank'
                 div.appendChild(a);
