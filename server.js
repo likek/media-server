@@ -48,8 +48,8 @@ const logFormat = async (req, res) => {
     const responseTime = new Date().toLocaleString();
     const userIp = normalizeIp(req.clientIp || req.ip);
     const requestMethod = req.method;
-    const requestUrl = req.originalUrl;
-    const requestBody = JSON.stringify(req.body);
+    const requestUrl = decodeURIComponent(req.originalUrl);
+    const requestBody = decodeURIComponent(JSON.stringify(req.body));
     const status = res.statusCode;
 
     let region = '';

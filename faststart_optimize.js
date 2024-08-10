@@ -18,11 +18,13 @@ const gpuAccelSupported = async () => {
   }
 };
 
+const temp_file_xxx = ".tempftf";
+
 // 处理单个文件
 const processFile = async (file, useGpu) => {
   const fileDir = path.dirname(file);
   const fileName = path.basename(file);
-  const outputFileName = `${fileName.replace(/\.mp4$/, "")}-faststart.mp4`;
+  const outputFileName = `${fileName.replace(/\.mp4$/, "")}${temp_file_xxx}.mp4`;
 
   console.log(`开始处理文件: "${file}"`);
 
@@ -110,10 +112,13 @@ try {
 
 // 使用 glob 的 Promise 版本
 const findMp4Files = async (pattern) => {
-  console.log(`正在使用 glob 查找文件: ${pattern}`);
+  console.log(`正在查找文件: ${pattern}`);
   const files = await glob(pattern, {});
-  console.log(`glob 查找到 ${files.length} 个文件`);
-  return files.filter((file) => !file.endsWith("-faststart.mp4")); // 排除临时文件
+  const total = files.length;
+  console.log(`查找到 ${total} 个文件`);
+  const res = files.filter((file) => !file.endsWith(`${temp_file_xxx}.mp4`));
+  console.log(`排除了 ${total - res.length} 个临时文件`);
+  return res;
 };
 
 // 主函数
@@ -133,7 +138,7 @@ const main = async () => {
     let i = 0;
     for (const file of files) {
       try {
-        console.log(chalk.rgb(255, 0, 255)(`第${++i}个文件: ${file}`));
+        console.log(chalk.rgb(255, 0, 255)(`第${++i}/${files.length}个文件: ${file}`));
         const stats = await fs.stat(file); // 获取文件信息
         const fileSizeInBytes = stats.size;
 
