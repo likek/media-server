@@ -285,10 +285,19 @@
     
             if (file.type !== 'folder') {
                 const fileInfoElement = document.createElement('p');
-                fileInfoElement.textContent = `修改日期: ${new Date(file.lastModified).toLocaleString()}`;
-                const sizeInMB = (file.size / (1024 * 1024)).toFixed(2);
-                fileInfoElement.textContent += ` 大小: ${sizeInMB} MB`;
-                fileInfoElement.style = 'font-size: 10px; color: #666;margin: 0 0 4px 0';
+                const sizeInMB = file.size / (1024 * 1024);
+                let sizeText;
+                
+                if (sizeInMB >= 1024) {
+                  const sizeInGB = (sizeInMB / 1024).toFixed(2);
+                  sizeText = `${sizeInGB} GB`;
+                } else {
+                  sizeText = `${sizeInMB.toFixed(2)} MB`;
+                }
+                
+                fileInfoElement.innerHTML = `<span>大小: ${sizeText}</span>`;
+                fileInfoElement.innerHTML += `<span>修改日期: ${new Date(file.lastModified).toLocaleString()}</span>`;
+                fileInfoElement.style = 'font-size: 10px; color: #666;margin: 0 0 4px 0;display:flex;justify-content: space-between';
                 div.appendChild(fileInfoElement);
             }
     

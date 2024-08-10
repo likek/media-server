@@ -11,6 +11,8 @@ import jschardet from 'jschardet'
 import readline from 'readline'
 import { fileURLToPath } from 'url';
 import requestIp from 'request-ip'
+import rangeParser from 'range-parser';
+import useragent from 'useragent';
 
 // 获取当前文件的目录名
 const __filename = fileURLToPath(import.meta.url);
@@ -41,7 +43,6 @@ const dbPath =  path.join(__dirname, 'ip2region.xdb');
 const vectorIndex = Searcher.loadVectorIndexFromFile(dbPath)
 const searcher = Searcher.newWithVectorIndex(dbPath, vectorIndex)
 
-// Format log output
 const logFormat = async (req, res) => {
     const requestTime = new Date().toLocaleString();
     const responseTime = new Date().toLocaleString();
@@ -50,12 +51,22 @@ const logFormat = async (req, res) => {
     const requestUrl = req.originalUrl;
     const requestBody = JSON.stringify(req.body);
     const status = res.statusCode;
-    let region = ''
+
+    let region = '';
     try {
-        region = (await searcher.search(userIp))?.region || 'unkown'
-    } catch(e) {
-        console.error('获取ip属地出错: ', e)
+        region = (await searcher.search(userIp))?.region || 'unknown';
+    } catch (e) {
+        console.error('获取ip属地出错: ', e);
     }
+
+    const userAgentString = req.headers['user-agent'];
+    const userAgent = useragent.parse(userAgentString);
+
+    const deviceInfo = {
+        device: userAgent.device.toString(),
+        os: userAgent.os.toString(),
+        browser: userAgent.toAgent()
+    };
 
     return [
         chalk.blue(`[Request Time]: ${requestTime}`),
@@ -64,7 +75,10 @@ const logFormat = async (req, res) => {
         chalk.yellow(`[Request]: ${requestMethod} ${requestUrl}`),
         chalk.cyan(`[Request Params]: ${requestBody}`),
         chalk.red(`[Response Time]: ${responseTime}`),
-        chalk.magenta(`[Response Status]: ${status}`)
+        chalk.magenta(`[Response Status]: ${status}`),
+        chalk.gray(`[Device]: ${deviceInfo.device}`),
+        chalk.gray(`[OS]: ${deviceInfo.os}`),
+        chalk.gray(`[Browser]: ${deviceInfo.browser}`)
     ].join(' | ');
 };
 
@@ -323,6 +337,48 @@ const invalidateCache = (dirPath) => {
     }
     delete cache[dirPath];
 };
+
+app.get('/uploads/*', (req, res) => {
+    const filePath = path.join(__dirname, req.path);
+
+    fs.stat(filePath, (err, stats) => {
+        if (err) {
+            if (err.code === 'ENOENT') {
+                return res.status(404).send('File not found');
+            }
+            return res.status(500).send(err);
+        }
+
+        const range = req.headers.range;
+        if (!range) {
+            // If there is no Range header, send the entire video file
+            res.writeHead(200, {
+                'Content-Length': stats.size,
+                'Content-Type': 'video/mp4',
+            });
+            fs.createReadStream(filePath).pipe(res);
+        } else {
+            // Parse the Range header
+            const positions = rangeParser(stats.size, range);
+            if (positions === -1) {
+                // Invalid Range header
+                return res.status(416).send('Requested Range Not Satisfiable');
+            }
+
+            const { start, end } = positions[0];
+            const chunkSize = (end - start) + 1;
+
+            res.writeHead(206, {
+                'Content-Range': `bytes ${start}-${end}/${stats.size}`,
+                'Accept-Ranges': 'bytes',
+                'Content-Length': chunkSize,
+                'Content-Type': 'video/mp4',
+            });
+
+            fs.createReadStream(filePath, { start, end }).pipe(res);
+        }
+    });
+});
 
 // 上传文件并生成缩略图
 app.post('/upload', upload.single('file'), async (req, res) => {
