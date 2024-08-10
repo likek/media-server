@@ -245,6 +245,7 @@
                 }
                 video.controls = true;
                 video.playsInline = true
+                video.preload = 'metadata';
                 if(['ts'].includes(fileExt)) {
                     // const source = document.createElement('source');
 
