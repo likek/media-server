@@ -6,7 +6,6 @@ db.serialize(() => {
     CREATE TABLE IF NOT EXISTS logs_request (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       requestTime TEXT,
-      responseTime TEXT,
       userIp TEXT,
       requestMethod TEXT,
       requestUrl TEXT,
@@ -42,4 +41,4 @@ db.serialize(() => {
   `);
 });
 
-module.exports = db;
+export default db;

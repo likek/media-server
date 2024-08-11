@@ -12,6 +12,14 @@ import readline from 'readline'
 import { fileURLToPath } from 'url';
 import requestIp from 'request-ip'
 import useragent from 'useragent';
+import Searcher from './ip2region.js'
+import { rateLimit } from 'express-rate-limit'
+import cookieParser from 'cookie-parser';
+import cookie from 'cookie';
+import { v4 as uuidv4 } from 'uuid';
+import { createServer } from 'http';
+import WebSocket, { WebSocketServer } from 'ws';
+import db from './dbserialize.js';
 
 // 获取当前文件的目录名
 const __filename = fileURLToPath(import.meta.url);
@@ -28,6 +36,70 @@ let permissions = {};
 const folderLockConfigPath = path.join(__dirname, 'folderLockCfg.json');
 let folderLockConfig = {}
 
+const regineDBPath =  path.join(__dirname, 'ip2region.xdb');
+const vectorIndex = Searcher.loadVectorIndexFromFile(regineDBPath)
+const searcher = Searcher.newWithVectorIndex(regineDBPath, vectorIndex)
+
+const httpServer = createServer(app);
+const wss = new WebSocketServer({ server: httpServer });
+const clientsById = new Map();
+
+const config = JSON.parse(fs.readFileSync('./config.json', 'utf8'));
+const maxRequestsPerMinute = config.maxRequestsPerMinute;
+const blacklistDurationMs = config.blacklistDurationMs;
+
+const limiter = rateLimit({
+    windowMs: 1 * 60 * 1000,
+    max: maxRequestsPerMinute,
+    handler: (req, res, next) => {
+      const ip = req.ip;
+      const addedTime = new Date().toISOString();
+      const cookies = req.cookies;
+      const userId = cookies.userId;
+      db.run('INSERT OR REPLACE INTO blacklist (ip, cookies, userId, added_time) VALUES (?, ?, ?, ?)', [ip, JSON.stringify(cookies), userId, addedTime], function (err) {
+        if (err) {
+            console.error('插入黑名单出错: ', err);
+            return res.status(500).json({ error: '内部服务器错误' });
+        }
+        res.status(429).json({
+          error: `请求过于频繁，您已被列入黑名单，${blacklistDurationMs/1000}秒后解除。`,
+        });
+      });
+    },
+  });
+
+  function checkBlacklist(req, res, next) {
+    const ip = req.ip;
+    const currentTime = Date.now();
+    const cookies = req.cookies;
+    const userId = cookies.userId;
+    db.get('SELECT added_time FROM blacklist WHERE userId = ?', [userId], (err, row) => {
+      if (err) {
+        console.error('查询黑名单出错: ', err);
+        return res.status(500).json({ error: '内部服务器错误' });
+      }
+      if (row) {
+        const duration = currentTime - new Date(row.added_time).getTime()
+        if (duration > blacklistDurationMs) {
+          // 黑名单时间已过，移除IP
+          db.run('DELETE FROM blacklist WHERE userId = ?', [userId], (err) => {
+            if (err) {
+                console.error('移除IP出错: ', err);
+                return res.status(500).json({ error: '内部服务器错误' });
+            }
+            next();
+          });
+        } else {
+          return res.status(403).json({
+            error: `您已被列入黑名单，无法访问该资源，${Math.floor((blacklistDurationMs - duration)/1000)}秒后解除。`,
+          });
+        }
+      } else {
+        next();
+      }
+    });
+  }
+
 // 创建上传和缩略图目录
 if (!fs.existsSync(UPLOAD_DIR)) {
     fs.mkdirSync(UPLOAD_DIR);
@@ -37,18 +109,9 @@ if (!fs.existsSync(THUMB_DIR)) {
     fs.mkdirSync(THUMB_DIR);
 }
 
-import cookieParser from 'cookie-parser';
-import cookie from 'cookie';
-import { v4 as uuidv4 } from 'uuid';
-
-import { createServer } from 'http';
-import WebSocket, { WebSocketServer } from 'ws';
-
-const httpServer = createServer(app);
-const wss = new WebSocketServer({ server: httpServer });
-const clientsById = new Map();
-
 app.use(cookieParser());
+app.use(checkBlacklist);
+app.use(limiter);
 
 function broadcastMessage(message, req) {
     const userId = req.cookies.userId;
@@ -74,7 +137,7 @@ app.get('/register', (req, res) => {
     res.send();
 });
 
-wss.on('connection', (ws, req) => {
+wss.on('connection', async (ws, req) => {
     const cookies = cookie.parse(req.headers.cookie || '');
 
     let ipAddress;
@@ -85,23 +148,25 @@ wss.on('connection', (ws, req) => {
     }
     ipAddress = normalizeIp(ipAddress);
     const userId = cookies.userId;
-    console.log(`用户${chalk.green('已连接')}: [${userId}] - [${ipAddress}]`);
+
+    let region = '';
 
     clientsById.set(userId, ws);
     ws.on('close', () => {
         clientsById.delete(userId);
-        console.log(`用户${chalk.yellow('已断开')}: [${userId}] - [${ipAddress}]`);
+        console.log(`[${new Date().toLocaleString()}] 用户${chalk.yellow('已断开')}: [${userId}] - [${ipAddress}] - [${region}]`);
     });
-});
 
-import Searcher from './ip2region.js'
-const regineDBPath =  path.join(__dirname, 'ip2region.xdb');
-const vectorIndex = Searcher.loadVectorIndexFromFile(regineDBPath)
-const searcher = Searcher.newWithVectorIndex(regineDBPath, vectorIndex)
+    try {
+        region = (await searcher.search(ipAddress))?.region || 'unknown';
+    } catch (e) {
+        console.error('获取ip属地出错: ', e);
+    }
+    console.log(`[${new Date().toLocaleString()}] 用户${chalk.green('已连接')}: [${userId}] - [${ipAddress}] - [${region}]`);
+});
 
 const logFormat = async (req, res) => {
     const requestTime = new Date().toLocaleString();
-    const responseTime = new Date().toLocaleString();
     const userIp = normalizeIp(req.clientIp || req.ip);
     const requestMethod = req.method;
     const requestUrl = decodeURIComponent(req.originalUrl);
@@ -130,7 +195,6 @@ const logFormat = async (req, res) => {
         chalk.green(`[IP Region]: ${region}`),
         chalk.yellow(`[Request]: ${requestMethod} ${requestUrl}`),
         chalk.cyan(`[Request Params]: ${requestBody}`),
-        chalk.red(`[Response Time]: ${responseTime}`),
         chalk.magenta(`[Response Status]: ${status}`),
         chalk.gray(`[Device]: ${deviceInfo.device}`),
         chalk.gray(`[OS]: ${deviceInfo.os}`),
