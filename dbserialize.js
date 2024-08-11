@@ -21,6 +21,17 @@ db.serialize(() => {
   `);
 
   db.run(`
+    CREATE TABLE IF NOT EXISTS logs_ws (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      time TEXT,
+      action TEXT,
+      userId TEXT,
+      userIp TEXT,
+      userRegion TEXT
+    )
+  `);
+
+  db.run(`
     CREATE TABLE IF NOT EXISTS blacklist (
       ip TEXT PRIMARY KEY,
       cookies TEXT,
@@ -30,7 +41,7 @@ db.serialize(() => {
     `)
 
   db.run(`
-    CREATE TRIGGER IF NOT EXISTS limit_logs
+    CREATE TRIGGER IF NOT EXISTS limit_logs_request
     AFTER INSERT ON logs_request
     WHEN (SELECT COUNT(*) FROM logs_request) > 10000
     BEGIN
@@ -39,6 +50,18 @@ db.serialize(() => {
       );
     END;
   `);
+
+  db.run(`
+    CREATE TRIGGER IF NOT EXISTS limit_logs_ws
+    AFTER INSERT ON logs_ws
+    WHEN (SELECT COUNT(*) FROM logs_ws) > 10000
+    BEGIN
+      DELETE FROM logs_ws WHERE id IN (
+        SELECT id FROM logs_ws ORDER BY time ASC LIMIT (SELECT COUNT(*) - 10000 FROM logs_ws)
+      );
+    END;
+  `);
+
 });
 
 export default db;

@@ -47,6 +47,8 @@ const config = JSON.parse(fs.readFileSync('./config.json', 'utf8'));
 const maxRequestsPerMinute = config.maxRequestsPerMinute;
 const blacklistDurationMs = config.blacklistDurationMs;
 
+app.set('trust proxy', 1);
+
 const limiter = rateLimit({
     windowMs: 1 * 60 * 1000,
     max: maxRequestsPerMinute,
@@ -139,12 +141,17 @@ app.get('/register', (req, res) => {
 wss.on('connection', async (ws, req) => {
     const cookies = cookie.parse(req.headers.cookie || '');
 
-    let ipAddress;
-    if (req.headers['x-forwarded-for']) {
-        ipAddress = req.headers['x-forwarded-for'].split(',')[0];
-    } else if (req.connection.remoteAddress) {
-        ipAddress = req.connection.remoteAddress;
+    let ipAddress = req.ip;
+    if (!ipAddress) {
+        if (req.headers['x-forwarded-for']) {
+            ipAddress = req.headers['x-forwarded-for'].split(',')[0];
+        } else if (req.headers['x-real-ip']) {
+            ipAddress = req.headers['x-real-ip'];
+        } else if (req.connection.remoteAddress) {
+            ipAddress = req.connection.remoteAddress;
+        }
     }
+
     ipAddress = normalizeIp(ipAddress);
     const userId = cookies.userId;
 
@@ -154,6 +161,12 @@ wss.on('connection', async (ws, req) => {
     ws.on('close', () => {
         clientsById.delete(userId);
         console.log(`[${new Date().toLocaleString()}] 用户${chalk.yellow('已断开')}: [${userId}] - [${ipAddress}] - [${region}]`);
+        writeWsLogToDB({
+            userId,
+            userIp: ipAddress,
+            userRegion: region,
+            action: 'disconnect'
+        });
     });
 
     try {
@@ -162,10 +175,17 @@ wss.on('connection', async (ws, req) => {
         console.error('获取ip属地出错: ', e);
     }
     console.log(`[${new Date().toLocaleString()}] 用户${chalk.green('已连接')}: [${userId}] - [${ipAddress}] - [${region}]`);
+    writeWsLogToDB({
+        userId,
+        userIp: ipAddress,
+        userRegion: region,
+        action: 'connect'
+    });
 });
 
+
 const logFormat = async (req, res) => {
-    const requestTime = new Date().toLocaleString();
+    const requestTime = new Date().toISOString();
     const userIp = normalizeIp(req.clientIp || req.ip);
     const requestMethod = req.method;
     const requestUrl = decodeURIComponent(req.originalUrl);
@@ -206,7 +226,7 @@ const logFormat = async (req, res) => {
     return data;
 };
 
-const writeLogToDB = (logData) => {
+const writeRequestLogToDB = (logData) => {
     // 插入日志到数据库
     const query = `
         INSERT INTO logs_request (
@@ -230,9 +250,31 @@ const writeLogToDB = (logData) => {
 
     db.run(query, values, (err) => {
       if (err) {
-        console.error("Failed to insert log into database:", err);
+        console.error("Failed to insert log into database (logs_request):", err);
       }
     });
+};
+
+const writeWsLogToDB = (logData) => {
+    const query = `
+    INSERT INTO logs_ws (
+      time, action, userId, userIp, userRegion
+    ) VALUES (?, ?, ?, ?, ?)
+  `;
+
+  const values = [
+    new Date().toISOString(),
+    logData.action || '',
+    logData.userId || '',
+    logData.userIp || '',
+    logData.userRegion || ''
+  ];
+
+  db.run(query, values, (err) => {
+    if (err) {
+      console.error("Failed to insert log into database (logs_ws):", err);
+    }
+  });
 };
 
 
@@ -324,7 +366,7 @@ app.use(async (req, res, next) => {
     res.on('finish', async () => {
         const data = await logFormat(req, res);
         console.log([
-            chalk.blue(`${data.requestTime}`),
+            chalk.blue(`${new Date(data.requestTime).toLocaleString()}`),
             chalk.green(`${data.userIp}`),
             chalk.green(`${data.region}`),
             chalk.yellow(`${data.requestMethod} ${data.requestUrl}`),
@@ -336,7 +378,7 @@ app.use(async (req, res, next) => {
             chalk.gray(`${data.userAgent}`)
         ].join(' | '))
 
-        writeLogToDB(data);
+        writeRequestLogToDB(data);
     })
     next();
 });
