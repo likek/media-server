@@ -32,18 +32,20 @@ db.serialize(() => {
   `);
 
   db.run(`
-    CREATE TABLE IF NOT EXISTS logs_file_accessed (
+  CREATE TABLE IF NOT EXISTS blacklist (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      time TEXT,
+      ip TEXT,
+      cookies TEXT,
       userId TEXT,
-      userIp TEXT,
-      filePath TEXT
-    )
+      added_time TEXT,
+      enabled INTEGER DEFAULT 1
+  )
   `);
 
   db.run(`
     CREATE TABLE IF NOT EXISTS blacklist (
-      userId TEXT PRIMARY KEY,
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      userId TEXT,
       cookies TEXT,
       ip TEXT,
       added_time TEXT

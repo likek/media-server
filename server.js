@@ -3,7 +3,7 @@ import express from 'express';
 import multer from 'multer';
 import cors from 'cors';
 import fs from 'fs';
-import path from 'path';
+import path, { resolve } from 'path';
 import ffmpeg from 'fluent-ffmpeg';
 import extract from 'extract-zip';
 import iconv from 'iconv-lite'
@@ -49,27 +49,7 @@ const blacklistDurationMs = config.blacklistDurationMs;
 
 app.set('trust proxy', 1);
 
-const limiter = rateLimit({
-    windowMs: 1 * 60 * 1000,
-    max: maxRequestsPerMinute,
-    handler: (req, res, next) => {
-      const ip = normalizeIp(req.clientIp || req.ip);
-      const addedTime = new Date().toISOString();
-      const cookies = req.cookies;
-      const userId = cookies.userId;
-      db.run('INSERT OR REPLACE INTO blacklist (ip, cookies, userId, added_time) VALUES (?, ?, ?, ?)', [ip, JSON.stringify(cookies), userId, addedTime], function (err) {
-        if (err) {
-            console.error('插入黑名单出错: ', err);
-            return res.status(500).json({ error: '内部服务器错误' });
-        }
-        res.status(429).json({
-          error: `请求过于频繁，您已被列入黑名单，${blacklistDurationMs/1000}秒后解除。`,
-        });
-      });
-    },
-  });
-
-  const normalizeIp = (ip) => {
+const normalizeIp = (ip) => {
     if (!ip) {
         return 'unknown ip';
     }
@@ -79,36 +59,85 @@ const limiter = rateLimit({
     return ip;
 };
 
-  function checkBlacklist(req, res, next) {
+let limiterQueue = Promise.resolve()
+const limiter = rateLimit({
+    windowMs: 1 * 60 * 1000,
+    max: maxRequestsPerMinute,
+    handler: (req, res, next) => {
+        limiterQueue = limiterQueue.finally(() => {
+            return new Promise((resolve, reject) => {
+                const ip = normalizeIp(req.clientIp || req.ip);
+                const addedTime = new Date().toISOString();
+                const cookies = req.cookies;
+                const userId = cookies.userId;
+                
+                // 检查是否存在相同 userId 且 enabled 为 1 的记录
+                db.get('SELECT * FROM blacklist WHERE userId = ? AND enabled = 1', [userId], (err, row) => {
+                    if (err) {
+                        console.error('查询黑名单出错: ', err);
+                        res.status(500).json({ message: '内部服务器错误' });
+                        return reject();
+                    }
+        
+                    if (row) {
+                        // 如果存在，不进行插入操作
+                        res.status(429).json({
+                            message: `请求过于频繁，您已被列入黑名单，${blacklistDurationMs / 1000}秒后解除。`,
+                        });
+                        return resolve();
+                    } else {
+                        // 插入新的记录
+                        db.run('INSERT INTO blacklist (ip, cookies, userId, added_time, enabled) VALUES (?, ?, ?, ?, 1)', [ip, JSON.stringify(cookies), userId, addedTime], function (err) {
+                            if (err) {
+                                console.error('插入黑名单出错: ', err);
+                                res.status(500).json({ message: '内部服务器错误' });
+                                return reject();
+                            }
+                            res.status(429).json({
+                                message: `请求过于频繁，您已被列入黑名单，${blacklistDurationMs / 1000}秒后解除。`,
+                            });
+                            return resolve();
+                        });
+                    }
+                });
+            })
+        })
+    },
+});
+
+function checkBlacklist(req, res, next) {
     const currentTime = Date.now();
     const cookies = req.cookies;
     const userId = cookies.userId;
-    db.get('SELECT added_time FROM blacklist WHERE userId = ?', [userId], (err, row) => {
-      if (err) {
-        console.error('查询黑名单出错: ', err);
-        return res.status(500).json({ error: '内部服务器错误' });
-      }
-      if (row) {
-        const duration = currentTime - new Date(row.added_time).getTime()
-        if (duration > blacklistDurationMs) {
-          // 黑名单时间已过，移除IP
-          db.run('DELETE FROM blacklist WHERE userId = ?', [userId], (err) => {
-            if (err) {
-                console.error('移除IP出错: ', err);
-                return res.status(500).json({ error: '内部服务器错误' });
-            }
-            next();
-          });
-        } else {
-          return res.status(403).json({
-            error: `您已被列入黑名单，无法访问该资源，${Math.floor((blacklistDurationMs - duration)/1000)}秒后解除。`,
-          });
+    db.get('SELECT added_time FROM blacklist WHERE userId = ? AND enabled = 1', [userId], (err, row) => {
+        if (err) {
+            console.error('查询黑名单出错: ', err);
+            return res.status(500).json({ message: '内部服务器错误' });
         }
-      } else {
-        next();
-      }
+        if (row) {
+            const duration = currentTime - new Date(row.added_time).getTime();
+            if (duration > blacklistDurationMs) {
+                // 黑名单时间已过，逻辑删除IP
+                db.run('UPDATE blacklist SET enabled = 0 WHERE userId = ?', [userId], (err) => {
+                    if (err) {
+                        console.error('移除IP出错: ', err);
+                        return res.status(500).json({ message: '内部服务器错误' });
+                    }
+                    next();
+                });
+            } else {
+                const black_time_left = Math.floor((blacklistDurationMs - duration) / 1000);
+                return res.status(403).json({
+                    message: `您已被列入黑名单，无法访问该资源，${black_time_left}秒后解除。`,
+                    black_time_left,
+                });
+            }
+        } else {
+            next();
+        }
     });
-  }
+}
+
 
   const checkPermissions = (req, res, next) => {
     loadPermissions();
@@ -638,7 +667,7 @@ app.post('/users', async (req, res) => {
         db.get(countQuery, [], (err, row) => {
             if (err) {
                 console.error('Error executing count query:', err);
-                return res.status(500).send({ error: 'Database error' });
+                return res.status(500).send({ message: 'Database error' });
             }
 
             // 分页查询
@@ -651,7 +680,7 @@ app.post('/users', async (req, res) => {
             db.all(query, [limit, offset], (err, rows) => {
                 if (err) {
                     console.error('Error executing query:', err);
-                    return res.status(500).send({ error: 'Database error' });
+                    return res.status(500).send({ message: 'Database error' });
                 }
                 
                 // 返回结果包括数据和总数
@@ -660,7 +689,7 @@ app.post('/users', async (req, res) => {
         });
     } catch (error) {
         console.error('Error handling request:', error);
-        res.status(500).send({ error: 'Internal server error' });
+        res.status(500).send({ message: 'Internal server error' });
     }
 });
 

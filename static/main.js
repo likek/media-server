@@ -146,14 +146,18 @@ async function loadMedia(path = "", password) {
         renderFiles(totalFiles.slice(0, pageSize)); // Render the first page
         checkAndRenderInitialFiles();
         updateCurrentPath(path);
-      } else if (response.status === 403 && data.lock) {
+      } else if (response.status === 403) {
         showToast(data.message, "warn");
 
-        const pw = prompt("请输入文件夹密码");
-        if (!pw) {
-          showToast("密码不能为空", "warn");
-        } else {
-          loadMedia(path, pw);
+        if (data.lock) {
+          const pw = prompt("请输入文件夹密码");
+          if (!pw) {
+            showToast("密码不能为空", "warn");
+          } else {
+            loadMedia(path, pw);
+          }
+        } else if(data.black_time_left) {
+          
         }
       } else {
         showToast(data.message, "warn");
