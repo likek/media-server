@@ -945,7 +945,8 @@ function registeUserId() {
 }
 
 function connectWs() {
-  ws = new WebSocket(`ws://${location.host}`);
+  const prot = location.protocol === "https:" ? "wss" : "ws";
+  ws = new WebSocket(`${prot}://${location.host}`);
   ws.onopen = function (event) {
     clearInterval(reconnectTimer);
     console.log("ws connected");
