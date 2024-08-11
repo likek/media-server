@@ -157,7 +157,7 @@ async function loadMedia(path = "", password) {
             loadMedia(path, pw);
           }
         } else if(data.black_time_left) {
-          
+          window.location.reload();
         }
       } else {
         showToast(data.message, "warn");
