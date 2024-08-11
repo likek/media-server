@@ -29,7 +29,6 @@ const app = express();
 const PORT = 7777;
 const UPLOAD_DIR = path.join(__dirname, 'uploads');
 const THUMB_DIR = path.join(__dirname, 'thumbnails');
-const LOG_FILE = path.join(__dirname, 'log.txt');
 const cacheFilePath = path.join(__dirname, 'cache.json');
 const permissionsFilePath = path.join(__dirname, 'permission.json');
 let permissions = {};
@@ -189,25 +188,50 @@ const logFormat = async (req, res) => {
         browser: userAgent.toAgent()
     };
 
-    return [
-        chalk.blue(`[Request Time]: ${requestTime}`),
-        chalk.green(`[User IP]: ${userIp}`),
-        chalk.green(`[IP Region]: ${region}`),
-        chalk.yellow(`[Request]: ${requestMethod} ${requestUrl}`),
-        chalk.cyan(`[Request Params]: ${requestBody}`),
-        chalk.magenta(`[Response Status]: ${status}`),
-        chalk.gray(`[Device]: ${deviceInfo.device}`),
-        chalk.gray(`[OS]: ${deviceInfo.os}`),
-        chalk.gray(`[Browser]: ${deviceInfo.browser}`),
-        chalk.gray(`[User Agent]: ${userAgentString}`)
-    ].join(' | ');
+    const data = {
+        requestTime,
+        userIp,
+        requestMethod,
+        requestUrl,
+        requestBody,
+        status,
+        userAgent: userAgentString,
+        region,
+        device: deviceInfo.device,
+        os: deviceInfo.os,
+        browser: deviceInfo.browser,
+        timestamp: new Date().toISOString()
+    };
+    
+    return data;
 };
 
-const writeLogToFile = (logMessage) => {
-    fs.appendFile(LOG_FILE, logMessage + '\n', (err) => {
-        if (err) {
-            console.error('Failed to write log to file:', err);
-        }
+const writeLogToDB = (logData) => {
+    // 插入日志到数据库
+    const query = `
+        INSERT INTO logs_request (
+          requestTime, userIp, requestMethod, requestUrl, requestBody, status, userAgent, region, device, os, browser, timestamp
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `;
+    const values = [
+      logData.requestTime,
+      logData.userIp,
+      logData.requestMethod,
+      logData.requestUrl,
+      logData.requestBody,
+      logData.status,
+      logData.userAgent,
+      logData.region,
+      logData.device,
+      logData.os,
+      logData.browser,
+      logData.timestamp,
+    ];
+
+    db.run(query, values, (err) => {
+      if (err) {
+        console.error("Failed to insert log into database:", err);
+      }
     });
 };
 
@@ -298,9 +322,21 @@ app.use(pathNormalizer);
 
 app.use(async (req, res, next) => {
     res.on('finish', async () => {
-        const logMessage = await logFormat(req, res);
-        console.log(logMessage)
-        writeLogToFile(logMessage);
+        const data = await logFormat(req, res);
+        console.log([
+            chalk.blue(`${data.requestTime}`),
+            chalk.green(`${data.userIp}`),
+            chalk.green(`${data.region}`),
+            chalk.yellow(`${data.requestMethod} ${data.requestUrl}`),
+            chalk.cyan(`${data.requestBody}`),
+            chalk.magenta(`${data.status}`),
+            chalk.gray(`${data.device}`),
+            chalk.gray(`${data.os}`),
+            chalk.gray(`${data.browser}`),
+            chalk.gray(`${data.userAgent}`)
+        ].join(' | '))
+
+        writeLogToDB(data);
     })
     next();
 });
