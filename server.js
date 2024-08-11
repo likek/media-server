@@ -76,12 +76,21 @@ app.get('/register', (req, res) => {
 
 wss.on('connection', (ws, req) => {
     const cookies = cookie.parse(req.headers.cookie || '');
+
+    let ipAddress;
+    if (req.headers['x-forwarded-for']) {
+        ipAddress = req.headers['x-forwarded-for'].split(',')[0];
+    } else if (req.connection.remoteAddress) {
+        ipAddress = req.connection.remoteAddress;
+    }
+    ipAddress = normalizeIp(ipAddress);
     const userId = cookies.userId;
-    console.log(`用户${userId}已连接`)
+    console.log(`用户${chalk.green('已连接')}: [${userId}] - [${ipAddress}]`);
+
     clientsById.set(userId, ws);
     ws.on('close', () => {
         clientsById.delete(userId);
-        console.log(`用户${userId}已断开`)
+        console.log(`用户${chalk.yellow('已断开')}: [${userId}] - [${ipAddress}]`);
     });
 });
 
@@ -164,6 +173,9 @@ const loadFolderLockConfig = () => {
 loadFolderLockConfig();
 
 const normalizeIp = (ip) => {
+    if (!ip) {
+        return 'unknown ip';
+    }
     if (ip.startsWith('::ffff:')) {
         return ip.substring(7);
     }
@@ -316,6 +328,7 @@ const updateCache = async (dirPath, req) => {
     if(dirPath.startsWith('/')) {
         dirPath = dirPath.slice(1)
     }
+    const oldFileInfosStr = JSON.stringify(cache[dirPath] || []);
     const fullPath = path.join(UPLOAD_DIR, dirPath);
     const files = await new Promise((resolve, reject) => {
         fs.readdir(fullPath, (err, files) => {
@@ -374,9 +387,11 @@ const updateCache = async (dirPath, req) => {
         return new Date(b.lastModified) - new Date(a.lastModified);
     });
 
-    cache[dirPath] = fileInfos;
-    fs.writeFileSync(cacheFilePath, JSON.stringify(cache), 'utf8');
-    broadcastMessage({event: 'updateCache', data: { dirPath, fileInfos }}, req)
+    if (oldFileInfosStr !== JSON.stringify(fileInfos)) {
+        cache[dirPath] = fileInfos;
+        fs.writeFileSync(cacheFilePath, JSON.stringify(cache), 'utf8');
+        broadcastMessage({event: 'updateCache', data: { dirPath, fileInfos }}, req)
+    }
 };
 
 const invalidateCache = (dirPath) => {
@@ -403,7 +418,6 @@ app.post('/upload', upload.single('file'), async (req, res) => {
         const thumbnailPath = path.join(thumbnailDir, filename + '.png');
         try {
             await generateThumbnail(filePath, thumbnailPath);
-            invalidateCache(currentPath); // 更新缓存
             await updateCache(currentPath, req); // 更新缓存
             res.send({
                 filename: '/uploads/' + currentPath + '/' + filename,
@@ -414,7 +428,6 @@ app.post('/upload', upload.single('file'), async (req, res) => {
             res.send({ filename: '/uploads/' + currentPath + '/' + filename });
         }
     } else {
-        invalidateCache(currentPath); // 更新缓存
         await updateCache(currentPath, req); // 更新缓存
         res.send({ filename: '/uploads/' + currentPath + '/' + filename });
     }
@@ -531,7 +544,6 @@ app.post('/delete', async (req, res) => {
 
     try {
         await deleteRecursively(filePath);
-        invalidateCache(currentPath); // 更新缓存
         await updateCache(currentPath, req); // 更新缓存
         res.send({ message: `${type} deleted successfully` });
     } catch (err) {
@@ -555,7 +567,6 @@ app.post('/createFolder', (req, res) => {
             return res.status(500).send({ message: 'Failed to create folder' });
         }
 
-        invalidateCache(currentPath); // 更新缓存
         await updateCache(currentPath, req); // 更新缓存
 
         res.send({ message: 'Folder created successfully' });
@@ -578,7 +589,6 @@ app.post('/rename', (req, res) => {
             return res.status(500).send({ message: `Failed to rename ${type}` });
         }
 
-        invalidateCache(currentPath); // 更新缓存
         invalidateCache(`${currentPath}/${oldName}`) // 如果rename的是文件夹，则该文件夹对应的缓存不应该再继续存在
         await updateCache(currentPath, req); // 更新缓存
 
@@ -589,8 +599,7 @@ app.post('/rename', (req, res) => {
 app.post('/updateCache', async (req, res) => {
     try {
         const currentPath = req.body.path || '';
-        invalidateCache(currentPath); // 更新缓存，这里需要确保该函数能处理可能的异常
-        await updateCache(currentPath, req); // 更新缓存，这里需要确保该函数能处理可能的异常
+        await updateCache(currentPath, req);
         // res.send(cache[currentPath]);
         res.send({ message: 'Update cache successfully' });
     } catch (error) {
@@ -619,10 +628,8 @@ app.post('/move', (req, res) => {
             return res.status(500).json({ message: 'Error moving file/folder' });
         }
 
-        invalidateCache(currentPath); // 更新缓存
         invalidateCache(`${currentPath}/${filename}`) // 如果是文件夹，则该文件夹对应的缓存不应该再继续存在
         await updateCache(currentPath, req); // 更新缓存
-        invalidateCache(targetFolder.replace(/^\/+/, '')); // 更新缓存
         await updateCache(targetFolder.replace(/^\/+/, ''), req); // 更新缓存
         res.json({ success: true });
     });
@@ -647,7 +654,6 @@ app.post('/convert', (req, res) => {
         .save(absoluteOutputPath)
         .on('end', async () => {
             const currentPath = path.dirname(inputFilePath);
-            invalidateCache(currentPath); // 更新缓存
             await updateCache(currentPath, req); // 更新缓存
             res.json({ outputFilePath: outputFilePath });
         })
@@ -672,7 +678,6 @@ app.post('/unzip', async (req, res) => {
     if (fileExtension === '.zip') {
         extract(absoluteZipPath, { dir: extractToPath })
             .then(async () => {
-                invalidateCache(currentPath);
                 await updateCache(currentPath, req);
                 res.json({ message: 'File unzipped successfully', success: true });
             })
