@@ -69,6 +69,16 @@ const limiter = rateLimit({
     },
   });
 
+  const normalizeIp = (ip) => {
+    if (!ip) {
+        return 'unknown ip';
+    }
+    if (ip.startsWith('::ffff:')) {
+        return ip.substring(7);
+    }
+    return ip;
+};
+
   function checkBlacklist(req, res, next) {
     const currentTime = Date.now();
     const cookies = req.cookies;
@@ -100,6 +110,49 @@ const limiter = rateLimit({
     });
   }
 
+  const checkPermissions = (req, res, next) => {
+    loadPermissions();
+
+    const userIp = normalizeIp(req.clientIp || req.ip);
+    let userId = req.cookies.userId;
+    const requestUrl = req.originalUrl.split('?')[0];
+    const allowedUsers = permissions[requestUrl];
+    if (!allowedUsers) {
+        return next();
+    }
+
+    if (allowedUsers === '*') {
+        return next();
+    }
+
+    if (allowedUsers.includes(userId) || allowedUsers.includes(userIp)) {
+        return next();
+    }
+
+    res.status(403).json({ message: '请联系管理员为你添加该权限' });
+};
+// 配置 multer
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        const currentPath = req.query.path || '';
+        const uploadPath = path.join(UPLOAD_DIR, currentPath);
+
+        if (!fs.existsSync(uploadPath)) {
+            fs.mkdirSync(uploadPath, { recursive: true });
+        }
+
+        cb(null, uploadPath);
+    },
+    filename: (req, file, cb) => {
+        const filename = Buffer.from(file.originalname, 'latin1').toString('utf-8')
+        const info = path.parse(filename);
+        cb(null, `${info.name}(${Date.now()})${info.ext}`);
+    }
+});
+
+const upload = multer({ storage });
+
+
 // 创建上传和缩略图目录
 if (!fs.existsSync(UPLOAD_DIR)) {
     fs.mkdirSync(UPLOAD_DIR);
@@ -112,6 +165,23 @@ if (!fs.existsSync(THUMB_DIR)) {
 app.use(cookieParser());
 app.use(checkBlacklist);
 app.use(limiter);
+app.use(cors());
+app.use(requestIp.mw());
+app.use(checkPermissions);
+
+app.use((req, res, next) => {
+    const path = decodeURIComponent(req.path);
+    if(path.startsWith('/uploads/')) {
+        console.log(`File accessed: ${path}, userId: `, req.cookies?.userId, normalizeIp(req.clientIp || req.ip));
+        if(!req.cookies?.userId) {
+            console.log('尝试注册');
+            tryRegister(req, res).catch(e => {
+                console.error('注册失败: ', e);
+            })
+        }
+    }
+    next();
+});
 
 function broadcastMessage(message, req) {
     const userId = req.cookies.userId;
@@ -241,63 +311,6 @@ const loadFolderLockConfig = () => {
 
 loadFolderLockConfig();
 
-const normalizeIp = (ip) => {
-    if (!ip) {
-        return 'unknown ip';
-    }
-    if (ip.startsWith('::ffff:')) {
-        return ip.substring(7);
-    }
-    return ip;
-};
-
-const checkPermissions = (req, res, next) => {
-    loadPermissions();
-
-    const userIp = normalizeIp(req.clientIp || req.ip);
-    let userId = req.cookies.userId;
-    const requestUrl = req.originalUrl.split('?')[0];
-    const allowedUsers = permissions[requestUrl];
-    if (!allowedUsers) {
-        return next();
-    }
-
-    if (allowedUsers === '*') {
-        return next();
-    }
-
-    if (allowedUsers.includes(userId) || allowedUsers.includes(userIp)) {
-        return next();
-    }
-
-    console.log(allowedUsers, userId, userIp)
-
-    res.status(403).json({ message: '请联系管理员为你添加该权限' });
-};
-// 配置 multer
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        const currentPath = req.query.path || '';
-        const uploadPath = path.join(UPLOAD_DIR, currentPath);
-
-        if (!fs.existsSync(uploadPath)) {
-            fs.mkdirSync(uploadPath, { recursive: true });
-        }
-
-        cb(null, uploadPath);
-    },
-    filename: (req, file, cb) => {
-        const filename = Buffer.from(file.originalname, 'latin1').toString('utf-8')
-        const info = path.parse(filename);
-        cb(null, `${info.name}(${Date.now()})${info.ext}`);
-    }
-});
-
-const upload = multer({ storage });
-
-app.use(cors());
-app.use(requestIp.mw());
-app.use(checkPermissions);
 app.use('/uploads', express.static(UPLOAD_DIR));
 app.use('/thumbnails', express.static(THUMB_DIR));
 app.use(express.json());
@@ -517,6 +530,10 @@ wss.on('connection', async (ws, req) => {
         });
     });
 
+    ws.on('error', function error(err) {
+        console.error('WebSocket error:', err);
+    });
+
     try {
         region = (await searcher.search(ipAddress))?.region || 'unknown';
     } catch (e) {
@@ -531,7 +548,7 @@ wss.on('connection', async (ws, req) => {
     });
 });
 
-app.get('/register', async (req, res) => {
+async function tryRegister(req, res) {
     let userId = req.cookies.userId;
 
     if (!userId) {
@@ -575,8 +592,12 @@ app.get('/register', async (req, res) => {
             console.error('Error updating user info:', err);
         }
     })
+    return userId;
+}
 
-    res.send();
+app.get('/register', async (req, res) => {
+    await tryRegister(req, res);
+    res.send({ success: true });
 });
 
 app.post('/users', async (req, res) => {
