@@ -1,4 +1,4 @@
 {
-    "maxRequestsPerMinute": 600,
+    "maxRequestsPerMinute": 300,
     "blacklistDurationMs": 1800000
 }
