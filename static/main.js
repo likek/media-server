@@ -816,6 +816,23 @@ function getTxtContent(filePath, start, numLines) {
     });
 }
 
+function getUsers(page, limit) {
+  return fetch("/users", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json;charset=utf-8",
+      "Accept-Language": "en,zh-cn",
+    },
+    body: JSON.stringify({ page, limit }),
+  })
+    .then((response) => response.json())
+    .catch((error) => {
+      console.error("Error get users:", error);
+      // showToast("Error get users", "error");
+    });
+}
+
+
 function convertEncoding(filePath) {
   return fetch("/convertTxtEncoding", {
     method: "POST",
@@ -842,6 +859,66 @@ function viewTextFile(filePath, start, numLines) {
       showToast(data.message, "error");
     }
   });
+}
+
+
+function createOverlay() {
+  const overlay = document.createElement('div');
+  overlay.className = 'overlay';
+  overlay.style.display = 'none';
+
+  const content = document.createElement('div');
+  content.className = 'overlay-content';
+
+  const closeButton = document.createElement('button');
+  closeButton.className = 'close-btn';
+  closeButton.innerHTML = 'X';
+  closeButton.onclick = () => {
+    overlay.style.display = 'none';
+  };
+
+  overlay.appendChild(content);
+  overlay.appendChild(closeButton);
+  document.body.appendChild(overlay);
+
+  return { overlay, content };
+}
+
+const { overlay: overlayContainer, content: overlayContent } = createOverlay();
+
+function showOverlayFullScreen(message) {
+  overlayContent.innerHTML =  message;
+  overlayContainer.style.display = 'flex';
+}
+
+addDebugClick(document.body, () => {
+  getUsers(1, 50).then((data) => {
+    data.data.map((item) => {
+      item.update_time = new Date(item.update_time).toLocaleString();
+      item.create_time = new Date(item.create_time).toLocaleString();
+    })
+    const str = JSON.stringify(data, null, 2)
+    showOverlayFullScreen(`<pre>${str}</pre>`)
+    copyToClipboard(str);
+  });
+})
+
+function addDebugClick(node, callback, triggerCount = 5) {
+  node.addEventListener('click', () => {
+    if (window.debugClickTimer) {
+        window.clearTimeout(window.debugClickTimer)
+    }
+    if (typeof window.debugTouchCount !== 'number') {
+        window.debugTouchCount = 0
+    }
+    window.debugTouchCount++
+    window.debugClickTimer = setTimeout(() => {
+        if (typeof window.debugTouchCount === 'number' && window.debugTouchCount >= triggerCount) {
+            callback()
+        }
+        window.debugTouchCount = 0
+    }, 300)
+  })
 }
 
 function openImgModal(img) {

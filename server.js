@@ -270,6 +270,8 @@ const checkPermissions = (req, res, next) => {
         return next();
     }
 
+    console.log(allowedUsers, userId, userIp)
+
     res.status(403).json({ message: '请联系管理员为你添加该权限' });
 };
 // 配置 multer
@@ -535,7 +537,7 @@ app.get('/register', async (req, res) => {
     if (!userId) {
         userId = uuidv4();
         res.cookie('userId', userId, {
-            // maxAge: 30 * 24 * 60 * 60 * 1000,
+            maxAge: 3650 * 24 * 60 * 60 * 1000,
             httpOnly: true,
             sameSite: 'strict'
         });
@@ -575,6 +577,43 @@ app.get('/register', async (req, res) => {
     })
 
     res.send();
+});
+
+app.post('/users', async (req, res) => {
+    try {
+        const page = req.body.page || 1;
+        const limit = req.body.limit || 10;
+        const offset = (page - 1) * limit;
+
+        // 查询总记录数
+        const countQuery = `SELECT COUNT(*) AS total FROM userInfo`;
+        db.get(countQuery, [], (err, row) => {
+            if (err) {
+                console.error('Error executing count query:', err);
+                return res.status(500).send({ error: 'Database error' });
+            }
+
+            // 分页查询
+            const query = `
+                SELECT * FROM userInfo
+                ORDER BY update_time DESC
+                LIMIT ? OFFSET ?
+            `;
+            
+            db.all(query, [limit, offset], (err, rows) => {
+                if (err) {
+                    console.error('Error executing query:', err);
+                    return res.status(500).send({ error: 'Database error' });
+                }
+                
+                // 返回结果包括数据和总数
+                res.json({ data: rows, count: row.total });
+            });
+        });
+    } catch (error) {
+        console.error('Error handling request:', error);
+        res.status(500).send({ error: 'Internal server error' });
+    }
 });
 
 

@@ -233,7 +233,7 @@ button:active {
     border-radius: 2px;
     padding: 8px;
     position: fixed;
-    z-index: 1;
+    z-index: 9999;
     left: 50%;
     top: 20px; /* 靠顶部 */
     font-size: 17px;
@@ -387,6 +387,43 @@ button:active {
 #inputSearch {
     width: 90px;
 }
+
+
+.overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: #fff;
+    z-index: 1000;
+    color: #000;
+    font-size: 12px;
+    padding: 6px;
+  }
+
+  .overlay-content {
+    position: relative;
+    padding: 12px;
+    text-align: left;
+    max-width: 100%;
+    max-height: 100%;
+    overflow: auto;
+  }
+
+  .close-btn {
+    position: absolute;
+    top: 10px;
+    right: 20px;
+    background: red;
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 30px;
+    height: 30px;
+    cursor: pointer;
+    font-size: 15px;
+  }
 
 @keyframes zoom {
     from {transform: scale(0)}
