@@ -11,7 +11,6 @@ import jschardet from 'jschardet'
 import readline from 'readline'
 import { fileURLToPath } from 'url';
 import requestIp from 'request-ip'
-import rangeParser from 'range-parser';
 import useragent from 'useragent';
 
 // 获取当前文件的目录名
@@ -38,10 +37,58 @@ if (!fs.existsSync(THUMB_DIR)) {
     fs.mkdirSync(THUMB_DIR);
 }
 
+import cookieParser from 'cookie-parser';
+import cookie from 'cookie';
+import { v4 as uuidv4 } from 'uuid';
+
+import { createServer } from 'http';
+import WebSocket, { WebSocketServer } from 'ws';
+
+const httpServer = createServer(app);
+const wss = new WebSocketServer({ server: httpServer });
+const clientsById = new Map();
+
+app.use(cookieParser());
+
+function broadcastMessage(message, req) {
+    const userId = req.cookies.userId;
+    clientsById.forEach((client, id) => {
+        if (id !== userId && client.readyState === WebSocket.OPEN) {
+        client.send(JSON.stringify(message));
+        }
+    });
+}
+
+app.get('/register', (req, res) => {
+    let userId = req.cookies.userId;
+
+    if (!userId) {
+        userId = uuidv4();
+        res.cookie('userId', userId, {
+        // maxAge: 30 * 24 * 60 * 60 * 1000,
+        httpOnly: true,
+        sameSite: 'strict'
+        });
+    }
+
+    res.send();
+});
+
+wss.on('connection', (ws, req) => {
+    const cookies = cookie.parse(req.headers.cookie || '');
+    const userId = cookies.userId;
+    console.log(`用户${userId}已连接`)
+    clientsById.set(userId, ws);
+    ws.on('close', () => {
+        clientsById.delete(userId);
+        console.log(`用户${userId}已断开`)
+    });
+});
+
 import Searcher from './ip2region.js'
-const dbPath =  path.join(__dirname, 'ip2region.xdb');
-const vectorIndex = Searcher.loadVectorIndexFromFile(dbPath)
-const searcher = Searcher.newWithVectorIndex(dbPath, vectorIndex)
+const regineDBPath =  path.join(__dirname, 'ip2region.xdb');
+const vectorIndex = Searcher.loadVectorIndexFromFile(regineDBPath)
+const searcher = Searcher.newWithVectorIndex(regineDBPath, vectorIndex)
 
 const logFormat = async (req, res) => {
     const requestTime = new Date().toLocaleString();
@@ -78,7 +125,8 @@ const logFormat = async (req, res) => {
         chalk.magenta(`[Response Status]: ${status}`),
         chalk.gray(`[Device]: ${deviceInfo.device}`),
         chalk.gray(`[OS]: ${deviceInfo.os}`),
-        chalk.gray(`[Browser]: ${deviceInfo.browser}`)
+        chalk.gray(`[Browser]: ${deviceInfo.browser}`),
+        chalk.gray(`[User Agent]: ${userAgentString}`)
     ].join(' | ');
 };
 
@@ -162,7 +210,6 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage });
 
-// 提供静态文件服务
 app.use(cors());
 app.use(requestIp.mw());
 app.use(checkPermissions);
@@ -265,7 +312,7 @@ function loadCache() {
 loadCache();
 
 // 缓存管理函数
-const updateCache = async (dirPath) => {
+const updateCache = async (dirPath, req) => {
     if(dirPath.startsWith('/')) {
         dirPath = dirPath.slice(1)
     }
@@ -329,6 +376,7 @@ const updateCache = async (dirPath) => {
 
     cache[dirPath] = fileInfos;
     fs.writeFileSync(cacheFilePath, JSON.stringify(cache), 'utf8');
+    broadcastMessage({event: 'updateCache', data: { dirPath, fileInfos }}, req)
 };
 
 const invalidateCache = (dirPath) => {
@@ -337,48 +385,6 @@ const invalidateCache = (dirPath) => {
     }
     delete cache[dirPath];
 };
-
-app.get('/uploads/*', (req, res) => {
-    const filePath = path.join(__dirname, req.path);
-
-    fs.stat(filePath, (err, stats) => {
-        if (err) {
-            if (err.code === 'ENOENT') {
-                return res.status(404).send('File not found');
-            }
-            return res.status(500).send(err);
-        }
-
-        const range = req.headers.range;
-        if (!range) {
-            // If there is no Range header, send the entire video file
-            res.writeHead(200, {
-                'Content-Length': stats.size,
-                'Content-Type': 'video/mp4',
-            });
-            fs.createReadStream(filePath).pipe(res);
-        } else {
-            // Parse the Range header
-            const positions = rangeParser(stats.size, range);
-            if (positions === -1) {
-                // Invalid Range header
-                return res.status(416).send('Requested Range Not Satisfiable');
-            }
-
-            const { start, end } = positions[0];
-            const chunkSize = (end - start) + 1;
-
-            res.writeHead(206, {
-                'Content-Range': `bytes ${start}-${end}/${stats.size}`,
-                'Accept-Ranges': 'bytes',
-                'Content-Length': chunkSize,
-                'Content-Type': 'video/mp4',
-            });
-
-            fs.createReadStream(filePath, { start, end }).pipe(res);
-        }
-    });
-});
 
 // 上传文件并生成缩略图
 app.post('/upload', upload.single('file'), async (req, res) => {
@@ -398,7 +404,7 @@ app.post('/upload', upload.single('file'), async (req, res) => {
         try {
             await generateThumbnail(filePath, thumbnailPath);
             invalidateCache(currentPath); // 更新缓存
-            await updateCache(currentPath); // 更新缓存
+            await updateCache(currentPath, req); // 更新缓存
             res.send({
                 filename: '/uploads/' + currentPath + '/' + filename,
                 thumbnail: '/thumbnails/' + currentPath + '/' + filename + '.png'
@@ -409,7 +415,7 @@ app.post('/upload', upload.single('file'), async (req, res) => {
         }
     } else {
         invalidateCache(currentPath); // 更新缓存
-        await updateCache(currentPath); // 更新缓存
+        await updateCache(currentPath, req); // 更新缓存
         res.send({ filename: '/uploads/' + currentPath + '/' + filename });
     }
 });
@@ -429,7 +435,7 @@ app.post('/files', async (req, res) => {
     }
 
     try {
-        await updateCache(reqPath);
+        await updateCache(reqPath, req);
         if (!pageSize || pageSize === -1) {
             return res.send(cache[reqPath]);
         }
@@ -526,7 +532,7 @@ app.post('/delete', async (req, res) => {
     try {
         await deleteRecursively(filePath);
         invalidateCache(currentPath); // 更新缓存
-        await updateCache(currentPath); // 更新缓存
+        await updateCache(currentPath, req); // 更新缓存
         res.send({ message: `${type} deleted successfully` });
     } catch (err) {
         console.error(`Error deleting ${type}:`, err);
@@ -550,7 +556,7 @@ app.post('/createFolder', (req, res) => {
         }
 
         invalidateCache(currentPath); // 更新缓存
-        await updateCache(currentPath); // 更新缓存
+        await updateCache(currentPath, req); // 更新缓存
 
         res.send({ message: 'Folder created successfully' });
     });
@@ -574,7 +580,7 @@ app.post('/rename', (req, res) => {
 
         invalidateCache(currentPath); // 更新缓存
         invalidateCache(`${currentPath}/${oldName}`) // 如果rename的是文件夹，则该文件夹对应的缓存不应该再继续存在
-        await updateCache(currentPath); // 更新缓存
+        await updateCache(currentPath, req); // 更新缓存
 
         res.send({ message: `${type} renamed successfully` });
     });
@@ -584,7 +590,7 @@ app.post('/updateCache', async (req, res) => {
     try {
         const currentPath = req.body.path || '';
         invalidateCache(currentPath); // 更新缓存，这里需要确保该函数能处理可能的异常
-        await updateCache(currentPath); // 更新缓存，这里需要确保该函数能处理可能的异常
+        await updateCache(currentPath, req); // 更新缓存，这里需要确保该函数能处理可能的异常
         // res.send(cache[currentPath]);
         res.send({ message: 'Update cache successfully' });
     } catch (error) {
@@ -615,9 +621,9 @@ app.post('/move', (req, res) => {
 
         invalidateCache(currentPath); // 更新缓存
         invalidateCache(`${currentPath}/${filename}`) // 如果是文件夹，则该文件夹对应的缓存不应该再继续存在
-        await updateCache(currentPath); // 更新缓存
+        await updateCache(currentPath, req); // 更新缓存
         invalidateCache(targetFolder.replace(/^\/+/, '')); // 更新缓存
-        await updateCache(targetFolder.replace(/^\/+/, '')); // 更新缓存
+        await updateCache(targetFolder.replace(/^\/+/, ''), req); // 更新缓存
         res.json({ success: true });
     });
 });
@@ -642,7 +648,7 @@ app.post('/convert', (req, res) => {
         .on('end', async () => {
             const currentPath = path.dirname(inputFilePath);
             invalidateCache(currentPath); // 更新缓存
-            await updateCache(currentPath); // 更新缓存
+            await updateCache(currentPath, req); // 更新缓存
             res.json({ outputFilePath: outputFilePath });
         })
         .on('error', (err) => {
@@ -667,7 +673,7 @@ app.post('/unzip', async (req, res) => {
         extract(absoluteZipPath, { dir: extractToPath })
             .then(async () => {
                 invalidateCache(currentPath);
-                await updateCache(currentPath);
+                await updateCache(currentPath, req);
                 res.json({ message: 'File unzipped successfully', success: true });
             })
             .catch(err => {
@@ -778,7 +784,7 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'static', 'index.html'));
 });
 
-app.listen(PORT, () => {
+httpServer.listen(PORT, () => {
     console.log(`Server is running on http://localhost:${PORT}`);
 });
 
