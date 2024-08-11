@@ -32,6 +32,16 @@ db.serialize(() => {
   `);
 
   db.run(`
+    CREATE TABLE IF NOT EXISTS logs_file_accessed (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      time TEXT,
+      userId TEXT,
+      userIp TEXT,
+      filePath TEXT
+    )
+  `);
+
+  db.run(`
     CREATE TABLE IF NOT EXISTS blacklist (
       userId TEXT PRIMARY KEY,
       cookies TEXT,
@@ -72,6 +82,17 @@ db.serialize(() => {
     BEGIN
       DELETE FROM logs_ws WHERE id IN (
         SELECT id FROM logs_ws ORDER BY time ASC LIMIT (SELECT COUNT(*) - 10000 FROM logs_ws)
+      );
+    END;
+  `);
+
+  db.run(`
+    CREATE TRIGGER IF NOT EXISTS limit_logs_file_accessed
+    AFTER INSERT ON logs_file_accessed
+    WHEN (SELECT COUNT(*) FROM logs_file_accessed) > 10000
+    BEGIN
+      DELETE FROM logs_file_accessed WHERE id IN (
+        SELECT id FROM logs_file_accessed ORDER BY time ASC LIMIT (SELECT COUNT(*) - 10000 FROM logs_file_accessed)
       );
     END;
   `);

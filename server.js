@@ -153,6 +153,79 @@ const storage = multer.diskStorage({
 const upload = multer({ storage });
 
 
+
+const writeRequestLogToDB = (logData) => {
+    // 插入日志到数据库
+    const query = `
+        INSERT INTO logs_request (
+          requestTime, userIp, requestMethod, requestUrl, requestBody, status, userAgent, region, device, os, browser, timestamp
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `;
+    const values = [
+      logData.requestTime,
+      logData.userIp,
+      logData.requestMethod,
+      logData.requestUrl,
+      logData.requestBody,
+      logData.status,
+      logData.userAgent,
+      logData.region,
+      logData.device,
+      logData.os,
+      logData.browser,
+      logData.timestamp,
+    ];
+
+    db.run(query, values, (err) => {
+      if (err) {
+        console.error("Failed to insert log into database (logs_request):", err);
+      }
+    });
+};
+
+const writeWsLogToDB = (logData) => {
+    const query = `
+    INSERT INTO logs_ws (
+      time, action, userId, userIp, userRegion
+    ) VALUES (?, ?, ?, ?, ?)
+  `;
+
+  const values = [
+    new Date().toISOString(),
+    logData.action || '',
+    logData.userId || '',
+    logData.userIp || '',
+    logData.userRegion || ''
+  ];
+
+  db.run(query, values, (err) => {
+    if (err) {
+      console.error("Failed to insert log into database (logs_ws):", err);
+    }
+  });
+};
+
+const writeFileAccessedLogToDB = (logData) => {
+    const query = `
+    INSERT INTO logs_file_accessed (
+      time, userId, userIp, filePath
+    ) VALUES (?, ?, ?, ?)
+  `;
+
+  const values = [
+    new Date().toISOString(),
+    logData.userId || '',
+    logData.userIp || '',
+    logData.filePath || ''
+  ];
+
+  db.run(query, values, (err) => {
+    if (err) {
+      console.error("Failed to insert log into database (logs_ws):", err);
+    }
+  });
+};
+
 // 创建上传和缩略图目录
 if (!fs.existsSync(UPLOAD_DIR)) {
     fs.mkdirSync(UPLOAD_DIR);
@@ -172,7 +245,13 @@ app.use(checkPermissions);
 app.use((req, res, next) => {
     const path = decodeURIComponent(req.path);
     if(path.startsWith('/uploads/')) {
-        console.log(`File accessed: ${path}, userId: `, req.cookies?.userId, normalizeIp(req.clientIp || req.ip));
+        const userIp = normalizeIp(req.clientIp || req.ip)
+        console.log(`File accessed: ${path}, userId: `, req.cookies?.userId, userIp);
+        writeFileAccessedLogToDB({
+            userId: req.cookies?.userId,
+            userIp,
+            filePath: path
+        });
         if(!req.cookies?.userId) {
             console.log('尝试注册');
             tryRegister(req, res).catch(e => {
@@ -234,58 +313,6 @@ const getRequestInfo = async (req, res) => {
     
     return data;
 };
-
-const writeRequestLogToDB = (logData) => {
-    // 插入日志到数据库
-    const query = `
-        INSERT INTO logs_request (
-          requestTime, userIp, requestMethod, requestUrl, requestBody, status, userAgent, region, device, os, browser, timestamp
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `;
-    const values = [
-      logData.requestTime,
-      logData.userIp,
-      logData.requestMethod,
-      logData.requestUrl,
-      logData.requestBody,
-      logData.status,
-      logData.userAgent,
-      logData.region,
-      logData.device,
-      logData.os,
-      logData.browser,
-      logData.timestamp,
-    ];
-
-    db.run(query, values, (err) => {
-      if (err) {
-        console.error("Failed to insert log into database (logs_request):", err);
-      }
-    });
-};
-
-const writeWsLogToDB = (logData) => {
-    const query = `
-    INSERT INTO logs_ws (
-      time, action, userId, userIp, userRegion
-    ) VALUES (?, ?, ?, ?, ?)
-  `;
-
-  const values = [
-    new Date().toISOString(),
-    logData.action || '',
-    logData.userId || '',
-    logData.userIp || '',
-    logData.userRegion || ''
-  ];
-
-  db.run(query, values, (err) => {
-    if (err) {
-      console.error("Failed to insert log into database (logs_ws):", err);
-    }
-  });
-};
-
 
 const loadPermissions = () => {
     try {
