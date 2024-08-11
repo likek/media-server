@@ -1,4 +1,4 @@
 {
-    "/delete": ["192.168.1.xxx"],
+    "/delete": ["192.168.1.xxx", "这里可以配用户ip，也可以配用户的cookie,cookie从userInfo表里可以查看"],
     "upload": ["192.168.1.xxx"]
 }

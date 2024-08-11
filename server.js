@@ -17,7 +17,7 @@ import { rateLimit } from 'express-rate-limit'
 import cookieParser from 'cookie-parser';
 import cookie from 'cookie';
 import { v4 as uuidv4 } from 'uuid';
-import { createServer } from 'http';
+import { createServer, get } from 'http';
 import WebSocket, { WebSocketServer } from 'ws';
 import db from './dbserialize.js';
 
@@ -53,7 +53,7 @@ const limiter = rateLimit({
     windowMs: 1 * 60 * 1000,
     max: maxRequestsPerMinute,
     handler: (req, res, next) => {
-      const ip = req.ip;
+      const ip = normalizeIp(req.clientIp || req.ip);
       const addedTime = new Date().toISOString();
       const cookies = req.cookies;
       const userId = cookies.userId;
@@ -70,7 +70,6 @@ const limiter = rateLimit({
   });
 
   function checkBlacklist(req, res, next) {
-    const ip = req.ip;
     const currentTime = Date.now();
     const cookies = req.cookies;
     const userId = cookies.userId;
@@ -123,74 +122,14 @@ function broadcastMessage(message, req) {
     });
 }
 
-app.get('/register', (req, res) => {
-    let userId = req.cookies.userId;
 
-    if (!userId) {
-        userId = uuidv4();
-        res.cookie('userId', userId, {
-        // maxAge: 30 * 24 * 60 * 60 * 1000,
-        httpOnly: true,
-        sameSite: 'strict'
-        });
-    }
-
-    res.send();
-});
-
-wss.on('connection', async (ws, req) => {
-    const cookies = cookie.parse(req.headers.cookie || '');
-
-    let ipAddress = req.ip;
-    if (!ipAddress) {
-        if (req.headers['x-forwarded-for']) {
-            ipAddress = req.headers['x-forwarded-for'].split(',')[0];
-        } else if (req.headers['x-real-ip']) {
-            ipAddress = req.headers['x-real-ip'];
-        } else if (req.connection.remoteAddress) {
-            ipAddress = req.connection.remoteAddress;
-        }
-    }
-
-    ipAddress = normalizeIp(ipAddress);
-    const userId = cookies.userId;
-
-    let region = '';
-
-    clientsById.set(userId, ws);
-    ws.on('close', () => {
-        clientsById.delete(userId);
-        console.log(`[${new Date().toLocaleString()}] 用户${chalk.yellow('已断开')}: [${userId}] - [${ipAddress}] - [${region}]`);
-        writeWsLogToDB({
-            userId,
-            userIp: ipAddress,
-            userRegion: region,
-            action: 'disconnect'
-        });
-    });
-
-    try {
-        region = (await searcher.search(ipAddress))?.region || 'unknown';
-    } catch (e) {
-        console.error('获取ip属地出错: ', e);
-    }
-    console.log(`[${new Date().toLocaleString()}] 用户${chalk.green('已连接')}: [${userId}] - [${ipAddress}] - [${region}]`);
-    writeWsLogToDB({
-        userId,
-        userIp: ipAddress,
-        userRegion: region,
-        action: 'connect'
-    });
-});
-
-
-const logFormat = async (req, res) => {
+const getRequestInfo = async (req, res) => {
     const requestTime = new Date().toISOString();
     const userIp = normalizeIp(req.clientIp || req.ip);
     const requestMethod = req.method;
     const requestUrl = decodeURIComponent(req.originalUrl);
     const requestBody = decodeURIComponent(JSON.stringify(req.body));
-    const status = res.statusCode;
+    const status = res?.statusCode;
 
     let region = '';
     try {
@@ -313,19 +252,21 @@ const normalizeIp = (ip) => {
 };
 
 const checkPermissions = (req, res, next) => {
-    const userIp = normalizeIp(req.clientIp || req.ip);
-    const requestUrl = req.originalUrl.split('?')[0];
     loadPermissions();
-    const allowedIps = permissions[requestUrl];
-    if (!allowedIps) {
+
+    const userIp = normalizeIp(req.clientIp || req.ip);
+    let userId = req.cookies.userId;
+    const requestUrl = req.originalUrl.split('?')[0];
+    const allowedUsers = permissions[requestUrl];
+    if (!allowedUsers) {
         return next();
     }
 
-    if (allowedIps === '*') {
+    if (allowedUsers === '*') {
         return next();
     }
 
-    if (allowedIps.includes(userIp)) {
+    if (allowedUsers.includes(userId) || allowedUsers.includes(userIp)) {
         return next();
     }
 
@@ -364,7 +305,7 @@ app.use(pathNormalizer);
 
 app.use(async (req, res, next) => {
     res.on('finish', async () => {
-        const data = await logFormat(req, res);
+        const data = await getRequestInfo(req, res);
         console.log([
             chalk.blue(`${new Date(data.requestTime).toLocaleString()}`),
             chalk.green(`${data.userIp}`),
@@ -542,6 +483,100 @@ const invalidateCache = (dirPath) => {
     }
     delete cache[dirPath];
 };
+
+
+wss.on('connection', async (ws, req) => {
+    const cookies = cookie.parse(req.headers.cookie || '');
+
+    let ipAddress = req.clientIp || req.ip;
+    if (!ipAddress) {
+        if (req.headers['x-forwarded-for']) {
+            ipAddress = req.headers['x-forwarded-for'].split(',')[0];
+        } else if (req.headers['x-real-ip']) {
+            ipAddress = req.headers['x-real-ip'];
+        } else if (req.connection.remoteAddress) {
+            ipAddress = req.connection.remoteAddress;
+        }
+    }
+    ipAddress = normalizeIp(ipAddress);
+    const userId = cookies.userId;
+
+    let region = '';
+
+    clientsById.set(userId, ws);
+    ws.on('close', () => {
+        clientsById.delete(userId);
+        console.log(`[${new Date().toLocaleString()}] 用户${chalk.yellow('已断开')}: [${userId}] - [${ipAddress}] - [${region}]`);
+        writeWsLogToDB({
+            userId,
+            userIp: ipAddress,
+            userRegion: region,
+            action: 'disconnect'
+        });
+    });
+
+    try {
+        region = (await searcher.search(ipAddress))?.region || 'unknown';
+    } catch (e) {
+        console.error('获取ip属地出错: ', e);
+    }
+    console.log(`[${new Date().toLocaleString()}] 用户${chalk.green('已连接')}: [${userId}] - [${ipAddress}] - [${region}]`);
+    writeWsLogToDB({
+        userId,
+        userIp: ipAddress,
+        userRegion: region,
+        action: 'connect'
+    });
+});
+
+app.get('/register', async (req, res) => {
+    let userId = req.cookies.userId;
+
+    if (!userId) {
+        userId = uuidv4();
+        res.cookie('userId', userId, {
+            // maxAge: 30 * 24 * 60 * 60 * 1000,
+            httpOnly: true,
+            sameSite: 'strict'
+        });
+    }
+
+    const userInfo = await getRequestInfo(req);
+    db.run(`INSERT OR IGNORE INTO userInfo (userId, ip, create_time, update_time, userAgent, region, device, os, browser) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
+        userId,
+        userInfo.userIp,
+        userInfo.requestTime,
+        userInfo.requestTime,
+        userInfo.userAgent,
+        userInfo.region,
+        userInfo.device,
+        userInfo.os,
+        userInfo.browser
+    ], (err) => {
+        if (err) {
+            console.error('Error inserting user info:', err);
+        }
+    });
+
+    // 修改除create_time外的其他所有字段
+    db.run(`UPDATE userInfo SET ip = ?, update_time = ?, userAgent = ?, region = ?, device = ?, os = ?, browser = ? WHERE userId = ?`, [
+        userInfo.userIp,
+        userInfo.requestTime,
+        userInfo.userAgent,
+        userInfo.region,
+        userInfo.device,
+        userInfo.os,
+        userInfo.browser,
+        userId
+    ],(err) => {
+        if (err) {
+            console.error('Error updating user info:', err);
+        }
+    })
+
+    res.send();
+});
+
 
 // 上传文件并生成缩略图
 app.post('/upload', upload.single('file'), async (req, res) => {

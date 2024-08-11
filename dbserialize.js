@@ -33,10 +33,24 @@ db.serialize(() => {
 
   db.run(`
     CREATE TABLE IF NOT EXISTS blacklist (
-      ip TEXT PRIMARY KEY,
+      userId TEXT PRIMARY KEY,
       cookies TEXT,
-      userId TEXT,
+      ip TEXT,
       added_time TEXT
+    );
+    `)
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS userInfo (
+      userId TEXT PRIMARY KEY,
+      ip TEXT,
+      create_time TEXT,
+      update_time TEXT,
+      userAgent TEXT,
+      region TEXT,
+      device TEXT,
+      os TEXT,
+      browser TEXT
     );
     `)
 
