@@ -713,7 +713,7 @@ app.post("/downloadFromText", async (req, res) => {
   }
   console.log('开始批量下载资源: ', links)
 
-  const downloadRoot = '批量下载的资源'
+  const downloadRoot = '从文本中链接提取的资源'
   const downloadSub = `${new Date().toLocaleString().replace(/[:\/|\s]/g, "_")}`
   const downloadDir = path.join(
     __dirname,
@@ -764,8 +764,8 @@ app.post("/downloadFromText", async (req, res) => {
   // 并行下载所有链接
   await Promise.all(links.map(downloadLink));
   await updateCache(downloadRoot, req);
-  await updateCache(`${downloadRoot}/${downloadSub}`);
-  res.json({ failedLinks, successCount: completedCount, downloadRoot, downloadSub });
+  await updateCache(`${downloadRoot}/${downloadSub}`, req);
+  res.json({ failedLinks, successCount: completedCount - failedLinks.length, downloadRoot, downloadSub });
 });
 
 

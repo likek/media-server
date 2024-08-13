@@ -1057,7 +1057,8 @@ function collectVideosFromText() {
     "请输入带有视频链接的文本内容(将从中提取视频链接并下载到服务器)",
     async (text) => {
       try {
-        downloadFromText(text).then(() => {
+        showToast('开始在后台提取资源，请稍后...')
+        downloadFromText(text).then((data) => {
           showToast(`提取成功${data.successCount}条, 失败${data.failedLinks.length}`, "success");
           loadMedia(`${data.downloadRoot}/${data.downloadSub}`)
         })
@@ -1115,7 +1116,7 @@ function connectWs() {
     switch (data.event) {
       case "downloadProgress":
         console.log("downloadProgress: ", data)
-        showToast(`第${data.progress}个资源提取${data.state === 'failed' ? '失败' : '成功'}`, `${data.state === 'failed' ? 'warn' : 'success'}`)
+        showToast(`第${data.data.progress}个资源提取${data.data.state === 'failed' ? '失败' : '成功'}`, `${data.data.state === 'failed' ? 'warn' : 'success'}`)
         break
       case "updateCache":
         setCache(data.data.dirPath, data.data.fileInfos);
