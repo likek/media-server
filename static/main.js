@@ -345,7 +345,7 @@ function renderFiles(files) {
       const convertButton = document.createElement("button");
       convertButton.innerText = "转mp4";
       convertButton.className = "warn-button";
-      convertButton.addEventListener("click", () => {
+      convertButton.addEventListener("click", (e) => {
         e.stopPropagation();
         const originPath = `${file.folder || currentPath}/${filename}`;
         const targetPath = originPath.replace(/\.[^/.]+$/, "_ts.mp4");
