@@ -17,8 +17,9 @@
                     <div id="searchTips" class="search-tips">注意:只会从服务端缓存搜索，浏览过的目录才有缓存</div>
                     搜索
                 </button>
+                <button onclick="collectVideosFromText()">提取资源</button>
                 <button onclick="updateCache()">刷新</button>
-                <button onclick="createFolder()">新建文件夹</button>
+                <button onclick="createFolder()">新建</button>
                 <button onclick="triggerFileUpload()">上传</button>
                 <progress id="progressBar" value="0" max="100"></progress><span id="progressBarValue">0%<span></span>
             </div>
@@ -47,6 +48,18 @@
         </div>
         <div class="txt-modal-content" id="txtContent"></div>
     </div>
+
+    <div id="promptModal" class="modal">
+        <div class="modal-content">
+            <div id="promptModalTitle" class="modal-title">请输入文本</div>
+            <textarea id="promptModalContent" class="modal-textarea" placeholder="请输入文本"></textarea>
+            <div class="modal-buttons">
+                <button id="promptCancelButton" class="modal-button">取消</button>
+                <button id="promptConfirmButton" class="modal-button">确认</button>
+            </div>
+        </div>
+    </div>
+    
 
     <script src="lib/mux.min.js"></script>
     <script src="videoHelper.js"></script>

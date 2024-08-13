@@ -20,6 +20,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { createServer, get } from 'http';
 import WebSocket, { WebSocketServer } from 'ws';
 import db from './dbserialize.js';
+import { exec } from 'child_process';
 
 // 获取当前文件的目录名
 const __filename = fileURLToPath(import.meta.url);
@@ -291,11 +292,19 @@ app.use((req, res, next) => {
     next();
 });
 
-function broadcastMessage(message, req) {
+function broadcastMessage(message, req, onlySelf = false) {
     const userId = req.cookies.userId;
+    if (onlySelf) {
+        const userId = req.cookies.userId;
+        const client = clientsById.get(userId);
+        if (client && client.readyState === WebSocket.OPEN) {
+            client.send(JSON.stringify(message));
+        }
+        return;
+    }
     clientsById.forEach((client, id) => {
         if (id !== userId && client.readyState === WebSocket.OPEN) {
-        client.send(JSON.stringify(message));
+            client.send(JSON.stringify(message));
         }
     });
 }
@@ -694,6 +703,72 @@ app.post('/users', async (req, res) => {
 });
 
 
+app.post("/downloadFromText", async (req, res) => {
+  const text = req.body.text || "";
+  const cleanedText = text.replace(/\s+/g, "");
+  const links = cleanedText.match(/https?:\/\/[a-zA-Z0-9.-]+\/[^\s]*?\.m3u8/g);
+
+  if (!links || links.length === 0) {
+    return res.status(400).json({ error: "没有找到任何.m3u8链接" });
+  }
+  console.log('开始批量下载资源: ', links)
+
+  const downloadRoot = '批量下载的资源'
+  const downloadSub = `${new Date().toLocaleString().replace(/[:\/|\s]/g, "_")}`
+  const downloadDir = path.join(
+    __dirname,
+    'uploads',
+    downloadRoot,
+    downloadSub
+  );
+  fs.mkdirSync(downloadDir, { recursive: true });
+
+  const failedLinks = [];
+  let completedCount = 0;
+
+  const downloadLink = (link) => {
+    return new Promise((resolve) => {
+        const tempDir = path.join(
+            __dirname,
+            "temp",
+            "batch_download",
+            `${Date.now()}`
+        );
+      const command = `N_m3u8DL-RE "${link}" --save-dir "${downloadDir}" --save-name ${link} --tmp-dir ${tempDir}`;
+      exec(command, (error, stdout, stderr) => {
+        let failed = false
+        if (error || stdout.includes('One or more errors occurred')) {
+            failed = true
+            console.error(`下载链接失败: ${link}\n${stdout}\n${stderr}`);
+            failedLinks.push(link);
+        } else {
+            failed = false
+            console.log(`下载成功: ${link}`);
+        }
+        completedCount++;
+
+        broadcastMessage({
+            event: 'downloadProgress',
+            data: {
+                link,
+                progress: completedCount,
+                total: links.length,
+                state: failed ? 'failed' : 'success',
+            },
+        }, req, true)
+        resolve();
+      });
+    });
+  };
+
+  // 并行下载所有链接
+  await Promise.all(links.map(downloadLink));
+  await updateCache(downloadRoot, req);
+  await updateCache(`${downloadRoot}/${downloadSub}`);
+  res.json({ failedLinks, successCount: completedCount, downloadRoot, downloadSub });
+});
+
+
 // 上传文件并生成缩略图
 app.post('/upload', upload.single('file'), async (req, res) => {
     const currentPath = req.query.path || '';
@@ -742,10 +817,11 @@ app.post('/files', async (req, res) => {
 
     try {
         await updateCache(reqPath, req);
+        const result = cache[reqPath] || []
         if (!pageSize || pageSize === -1) {
-            return res.send(cache[reqPath]);
+            return res.send(result);
         }
-        return res.send(cache[reqPath].slice(page * pageSize, (page + 1) * pageSize));
+        return res.send(result.slice(page * pageSize, (page + 1) * pageSize));
     } catch (err) {
         console.error('Error fetching file list:', err);
         res.status(500).send({ message: 'Failed to fetch file list.' });

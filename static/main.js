@@ -1025,6 +1025,78 @@ function registeUserId() {
     .catch((error) => console.error("Error:", error));
 }
 
+function showPromptModal(title, confirmHandler, placeholder = "") {
+  const modal = document.getElementById("promptModal");
+  const modalTitle = document.getElementById("promptModalTitle");
+  const modalContent = document.getElementById("promptModalContent");
+  const cancelButton = document.getElementById("promptCancelButton");
+  const confirmButton = document.getElementById("promptConfirmButton");
+
+  modalTitle.textContent = title;
+  modalContent.placeholder = placeholder;
+
+  modal.style.display = "block";
+
+  cancelButton.onclick = function() {
+      modal.style.display = "none";
+  };
+
+  confirmButton.onclick = async function() {
+      const result = await confirmHandler(modalContent.value);
+      if (result) {
+          modal.style.display = "none";
+      } else {
+          alert("失败");
+      }
+  };
+}
+
+
+function collectVideosFromText() {
+  showPromptModal(
+    "请输入带有视频链接的文本内容(将从中提取视频链接并下载到服务器)",
+    async (text) => {
+      try {
+        downloadFromText(text).then(() => {
+          showToast(`提取成功${data.successCount}条, 失败${data.failedLinks.length}`, "success");
+          loadMedia(`${data.downloadRoot}/${data.downloadSub}`)
+        })
+        return true;
+      } catch(e) {
+        showToast(e.message, "warn");
+        return false
+      }
+    },
+    "请输入带有视频链接的文本内容"
+  );
+}
+
+function downloadFromText(text) {
+  const cleanedText = text.replace(/\s+/g, '');
+
+  const requestBody = {
+      text: cleanedText
+  };
+
+  return fetch('/downloadFromText', {
+      method: 'POST',
+      headers: {
+          'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(requestBody)
+  })
+  .then(response => response.json())
+  .then(data => {
+    console.log('执行成功:', data);
+    deleteCache(data.downloadRoot);
+    return data;
+  })
+  .catch(error => {
+      console.error('请求出错:', error);
+  });
+}
+
+
 function connectWs() {
   const prot = location.protocol === "https:" ? "wss" : "ws";
   ws = new WebSocket(`${prot}://${location.host}`);
@@ -1041,6 +1113,10 @@ function connectWs() {
       console.error("消息解析错误:", e, data);
     }
     switch (data.event) {
+      case "downloadProgress":
+        console.log("downloadProgress: ", data)
+        showToast(`第${data.progress}个资源提取${data.state === 'failed' ? '失败' : '成功'}`, `${data.state === 'failed' ? 'warn' : 'success'}`)
+        break
       case "updateCache":
         setCache(data.data.dirPath, data.data.fileInfos);
           if (currentPath === data.data.dirPath) {
