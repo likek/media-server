@@ -21,6 +21,7 @@ import { createServer, get } from 'http';
 import WebSocket, { WebSocketServer } from 'ws';
 import db from './dbserialize.js';
 import { exec } from 'child_process';
+import compression from 'compression';
 
 // 获取当前文件的目录名
 const __filename = fileURLToPath(import.meta.url);
@@ -140,7 +141,7 @@ function checkBlacklist(req, res, next) {
 }
 
 
-  const checkPermissions = (req, res, next) => {
+const checkPermissions = (req, res, next) => {
     loadPermissions();
 
     const userIp = normalizeIp(req.clientIp || req.ip);
@@ -265,6 +266,15 @@ if (!fs.existsSync(THUMB_DIR)) {
     fs.mkdirSync(THUMB_DIR);
 }
 
+app.use(compression({ filter: shouldCompress }))
+ 
+function shouldCompress (req, res) {
+  if (req.headers['x-no-compression']) {
+    return false
+  }
+ 
+  return compression.filter(req, res)
+}
 app.use(cookieParser());
 app.use(checkBlacklist);
 app.use(limiter);
@@ -385,21 +395,23 @@ app.use(pathNormalizer);
 
 app.use(async (req, res, next) => {
     res.on('finish', async () => {
-        const data = await getRequestInfo(req, res);
-        console.log([
-            chalk.blue(`${new Date(data.requestTime).toLocaleString()}`),
-            chalk.green(`${data.userIp}`),
-            chalk.green(`${data.region}`),
-            chalk.yellow(`${data.requestMethod} ${data.requestUrl}`),
-            chalk.cyan(`${data.requestBody}`),
-            chalk.magenta(`${data.status}`),
-            chalk.gray(`${data.device}`),
-            chalk.gray(`${data.os}`),
-            chalk.gray(`${data.browser}`),
-            chalk.gray(`${data.userAgent}`)
-        ].join(' | '))
-
-        writeRequestLogToDB(data);
+        if(!req.path.startsWith('/uploads/')) {
+            const data = await getRequestInfo(req, res);
+            console.log([
+                chalk.blue(`${new Date(data.requestTime).toLocaleString()}`),
+                chalk.green(`${data.userIp}`),
+                chalk.green(`${data.region}`),
+                chalk.yellow(`${data.requestMethod} ${data.requestUrl}`),
+                chalk.cyan(`${data.requestBody}`),
+                chalk.magenta(`${data.status}`),
+                chalk.gray(`${data.device}`),
+                chalk.gray(`${data.os}`),
+                chalk.gray(`${data.browser}`),
+                chalk.gray(`${data.userAgent}`)
+            ].join(' | '))
+    
+            writeRequestLogToDB(data);
+        }
     })
     next();
 });
@@ -703,70 +715,69 @@ app.post('/users', async (req, res) => {
 });
 
 
-app.post("/downloadFromText", async (req, res) => {
-  const text = req.body.text || "";
-  const cleanedText = text.replace(/\s+/g, "");
-  const links = cleanedText.match(/https?:\/\/[a-zA-Z0-9.-]+\/[^\s]*?\.m3u8/g);
-
-  if (!links || links.length === 0) {
-    return res.status(400).json({ error: "没有找到任何.m3u8链接" });
-  }
-  console.log('开始批量下载资源: ', links)
-
-  const downloadRoot = '从文本中链接提取的资源'
-  const downloadSub = `${new Date().toLocaleString().replace(/[:\/|\s]/g, "_")}`
-  const downloadDir = path.join(
-    __dirname,
-    'uploads',
-    downloadRoot,
-    downloadSub
-  );
-  fs.mkdirSync(downloadDir, { recursive: true });
-
-  const failedLinks = [];
-  let completedCount = 0;
-
-  const downloadLink = (link) => {
-    return new Promise((resolve) => {
-        const tempDir = path.join(
-            __dirname,
-            "temp",
-            "batch_download",
-            `${Date.now()}`
-        );
-      const command = `N_m3u8DL-RE "${link}" --save-dir "${downloadDir}" --save-name ${link} --tmp-dir ${tempDir}`;
-      exec(command, (error, stdout, stderr) => {
-        let failed = false
-        if (error || stdout.includes('One or more errors occurred')) {
-            failed = true
+app.post('/downloadFromText', async (req, res) => {
+    const text = req.body.text || '';
+    const cleanedText = text.replace(/\s+/g, '');
+    const regex = /https?:\/\/[^\s]+?\.(m3u8|pdf|mp4|mov|png|jpg|mp3|txt|zip|exe|apk)/g;
+    const allLinks = cleanedText.match(/https?:\/\/[^\s]+/g);
+    const links = cleanedText.match(regex) || [];
+    const ignoreLinks = allLinks.filter(link => !regex.test(link));
+  
+    if (links.length === 0) {
+      return res.status(400).json({ error: '没有找到任何有效的链接', ignoreLinks });
+    }
+  
+    console.log('开始批量下载资源: ', links);
+  
+    const downloadRoot = '从文本中链接提取的资源';
+    const downloadSub = `${new Date().toLocaleString().replace(/[:.\/\s]/g, '_')}_${uuidv4()}`;
+    const downloadDir = path.join(__dirname, 'uploads', downloadRoot, downloadSub);
+    fs.mkdirSync(downloadDir, { recursive: true });
+  
+    const failedLinks = [];
+    let completedCount = 0;
+  
+    const downloadLink = (link) => {
+      return new Promise((resolve) => {
+        const tempDir = path.join(__dirname, 'temp', 'batch_download', `${Date.now()}`);
+        const command = link.endsWith('.m3u8')
+          ? `N_m3u8DL-RE "${link}" --save-dir "${downloadDir}" --save-name ${path.basename(link)} --tmp-dir ${tempDir}`
+          : `curl -L "${link}" -o "${path.join(downloadDir, path.basename(link))}"`;
+        
+        exec(command, (error, stdout, stderr) => {
+          let failed = false;
+          if (error || stdout.includes('One or more errors occurred')) {
+            failed = true;
             console.error(`下载链接失败: ${link}\n${stdout}\n${stderr}`);
             failedLinks.push(link);
-        } else {
-            failed = false
+          } else {
+            failed = false;
             console.log(`下载成功: ${link}`);
-        }
-        completedCount++;
-
-        broadcastMessage({
+          }
+          completedCount++;
+  
+          // 通知前端下载进度
+          broadcastMessage({
             event: 'downloadProgress',
             data: {
-                link,
-                progress: completedCount,
-                total: links.length,
-                state: failed ? 'failed' : 'success',
+              link,
+              progress: completedCount,
+              total: links.length,
+              state: failed ? 'failed' : 'success',
             },
-        }, req, true)
-        resolve();
+          }, req, true);
+          resolve();
+        });
       });
-    });
-  };
-
-  // 并行下载所有链接
-  await Promise.all(links.map(downloadLink));
-  await updateCache(downloadRoot, req);
-  await updateCache(`${downloadRoot}/${downloadSub}`, req);
-  res.json({ failedLinks, successCount: completedCount - failedLinks.length, downloadRoot, downloadSub });
-});
+    };
+  
+    // 并行下载所有链接
+    await Promise.all(links.map(downloadLink));
+    await updateCache(downloadRoot, req);
+    await updateCache(`${downloadRoot}/${downloadSub}`, req);
+    res.json({ failedLinks, successCount: completedCount - failedLinks.length, downloadRoot, downloadSub, ignoreLinks });
+  });
+  
 
 
 // 上传文件并生成缩略图
