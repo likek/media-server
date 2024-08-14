@@ -719,7 +719,7 @@ app.post('/downloadFromText', async (req, res) => {
     const text = req.body.text || '';
     const cleanedText = text.replace(/\s+/g, '');
     const regex = /https?:\/\/[^\s]+?\.(m3u8|pdf|mp4|mov|png|jpg|mp3|txt|zip|exe|apk)/g;
-    const allLinks = cleanedText.match(/https?:\/\/[^\s]+/g);
+    const allLinks=cleanedText.match(/https?:\/\/[^\s]+?\.[^\s"']+/g)
     const links = cleanedText.match(regex) || [];
     const ignoreLinks = allLinks.filter(link => !regex.test(link));
   
