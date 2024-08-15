@@ -717,12 +717,15 @@ app.post('/users', async (req, res) => {
 
 app.post('/downloadFromText', async (req, res) => {
     const text = req.body.text || '';
-    const cleanedText = text.replace(/\s+/g, '');
-    const regex = /https?:\/\/[^\s]+?\.(m3u8|pdf|mp4|mov|png|jpg|mp3|txt|zip|exe|apk)/g;
-    const allLinks=cleanedText.match(/https?:\/\/[^\s]+?\.[^\s"']+/g)
-    const links = cleanedText.match(regex) || [];
-    const ignoreLinks = allLinks.filter(link => !regex.test(link));
   
+    const urlRegex = /https?:\/\/[^\s]+/g;
+    const allLinks = text.match(urlRegex) || [];
+    const validLinkRegex = /https?:\/\/[^\s]+?\.(m3u8|pdf|mp4|mov|png|jpg|mp3|txt|zip|exe|apk)(\?[^\s]*)?/i;
+    
+    const links = allLinks.filter(link => validLinkRegex.test(link));
+    const ignoreLinks = allLinks.filter(link => !validLinkRegex.test(link));
+  
+    // 获取51cg: JSON.parse(document.querySelector(`.dplayer[data-config]`).dataset.config).video.url
     if (links.length === 0) {
       return res.status(400).json({ error: '没有找到任何有效的链接', ignoreLinks });
     }
