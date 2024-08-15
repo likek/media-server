@@ -1025,7 +1025,7 @@ function registeUserId() {
     .catch((error) => console.error("Error:", error));
 }
 
-function showPromptModal(title, confirmHandler, placeholder = "") {
+async function showPromptModal(title, confirmHandler, placeholder = "") {
   const modal = document.getElementById("promptModal");
   const modalTitle = document.getElementById("promptModalTitle");
   const modalContent = document.getElementById("promptModalContent");
@@ -1034,6 +1034,13 @@ function showPromptModal(title, confirmHandler, placeholder = "") {
 
   modalTitle.textContent = title;
   modalContent.placeholder = placeholder;
+  try {
+    const clipboardContent = await navigator.clipboard.readText();
+    modalContent.value = clipboardContent;
+  } catch (error) {
+    modalContent.value = '';
+    console.warn('Failed to read clipboard contents: ', error);
+  }
 
   modal.style.display = "block";
 
@@ -1054,13 +1061,22 @@ function showPromptModal(title, confirmHandler, placeholder = "") {
 
 function collectVideosFromText() {
   showPromptModal(
-    "请输入带有视频链接的文本内容(将从中提取视频链接并下载到服务器)",
+    "请输入带有资源链接的文本内容(将从中下载资源链接对应的文件到服务器)",
     async (text) => {
       try {
+        const folder = prompt("请输入下载到哪个文件夹下(可不填)")
         showToast('开始在后台提取资源，请稍后...')
-        downloadFromText(text).then((data) => {
+        downloadFromText(text, (`${currentPath}/${folder}`).replace('//', '/')).then((data) => {
           showToast(`提取成功${data.successCount}条, 失败${data.failedLinks.length}`, "success");
-          loadMedia(`${data.downloadRoot}/${data.downloadSub}`)
+
+          console.log('执行成功:', data);
+          deleteCache(data.downloadRoot);
+          const target = (`${data.downloadRoot}/${data.downloadSub}`).replace(/^\//, '')
+          deleteCache(target)
+          if(data.downloadSub.indexOf('/') !== -1) {
+            deleteCache(data.downloadSub.substring(0, data.downloadSub.lastIndexOf('/')));
+          }
+          loadMedia(target)
         })
         return true;
       } catch(e) {
@@ -1072,11 +1088,10 @@ function collectVideosFromText() {
   );
 }
 
-function downloadFromText(text) {
-  const cleanedText = text.replace(/\s+/g, '');
-
+function downloadFromText(text, folder) {
   const requestBody = {
-      text: cleanedText
+      text,
+      folder
   };
 
   return fetch('/downloadFromText', {
@@ -1087,11 +1102,6 @@ function downloadFromText(text) {
       body: JSON.stringify(requestBody)
   })
   .then(response => response.json())
-  .then(data => {
-    console.log('执行成功:', data);
-    deleteCache(data.downloadRoot);
-    return data;
-  })
   .catch(error => {
       console.error('请求出错:', error);
   });
