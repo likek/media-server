@@ -380,7 +380,7 @@ button:active {
     background-color: rgba(0,0,0,0.9); /* Black w/ opacity */
 }
 
-.modal-content {
+.modal-content-img {
     margin: auto;
     display: block;
     margin-top: 1%;
