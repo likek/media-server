@@ -80,11 +80,10 @@ const updateCache = async (dirPath, req) => {
 
   fileInfos.sort((a, b) => {
     const isFolder = (file) => file.type === "folder";
-    const isVideoByName = (file) =>
-      ["mp4", "webm", "ogg", "ts"].includes(
-        file.filename.split(".").pop().toLowerCase()
-      );
-    const isImage = (file) =>
+    const isVideoFile = (file) => {
+        return isVideoByName(file.filename)
+    };
+    const isImageFile = (file) =>
       ["jpg", "jpeg", "png", "gif"].includes(
         file.filename.split(".").pop().toLowerCase()
       );
@@ -92,11 +91,11 @@ const updateCache = async (dirPath, req) => {
     if (isFolder(a) && !isFolder(b)) return -1;
     if (!isFolder(a) && isFolder(b)) return 1;
 
-    if (isVideoByName(a) && !isVideoByName(b)) return -1;
-    if (!isVideoByName(a) && isVideoByName(b)) return 1;
+    if (isVideoFile(a) && !isVideoFile(b)) return -1;
+    if (!isVideoFile(a) && isVideoFile(b)) return 1;
 
-    if (isImage(a) && !isImage(b)) return -1;
-    if (!isImage(a) && isImage(b)) return 1;
+    if (isImageFile(a) && !isImageFile(b)) return -1;
+    if (!isImageFile(a) && isImageFile(b)) return 1;
 
     return new Date(b.lastModified) - new Date(a.lastModified);
   });
@@ -141,6 +140,7 @@ const searchFromCache = (dirPath, query) => {
         });
       }
     }
+    return result;
 };
 
 const getFromCache = (dirPath) => {

@@ -81,7 +81,7 @@ const normalizeIp = (ip) => {
   };
 
   function isVideoByName(filename) {
-    return /https?:\/\/[^\s]+?\.(m3u8|mp4|ts|avi|mkv|mov|wmv|webm|flv|ogv|mpeg)(\?[^\s]*)?/i;
+    return /\.(m3u8|mp4|ts|avi|mkv|mov|wmv|webm|flv|ogv|mpeg)$/i.test(filename);
   }
 
 // 生成视频文件缩略图

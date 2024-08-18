@@ -305,7 +305,7 @@ app.post("/downloadFromText", async (req, res) => {
   const urlRegex = /https?:\/\/[^\s]+/g;
   const allLinks = text.match(urlRegex) || [];
   const validLinkRegex =
-    /https?:\/\/[^\s]+?\.(m3u8|pdf|mp4|mov|png|jpg|mp3|txt|zip|exe|apk)(\?[^\s]*)?/i;
+    /https?:\/\/[^\s]+?\.(m3u8|mp4|ts|avi|mkv|mov|wmv|webm|flv|ogv|mpeg|pdf|png|jpg|mp3|txt|zip|exe|apk)(\?[^\s]*)?/i;
 
   const links = allLinks.filter((link) => validLinkRegex.test(link));
   const ignoreLinks = allLinks.filter((link) => !validLinkRegex.test(link));
