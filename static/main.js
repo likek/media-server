@@ -220,7 +220,6 @@ function renderFiles(files) {
     if (file.format) {
       textSpan.textContent += ` (${file.format})`;
     }
-    textSpan.style = "display: inline-block;vertical-align:middle;";
     fileNameElement.appendChild(textSpan);
 
     const iconEdit = document.createElement("img");
@@ -249,6 +248,7 @@ function renderFiles(files) {
       folderIcon.style.width = "20px";
       folderIcon.style.height = "20px";
       folderIcon.style.margin = "0 4px 0 0";
+      folderIcon.style.display = 'inline';
       fileNameElement.insertBefore(folderIcon, textSpan);
       div.addEventListener("click", (e) => {
         e.stopPropagation();
@@ -1061,12 +1061,21 @@ async function showPromptModal(title, confirmHandler, placeholder = "") {
 
 function collectVideosFromText() {
   showPromptModal(
-    "请输入带有资源链接的文本内容(将从中下载资源链接对应的文件到服务器)",
+    "请输入带有资源链接的文本内容(链接对应的资源将被上传到服务器)",
     async (text) => {
       try {
-        const folder = prompt("请输入下载到哪个文件夹下(可不填)")
+        const folder = prompt("请输入文件夹名称(可不填)")
+        let path = '';
+        if(folder === null) {
+          return showToast('取消下载')
+        }
+        if(!folder) {
+          path = currentPath
+        } else {
+          path = `${currentPath}/${folder}`
+        }
         showToast('开始在后台提取资源，请稍后...')
-        downloadFromText(text, (`${currentPath}/${folder}`).replace('//', '/')).then((data) => {
+        downloadFromText(text, path.replace('//', '/')).then((data) => {
           showToast(`提取成功${data.successCount}条, 失败${data.failedLinks.length}`, "success");
 
           console.log('执行成功:', data);
