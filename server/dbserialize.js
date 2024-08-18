@@ -1,7 +1,7 @@
 import sqlite3 from "sqlite3";
 const db = new sqlite3.Database("./database.db");
 
-db.serialize(() => {
+const initAll = () => {
   db.run(`
     CREATE TABLE IF NOT EXISTS logs_request (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -99,6 +99,11 @@ db.serialize(() => {
     END;
   `);
 
-});
+}
+
+
+export function serializeDb() {
+  db.serialize(initAll);
+}
 
 export default db;

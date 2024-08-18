@@ -147,10 +147,12 @@ async function loadMedia(path = "", password) {
         checkAndRenderInitialFiles();
         updateCurrentPath(path);
       } else if (response.status === 403) {
-        showToast(data.message, "warn");
 
         if (data.lock) {
           const pw = prompt("请输入文件夹密码");
+          if(pw === null) {
+            return;
+          }
           if (!pw) {
             showToast("密码不能为空", "warn");
           } else {

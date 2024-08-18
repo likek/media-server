@@ -3,7 +3,7 @@ import express from "express";
 import multer from "multer";
 import cors from "cors";
 import fs from "fs";
-import path, { resolve } from "path";
+import path from "path";
 import ffmpeg from "fluent-ffmpeg";
 import extract from "extract-zip";
 import iconv from "iconv-lite";
@@ -11,17 +11,23 @@ import jschardet from "jschardet";
 import readline from "readline";
 import { fileURLToPath } from "url";
 import requestIp from "request-ip";
-import useragent from "useragent";
-import Searcher from "./ip2region.js";
-import { rateLimit } from "express-rate-limit";
 import cookieParser from "cookie-parser";
-import cookie from "cookie";
 import { v4 as uuidv4 } from "uuid";
-import { createServer, get } from "http";
+import { createServer } from "http";
 import WebSocket, { WebSocketServer } from "ws";
-import db from "./dbserialize.js";
+import db, { serializeDb } from "./server/dbserialize.js";
 import { exec } from "child_process";
 import compression from "compression";
+import { getRequestInfo, normalizeIp, generateThumbnail } from "./server/utils/index.js";
+import { limiter } from "./server/middleware/limiter.js";
+import { checkBlacklist } from "./server/middleware/blackList.js";
+import { checkPermissions } from "./server/middleware/apiPermission.js";
+import { writeRequestLog, writeWsLog, writeFileAccessedLog } from "./server/logManager.js";
+import folderLockHandler from "./server/middleware/folderLockManager.js";
+import { updateCache, invalidateCache, searchFromCache, getFromCache } from "./server/fileManager.js";
+import { UPLOAD_DIR, THUMB_DIR } from "./serverConfig.js";
+
+serializeDb();
 
 // 获取当前文件的目录名
 const __filename = fileURLToPath(import.meta.url);
@@ -29,160 +35,14 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = 7777;
-const UPLOAD_DIR = path.join(__dirname, "uploads");
-const THUMB_DIR = path.join(__dirname, "thumbnails");
-const cacheFilePath = path.join(__dirname, "cache.json");
-const permissionsFilePath = path.join(__dirname, "permission.json");
-let permissions = {};
-const folderLockConfigPath = path.join(__dirname, "folderLockCfg.json");
-let folderLockConfig = {};
-
-const regineDBPath = path.join(__dirname, "ip2region.xdb");
-const vectorIndex = Searcher.loadVectorIndexFromFile(regineDBPath);
-const searcher = Searcher.newWithVectorIndex(regineDBPath, vectorIndex);
 
 const httpServer = createServer(app);
 const wss = new WebSocketServer({ server: httpServer });
 const clientsById = new Map();
 
-const config = JSON.parse(fs.readFileSync("./config.json", "utf8"));
-const maxRequestsPerMinute = config.maxRequestsPerMinute;
-const blacklistDurationMs = config.blacklistDurationMs;
 
 app.set("trust proxy", 1);
 
-const normalizeIp = (ip) => {
-  if (!ip) {
-    return "unknown ip";
-  }
-  if (ip.startsWith("::ffff:")) {
-    return ip.substring(7);
-  }
-  return ip;
-};
-
-let limiterQueue = Promise.resolve();
-const limiter = rateLimit({
-  windowMs: 1 * 60 * 1000,
-  max: maxRequestsPerMinute,
-  handler: (req, res, next) => {
-    limiterQueue = limiterQueue.finally(() => {
-      return new Promise((resolve, reject) => {
-        const ip = normalizeIp(req.clientIp || req.ip);
-        const addedTime = new Date().toISOString();
-        const cookies = req.cookies;
-        const userId = cookies.userId;
-
-        // 检查是否存在相同 userId 且 enabled 为 1 的记录
-        db.get(
-          "SELECT * FROM blacklist WHERE userId = ? AND enabled = 1",
-          [userId],
-          (err, row) => {
-            if (err) {
-              console.error("查询黑名单出错: ", err);
-              res.status(500).json({ message: "内部服务器错误" });
-              return reject();
-            }
-
-            if (row) {
-              // 如果存在，不进行插入操作
-              res.status(429).json({
-                message: `请求过于频繁，您已被列入黑名单，${
-                  blacklistDurationMs / 1000
-                }秒后解除。`,
-              });
-              return resolve();
-            } else {
-              // 插入新的记录
-              db.run(
-                "INSERT INTO blacklist (ip, cookies, userId, added_time, enabled) VALUES (?, ?, ?, ?, 1)",
-                [ip, JSON.stringify(cookies), userId, addedTime],
-                function (err) {
-                  if (err) {
-                    console.error("插入黑名单出错: ", err);
-                    res.status(500).json({ message: "内部服务器错误" });
-                    return reject();
-                  }
-                  res.status(429).json({
-                    message: `请求过于频繁，您已被列入黑名单，${
-                      blacklistDurationMs / 1000
-                    }秒后解除。`,
-                  });
-                  return resolve();
-                }
-              );
-            }
-          }
-        );
-      });
-    });
-  },
-});
-
-function checkBlacklist(req, res, next) {
-  const currentTime = Date.now();
-  const cookies = req.cookies;
-  const userId = cookies.userId;
-  db.get(
-    "SELECT added_time FROM blacklist WHERE userId = ? AND enabled = 1",
-    [userId],
-    (err, row) => {
-      if (err) {
-        console.error("查询黑名单出错: ", err);
-        return res.status(500).json({ message: "内部服务器错误" });
-      }
-      if (row) {
-        const duration = currentTime - new Date(row.added_time).getTime();
-        if (duration > blacklistDurationMs) {
-          // 黑名单时间已过，逻辑删除IP
-          db.run(
-            "UPDATE blacklist SET enabled = 0 WHERE userId = ?",
-            [userId],
-            (err) => {
-              if (err) {
-                console.error("移除IP出错: ", err);
-                return res.status(500).json({ message: "内部服务器错误" });
-              }
-              next();
-            }
-          );
-        } else {
-          const black_time_left = Math.floor(
-            (blacklistDurationMs - duration) / 1000
-          );
-          return res.status(403).json({
-            message: `您已被列入黑名单，无法访问该资源，${black_time_left}秒后解除。`,
-            black_time_left,
-          });
-        }
-      } else {
-        next();
-      }
-    }
-  );
-}
-
-const checkPermissions = (req, res, next) => {
-  loadPermissions();
-
-  const userIp = normalizeIp(req.clientIp || req.ip);
-  let userId = req.cookies.userId;
-  const requestUrl = req.originalUrl.split("?")[0];
-  const allowedUsers = permissions[requestUrl];
-  if (!allowedUsers) {
-    return next();
-  }
-
-  if (allowedUsers === "*") {
-    return next();
-  }
-
-  if (allowedUsers.includes(userId) || allowedUsers.includes(userIp)) {
-    return next();
-  }
-
-  res.status(403).json({ message: "请联系管理员为你添加该权限" });
-};
 // 配置 multer
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -204,77 +64,18 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage });
 
-const writeRequestLogToDB = (logData) => {
-  // 插入日志到数据库
-  const query = `
-        INSERT INTO logs_request (
-          requestTime, userIp, requestMethod, requestUrl, requestBody, status, userAgent, region, device, os, browser, timestamp
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `;
-  const values = [
-    logData.requestTime,
-    logData.userIp,
-    logData.requestMethod,
-    logData.requestUrl,
-    logData.requestBody,
-    logData.status,
-    logData.userAgent,
-    logData.region,
-    logData.device,
-    logData.os,
-    logData.browser,
-    logData.timestamp,
-  ];
-
-  db.run(query, values, (err) => {
-    if (err) {
-      console.error("Failed to insert log into database (logs_request):", err);
+function updateTreeCache(dirPath, req) {
+  return updateCache(dirPath, req).then((res) => {
+    const { updated, fileInfos } = res;
+    if (updated) {
+      broadcastMessage(
+        { event: "updateCache", data: { dirPath, fileInfos } },
+        req
+      );
     }
-  });
-};
-
-const writeWsLogToDB = (logData) => {
-  const query = `
-    INSERT INTO logs_ws (
-      time, action, userId, userIp, userRegion
-    ) VALUES (?, ?, ?, ?, ?)
-  `;
-
-  const values = [
-    new Date().toISOString(),
-    logData.action || "",
-    logData.userId || "",
-    logData.userIp || "",
-    logData.userRegion || "",
-  ];
-
-  db.run(query, values, (err) => {
-    if (err) {
-      console.error("Failed to insert log into database (logs_ws):", err);
-    }
-  });
-};
-
-const writeFileAccessedLogToDB = (logData) => {
-  const query = `
-    INSERT INTO logs_file_accessed (
-      time, userId, userIp, filePath
-    ) VALUES (?, ?, ?, ?)
-  `;
-
-  const values = [
-    new Date().toISOString(),
-    logData.userId || "",
-    logData.userIp || "",
-    logData.filePath || "",
-  ];
-
-  db.run(query, values, (err) => {
-    if (err) {
-      console.error("Failed to insert log into database (logs_ws):", err);
-    }
-  });
-};
+    return res
+  })
+}
 
 // 创建上传和缩略图目录
 if (!fs.existsSync(UPLOAD_DIR)) {
@@ -285,15 +86,16 @@ if (!fs.existsSync(THUMB_DIR)) {
   fs.mkdirSync(THUMB_DIR);
 }
 
-app.use(compression({ filter: shouldCompress }));
+app.use(compression({
+  filter: (req, res) => {
+    if (req.headers["x-no-compression"]) {
+      return false;
+    }
 
-function shouldCompress(req, res) {
-  if (req.headers["x-no-compression"]) {
-    return false;
+    return compression.filter(req, res);
   }
+}));
 
-  return compression.filter(req, res);
-}
 app.use(cookieParser());
 app.use(checkBlacklist);
 app.use(limiter);
@@ -310,7 +112,7 @@ app.use((req, res, next) => {
       req.cookies?.userId,
       userIp
     );
-    writeFileAccessedLogToDB({
+    writeFileAccessedLog({
       userId: req.cookies?.userId,
       userIp,
       filePath: path,
@@ -342,303 +144,21 @@ function broadcastMessage(message, req, onlySelf = false) {
   });
 }
 
-const getRequestInfo = async (req, res) => {
-  const requestTime = new Date().toISOString();
-  const userIp = normalizeIp(req.clientIp || req.ip);
-  const requestMethod = req.method;
-  const requestUrl = decodeURIComponent(req.originalUrl);
-  const requestBody = decodeURIComponent(JSON.stringify(req.body));
-  const status = res?.statusCode;
-
-  let region = "";
-  try {
-    region = (await searcher.search(userIp))?.region || "unknown";
-  } catch (e) {
-    console.error("获取ip属地出错: ", e);
-  }
-
-  const userAgentString = req.headers["user-agent"];
-  const userAgent = useragent.parse(userAgentString);
-
-  const deviceInfo = {
-    device: userAgent.device.toString(),
-    os: userAgent.os.toString(),
-    browser: userAgent.toAgent(),
-  };
-
-  const data = {
-    requestTime,
-    userIp,
-    requestMethod,
-    requestUrl,
-    requestBody,
-    status,
-    userAgent: userAgentString,
-    region,
-    device: deviceInfo.device,
-    os: deviceInfo.os,
-    browser: deviceInfo.browser,
-    timestamp: new Date().toISOString(),
-  };
-
-  return data;
-};
-
-const loadPermissions = () => {
-  try {
-    const data = fs.readFileSync(permissionsFilePath, "utf8");
-    permissions = JSON.parse(data);
-  } catch (err) {
-    console.error(
-      "Failed to load permissions, using default permissions:",
-      err
-    );
-    permissions = {};
-  }
-};
-
-loadPermissions();
-
-const loadFolderLockConfig = () => {
-  try {
-    const data = fs.readFileSync(folderLockConfigPath, "utf8");
-    folderLockConfig = JSON.parse(data);
-  } catch (err) {
-    console.error(
-      "Failed to load permissions, using default permissions:",
-      err
-    );
-    folderLockConfig = {};
-  }
-};
-
-loadFolderLockConfig();
-
 app.use("/uploads", express.static(UPLOAD_DIR));
 app.use("/thumbnails", express.static(THUMB_DIR));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, "static")));
 app.use(pathNormalizer);
+app.use(writeRequestLog);
+app.use(folderLockHandler);
 
-app.use(async (req, res, next) => {
-  res.on("finish", async () => {
-    if (!req.path.startsWith("/uploads/")) {
-      const data = await getRequestInfo(req, res);
-      console.log(
-        [
-          chalk.blue(`${new Date(data.requestTime).toLocaleString()}`),
-          chalk.green(`${data.userIp}`),
-          chalk.green(`${data.region}`),
-          chalk.yellow(`${data.requestMethod} ${data.requestUrl}`),
-          chalk.cyan(`${data.requestBody}`),
-          chalk.magenta(`${data.status}`),
-          chalk.gray(`${data.device}`),
-          chalk.gray(`${data.os}`),
-          chalk.gray(`${data.browser}`),
-          chalk.gray(`${data.userAgent}`),
-        ].join(" | ")
-      );
-
-      writeRequestLogToDB(data);
-    }
-  });
-  next();
-});
-
-app.use((req, res, next) => {
-  if (!req.body) {
-    return next();
-  }
-  const requestUrl = req.originalUrl.split("?")[0];
-  let sourcePath = "";
-  let targetPath = "";
-  if (requestUrl === "/move") {
-    const { filename, targetFolder, currentPath } = req.body || {};
-    sourcePath = `${currentPath}/${filename}`;
-    targetPath = `${targetFolder}/${filename}`;
-  } else if (requestUrl === "/delete") {
-    const { filename, path: currentPath } = req.body;
-    sourcePath = `${currentPath}/${filename}`;
-  } else if (requestUrl === "/rename") {
-    const { path: currentPath, oldName, newName, type } = req.body;
-    sourcePath = `${currentPath}/${oldName}`;
-    targetPath = `${currentPath}/${newName}`;
-  } else if (requestUrl === "/files") {
-    sourcePath = req.body?.path || "";
-  } else {
-    return next();
-  }
-
-  if (sourcePath?.startsWith("/")) {
-    sourcePath = sourcePath.slice(1);
-  }
-
-  if (targetPath?.startsWith("/")) {
-    targetPath = targetPath.slice(1);
-  }
-
-  loadFolderLockConfig();
-  const sourceCfgPw = folderLockConfig[sourcePath]?.pw;
-  const targetCfgPw = targetPath && folderLockConfig[targetPath]?.pw;
-
-  if (requestUrl === "/move" || requestUrl === "/rename") {
-    if (sourceCfgPw) {
-      return res.status(403).send({ message: "源文件夹/文件不支持该操作" });
-    }
-
-    if (targetCfgPw) {
-      return res.status(403).send({ message: "目标文件夹/文件不支持该操作" });
-    }
-  }
-
-  if (!sourceCfgPw) {
-    return next();
-  }
-  const lockRoutes = folderLockConfig[sourcePath].routes || [
-    "/files",
-    "/delete",
-    "/rename",
-  ];
-  if (lockRoutes.includes(requestUrl)) {
-    if (!sourcePath) {
-      return next();
-    }
-    const pw = req.body.pw;
-    if (sourceCfgPw && sourceCfgPw !== pw) {
-      return res
-        .status(403)
-        .send({
-          lock: true,
-          message: !pw ? `该文件夹的操作需要密码` : "密码错误",
-        });
-    }
-  }
-  return next();
-});
-
-// 缓存对象
-let cache = {};
-// 尝试从cache.json文件中读取缓存
-function loadCache() {
-  if (fs.existsSync(cacheFilePath)) {
-    const data = fs.readFileSync(cacheFilePath, "utf8");
-    try {
-      cache = JSON.parse(data);
-      console.log("Cache loaded from cache.json");
-    } catch (error) {
-      console.error("Error parsing cache.json:", error);
-    }
-  } else {
-    console.log("No cache.json found, initializing empty cache");
-  }
-}
-
-loadCache();
-
-// 缓存管理函数
-const updateCache = async (dirPath, req) => {
-  if (dirPath.startsWith("/")) {
-    dirPath = dirPath.slice(1);
-  }
-  const oldFileInfosStr = JSON.stringify(cache[dirPath] || []);
-  const fullPath = path.join(UPLOAD_DIR, dirPath);
-  const files = await new Promise((resolve, reject) => {
-    fs.readdir(fullPath, (err, files) => {
-      if (err) return reject(err);
-      resolve(files);
-    });
-  });
-
-  const fileInfos = await Promise.all(
-    files.map(async (file) => {
-      const filePath = path.join(fullPath, file);
-      const stats = await fs.promises.stat(filePath);
-
-      if (stats.isDirectory()) {
-        return {
-          type: "folder",
-          filename: file,
-          path: path.join(dirPath, file).replace(/\\/g, "/"),
-          lastModified: stats.mtime,
-          size: stats.size,
-        };
-      } else {
-        const thumbnailPath = path.join(THUMB_DIR, dirPath, file + ".png");
-        let thumbnail = null;
-
-        if (fs.existsSync(thumbnailPath)) {
-          thumbnail = "/thumbnails/" + path.join(dirPath, file + ".png");
-        } else if (isVideo(file)) {
-          await generateThumbnail(filePath, thumbnailPath);
-          thumbnail = "/thumbnails/" + path.join(dirPath, file + ".png");
-        }
-
-        return {
-          filename: "/uploads/" + path.join(dirPath, file),
-          thumbnail: thumbnail,
-          lastModified: stats.mtime,
-          size: stats.size,
-          type: "file",
-        };
-      }
-    })
-  );
-
-  fileInfos.sort((a, b) => {
-    const isFolder = (file) => file.type === "folder";
-    const isVideo = (file) =>
-      ["mp4", "webm", "ogg", "ts"].includes(
-        file.filename.split(".").pop().toLowerCase()
-      );
-    const isImage = (file) =>
-      ["jpg", "jpeg", "png", "gif"].includes(
-        file.filename.split(".").pop().toLowerCase()
-      );
-
-    if (isFolder(a) && !isFolder(b)) return -1;
-    if (!isFolder(a) && isFolder(b)) return 1;
-
-    if (isVideo(a) && !isVideo(b)) return -1;
-    if (!isVideo(a) && isVideo(b)) return 1;
-
-    if (isImage(a) && !isImage(b)) return -1;
-    if (!isImage(a) && isImage(b)) return 1;
-
-    return new Date(b.lastModified) - new Date(a.lastModified);
-  });
-
-  if (oldFileInfosStr !== JSON.stringify(fileInfos)) {
-    cache[dirPath] = fileInfos;
-    fs.writeFileSync(cacheFilePath, JSON.stringify(cache), "utf8");
-    broadcastMessage(
-      { event: "updateCache", data: { dirPath, fileInfos } },
-      req
-    );
-  }
-};
-
-const invalidateCache = (dirPath) => {
-  if (dirPath.startsWith("/")) {
-    dirPath = dirPath.slice(1);
-  }
-  delete cache[dirPath];
-};
 
 wss.on("connection", async (ws, req) => {
-  const cookies = cookie.parse(req.headers.cookie || "");
+  const reqInfo = await getRequestInfo(req);
+  const cookies = reqInfo?.cookies;
 
-  let ipAddress = req.clientIp || req.ip;
-  if (!ipAddress) {
-    if (req.headers["x-forwarded-for"]) {
-      ipAddress = req.headers["x-forwarded-for"].split(",")[0];
-    } else if (req.headers["x-real-ip"]) {
-      ipAddress = req.headers["x-real-ip"];
-    } else if (req.connection.remoteAddress) {
-      ipAddress = req.connection.remoteAddress;
-    }
-  }
-  ipAddress = normalizeIp(ipAddress);
+  let ipAddress = reqInfo.userIp;
   const userId = cookies.userId;
 
   let region = "";
@@ -651,7 +171,7 @@ wss.on("connection", async (ws, req) => {
         "已断开"
       )}: [${userId}] - [${ipAddress}] - [${region}]`
     );
-    writeWsLogToDB({
+    writeWsLog({
       userId,
       userIp: ipAddress,
       userRegion: region,
@@ -664,7 +184,7 @@ wss.on("connection", async (ws, req) => {
   });
 
   try {
-    region = (await searcher.search(ipAddress))?.region || "unknown";
+    region = reqInfo?.region || "unknown";
   } catch (e) {
     console.error("获取ip属地出错: ", e);
   }
@@ -673,7 +193,7 @@ wss.on("connection", async (ws, req) => {
       "已连接"
     )}: [${userId}] - [${ipAddress}] - [${region}]`
   );
-  writeWsLogToDB({
+  writeWsLog({
     userId,
     userIp: ipAddress,
     userRegion: region,
@@ -879,10 +399,10 @@ app.post("/downloadFromText", async (req, res) => {
 
   // 并行下载所有链接
   await Promise.all(links.map(downloadLink));
-  await updateCache(downloadRoot, req);
-  await updateCache(`${downloadRoot}/${downloadSub}`, req);
+  await updateTreeCache(downloadRoot, req);
+  await updateTreeCache(`${downloadRoot}/${downloadSub}`, req);
   if(downloadSub.indexOf('/') !== -1) {
-    await updateCache(downloadSub.substring(0, downloadSub.lastIndexOf('/')), req);
+    await updateTreeCache(downloadSub.substring(0, downloadSub.lastIndexOf('/')), req);
   }
   res.json({
     failedLinks,
@@ -910,7 +430,7 @@ app.post("/upload", upload.single("file"), async (req, res) => {
     const thumbnailPath = path.join(thumbnailDir, filename + ".png");
     try {
       await generateThumbnail(filePath, thumbnailPath);
-      await updateCache(currentPath, req); // 更新缓存
+      await updateTreeCache(currentPath, req); // 更新缓存
       res.send({
         filename: "/uploads/" + currentPath + "/" + filename,
         thumbnail: "/thumbnails/" + currentPath + "/" + filename + ".png",
@@ -920,7 +440,7 @@ app.post("/upload", upload.single("file"), async (req, res) => {
       res.send({ filename: "/uploads/" + currentPath + "/" + filename });
     }
   } else {
-    await updateCache(currentPath, req); // 更新缓存
+    await updateTreeCache(currentPath, req); // 更新缓存
     res.send({ filename: "/uploads/" + currentPath + "/" + filename });
   }
 });
@@ -932,18 +452,19 @@ app.post("/files", async (req, res) => {
   const pageSize = parseInt(req.body.pageSize); // 每页文件数
 
   // 从缓存中获取数据
-  if (cache[reqPath]) {
+  const cacheData = getFromCache(reqPath)
+  if (cacheData) {
     if (!pageSize || pageSize === -1) {
-      return res.send(cache[reqPath]);
+      return res.send(cacheData);
     }
     return res.send(
-      cache[reqPath].slice(page * pageSize, (page + 1) * pageSize)
+      cacheData.slice(page * pageSize, (page + 1) * pageSize)
     );
   }
 
   try {
-    await updateCache(reqPath, req);
-    const result = cache[reqPath] || [];
+    await updateTreeCache(reqPath, req);
+    const result = getFromCache(reqPath) || [];
     if (!pageSize || pageSize === -1) {
       return res.send(result);
     }
@@ -964,60 +485,9 @@ app.post("/search", (req, res) => {
   if (!searchPath) {
     searchPath = "";
   }
-
-  const result = [];
-  for (const folder of Object.keys(cache)) {
-    if (folder.startsWith(searchPath)) {
-      const items = cache[folder];
-      items.forEach((item) => {
-        const filename = path.basename(item.filename);
-        if (filename.includes(query)) {
-          result.push({
-            ...item,
-            folder,
-          });
-        }
-      });
-    }
-  }
-
+  const result = searchFromCache(searchPath, query);
   res.send(result);
 });
-
-// 生成视频文件缩略图
-async function generateThumbnail(filePath, thumbnailPath) {
-  // 确保缩略图目录存在
-  const thumbnailDir = path.dirname(thumbnailPath);
-  if (!fs.existsSync(thumbnailDir)) {
-    fs.mkdirSync(thumbnailDir, { recursive: true });
-  }
-
-  return new Promise((resolve, reject) => {
-    ffmpeg(filePath)
-      // windows上是取视频中间位置帧
-      .screenshots({
-        count: 1,
-        folder: thumbnailDir,
-        filename: path.basename(thumbnailPath),
-        size: "320x240",
-      })
-      .on("end", () => resolve(true))
-      .on("error", (err) => {
-        console.error("Error generating thumbnail:", err);
-        resolve(false);
-      });
-
-    // 下面是强制取第1帧
-    // .on('end', () => resolve(true))
-    // .on('error', err => {
-    //     console.error('Error generating thumbnail:', err);
-    //     resolve(false);
-    // })
-    // .output(path.join(thumbnailDir, path.basename(thumbnailPath)))
-    // .outputOptions('-vf', 'thumbnail', '-frames:v', '1', '-s', '320x240')
-    // .run();
-  });
-}
 
 // 删除文件或文件夹
 app.post("/delete", async (req, res) => {
@@ -1038,7 +508,7 @@ app.post("/delete", async (req, res) => {
 
   try {
     await deleteRecursively(filePath);
-    await updateCache(currentPath, req); // 更新缓存
+    await updateTreeCache(currentPath, req); // 更新缓存
     res.send({ message: `${type} deleted successfully` });
   } catch (err) {
     console.error(`Error deleting ${type}:`, err);
@@ -1061,7 +531,7 @@ app.post("/createFolder", (req, res) => {
       return res.status(500).send({ message: "Failed to create folder" });
     }
 
-    await updateCache(currentPath, req); // 更新缓存
+    await updateTreeCache(currentPath, req); // 更新缓存
 
     res.send({ message: "Folder created successfully" });
   });
@@ -1086,7 +556,7 @@ app.post("/rename", (req, res) => {
     }
 
     invalidateCache(`${currentPath}/${oldName}`); // 如果rename的是文件夹，则该文件夹对应的缓存不应该再继续存在
-    await updateCache(currentPath, req); // 更新缓存
+    await updateTreeCache(currentPath, req); // 更新缓存
 
     res.send({ message: `${type} renamed successfully` });
   });
@@ -1095,8 +565,7 @@ app.post("/rename", (req, res) => {
 app.post("/updateCache", async (req, res) => {
   try {
     const currentPath = req.body.path || "";
-    await updateCache(currentPath, req);
-    // res.send(cache[currentPath]);
+    await updateTreeCache(currentPath, req);
     res.send({ message: "Update cache successfully" });
   } catch (error) {
     console.error("Error updating cache:", error);
@@ -1132,8 +601,8 @@ app.post("/move", (req, res) => {
     }
 
     invalidateCache(`${currentPath}/${filename}`); // 如果是文件夹，则该文件夹对应的缓存不应该再继续存在
-    await updateCache(currentPath, req); // 更新缓存
-    await updateCache(targetFolder.replace(/^\/+/, ""), req); // 更新缓存
+    await updateTreeCache(currentPath, req); // 更新缓存
+    await updateTreeCache(targetFolder.replace(/^\/+/, ""), req); // 更新缓存
     res.json({ success: true });
   });
 });
@@ -1166,7 +635,7 @@ app.post("/convert", (req, res) => {
     .save(absoluteOutputPath)
     .on("end", async () => {
       const currentPath = path.dirname(inputFilePath);
-      await updateCache(currentPath, req); // 更新缓存
+      await updateTreeCache(currentPath, req); // 更新缓存
       res.json({ outputFilePath: outputFilePath });
     })
     .on("error", (err) => {
@@ -1190,7 +659,7 @@ app.post("/unzip", async (req, res) => {
   if (fileExtension === ".zip") {
     extract(absoluteZipPath, { dir: extractToPath })
       .then(async () => {
-        await updateCache(currentPath, req);
+        await updateTreeCache(currentPath, req);
         res.json({ message: "File unzipped successfully", success: true });
       })
       .catch((err) => {
@@ -1329,8 +798,4 @@ function pathNormalizer(req, res, next) {
     return originalSend.call(this, body);
   };
   next();
-}
-
-function isVideo(filename) {
-  return filename.endsWith(".mp4") || filename.endsWith(".ts");
 }
