@@ -1,8 +1,8 @@
-import sqlite3 from "sqlite3";
-const db = new sqlite3.Database("./database.db");
+import dbPromise from './db.js';
 
-const initAll = () => {
-  db.run(`
+const initAll = async () => {
+  const db = await dbPromise;
+  await db.run(`
     CREATE TABLE IF NOT EXISTS logs_request (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       requestTime TEXT,
@@ -20,7 +20,7 @@ const initAll = () => {
     )
   `);
 
-  db.run(`
+  await db.run(`
     CREATE TABLE IF NOT EXISTS logs_ws (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       time TEXT,
@@ -31,28 +31,18 @@ const initAll = () => {
     )
   `);
 
-  db.run(`
-  CREATE TABLE IF NOT EXISTS blacklist (
+  await db.run(`
+    CREATE TABLE IF NOT EXISTS blacklist (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       ip TEXT,
       cookies TEXT,
       userId TEXT,
       added_time TEXT,
       enabled INTEGER DEFAULT 1
-  )
+    )
   `);
 
-  db.run(`
-    CREATE TABLE IF NOT EXISTS blacklist (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      userId TEXT,
-      cookies TEXT,
-      ip TEXT,
-      added_time TEXT
-    );
-    `)
-
-  db.run(`
+  await db.run(`
     CREATE TABLE IF NOT EXISTS userInfo (
       userId TEXT PRIMARY KEY,
       ip TEXT,
@@ -63,10 +53,10 @@ const initAll = () => {
       device TEXT,
       os TEXT,
       browser TEXT
-    );
-    `)
+    )
+  `);
 
-  db.run(`
+  await db.run(`
     CREATE TRIGGER IF NOT EXISTS limit_logs_request
     AFTER INSERT ON logs_request
     WHEN (SELECT COUNT(*) FROM logs_request) > 10000
@@ -77,7 +67,7 @@ const initAll = () => {
     END;
   `);
 
-  db.run(`
+  await db.run(`
     CREATE TRIGGER IF NOT EXISTS limit_logs_ws
     AFTER INSERT ON logs_ws
     WHEN (SELECT COUNT(*) FROM logs_ws) > 10000
@@ -88,22 +78,21 @@ const initAll = () => {
     END;
   `);
 
-  db.run(`
-    CREATE TRIGGER IF NOT EXISTS limit_logs_file_accessed
-    AFTER INSERT ON logs_file_accessed
-    WHEN (SELECT COUNT(*) FROM logs_file_accessed) > 10000
-    BEGIN
-      DELETE FROM logs_file_accessed WHERE id IN (
-        SELECT id FROM logs_file_accessed ORDER BY time ASC LIMIT (SELECT COUNT(*) - 10000 FROM logs_file_accessed)
-      );
-    END;
+  await db.run(`
+    CREATE TABLE IF NOT EXISTS file_system (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT,
+      path TEXT,
+      type TEXT,
+      parent_id INTEGER,
+      last_modified TEXT,
+      size INTEGER,
+      thumbnail TEXT,
+      FOREIGN KEY(parent_id) REFERENCES file_system(id)
+    )
   `);
+};
 
+export async function serializeDb() {
+  await initAll()
 }
-
-
-export function serializeDb() {
-  db.serialize(initAll);
-}
-
-export default db;

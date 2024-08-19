@@ -15,7 +15,7 @@ import cookieParser from "cookie-parser";
 import { v4 as uuidv4 } from "uuid";
 import { createServer } from "http";
 import WebSocket, { WebSocketServer } from "ws";
-import db, { serializeDb } from "./server/dbserialize.js";
+import { serializeDb } from "./server/dbserialize.js";
 import { exec } from "child_process";
 import compression from "compression";
 import { getRequestInfo, normalizeIp, generateThumbnail } from "./server/utils/index.js";
@@ -26,8 +26,15 @@ import { writeRequestLog, writeWsLog, writeFileAccessedLog } from "./server/logM
 import folderLockHandler from "./server/middleware/folderLockManager.js";
 import { updateCache, invalidateCache, searchFromCache, getFromCache } from "./server/fileManager.js";
 import { UPLOAD_DIR, THUMB_DIR } from "./serverConfig.js";
+import { updateDatabaseFromFolder, getItemsInFolder, getItemById, initFilesDb } from "./server/fileManager2.js";
+import dbPromise from './server/db.js';
 
-serializeDb();
+async function initDB() {
+  await serializeDb();
+  await initFilesDb();
+}
+
+initDB();
 
 // 获取当前文件的目录名
 const __filename = fileURLToPath(import.meta.url);
@@ -205,7 +212,7 @@ async function tryRegister(req, res) {
   let userId = req.cookies.userId;
 
   if (!userId) {
-    userId = uuidv4();
+    userId = uuid();
     res.cookie("userId", userId, {
       maxAge: 3650 * 24 * 60 * 60 * 1000,
       httpOnly: true,
@@ -214,46 +221,45 @@ async function tryRegister(req, res) {
   }
 
   const userInfo = await getRequestInfo(req);
-  db.run(
-    `INSERT OR IGNORE INTO userInfo (userId, ip, create_time, update_time, userAgent, region, device, os, browser) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [
-      userId,
-      userInfo.userIp,
-      userInfo.requestTime,
-      userInfo.requestTime,
-      userInfo.userAgent,
-      userInfo.region,
-      userInfo.device,
-      userInfo.os,
-      userInfo.browser,
-    ],
-    (err) => {
-      if (err) {
-        console.error("Error inserting user info:", err);
-      }
-    }
-  );
 
-  // 修改除create_time外的其他所有字段
-  db.run(
-    `UPDATE userInfo SET ip = ?, update_time = ?, userAgent = ?, region = ?, device = ?, os = ?, browser = ? WHERE userId = ?`,
-    [
-      userInfo.userIp,
-      userInfo.requestTime,
-      userInfo.userAgent,
-      userInfo.region,
-      userInfo.device,
-      userInfo.os,
-      userInfo.browser,
-      userId,
-    ],
-    (err) => {
-      if (err) {
-        console.error("Error updating user info:", err);
-      }
-    }
-  );
-  return userId;
+  try {
+    const db = await dbPromise;
+    // 插入或忽略已存在的用户信息
+    await db.run(
+      `INSERT OR IGNORE INTO userInfo (userId, ip, create_time, update_time, userAgent, region, device, os, browser) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        userId,
+        userInfo.userIp,
+        userInfo.requestTime,
+        userInfo.requestTime,
+        userInfo.userAgent,
+        userInfo.region,
+        userInfo.device,
+        userInfo.os,
+        userInfo.browser,
+      ]
+    );
+
+    // 更新除 create_time 外的所有字段
+    await db.run(
+      `UPDATE userInfo SET ip = ?, update_time = ?, userAgent = ?, region = ?, device = ?, os = ?, browser = ? WHERE userId = ?`,
+      [
+        userInfo.userIp,
+        userInfo.requestTime,
+        userInfo.userAgent,
+        userInfo.region,
+        userInfo.device,
+        userInfo.os,
+        userInfo.browser,
+        userId,
+      ]
+    );
+
+    return userId;
+  } catch (err) {
+    console.error("Error registering user:", err);
+    throw err;
+  }
 }
 
 app.get("/register", async (req, res) => {
@@ -268,30 +274,40 @@ app.post("/users", async (req, res) => {
     const offset = (page - 1) * limit;
 
     // 查询总记录数
-    const countQuery = `SELECT COUNT(*) AS total FROM userInfo`;
-    db.get(countQuery, [], (err, row) => {
-      if (err) {
+    const getCount = async () => {
+      const countQuery = 'SELECT COUNT(*) AS total FROM userInfo';
+      try {
+        const db = await dbPromise;
+        const row = await db.get(countQuery, []);
+        return row.total;
+      } catch (err) {
         console.error("Error executing count query:", err);
-        return res.status(500).send({ message: "Database error" });
+        throw err;
       }
+    };
 
-      // 分页查询
+    // 获取分页用户数据
+    const getUsers = async (limit, offset) => {
+      const db = await dbPromise;
       const query = `
-                SELECT * FROM userInfo
-                ORDER BY update_time DESC
-                LIMIT ? OFFSET ?
-            `;
+        SELECT * FROM userInfo
+        ORDER BY update_time DESC
+        LIMIT ? OFFSET ?
+      `;
+      try {
+        const rows = await db.all(query, [limit, offset]);
+        return rows;
+      } catch (err) {
+        console.error("Error executing query:", err);
+        throw err;
+      }
+    };
 
-      db.all(query, [limit, offset], (err, rows) => {
-        if (err) {
-          console.error("Error executing query:", err);
-          return res.status(500).send({ message: "Database error" });
-        }
+    const count = await getCount();
+    const users = await getUsers(limit, offset);
 
-        // 返回结果包括数据和总数
-        res.json({ data: rows, count: row.total });
-      });
-    });
+    res.json({ data: users, count });
+
   } catch (error) {
     console.error("Error handling request:", error);
     res.status(500).send({ message: "Internal server error" });
@@ -447,28 +463,37 @@ app.post("/upload", upload.single("file"), async (req, res) => {
 
 // 获取文件列表
 app.post("/files", async (req, res) => {
-  const reqPath = req.body.path || "";
+  // const reqPath = req.body.path || "";
+  const id = req.body.id || 1;
   const page = parseInt(req.body.page) || 0;
   const pageSize = parseInt(req.body.pageSize); // 每页文件数
 
   // 从缓存中获取数据
-  const cacheData = getFromCache(reqPath)
-  if (cacheData) {
-    if (!pageSize || pageSize === -1) {
-      return res.send(cacheData);
-    }
-    return res.send(
-      cacheData.slice(page * pageSize, (page + 1) * pageSize)
-    );
-  }
+  // const cacheData = getFromCache(reqPath)
+  // if (cacheData) {
+  //   if (!pageSize || pageSize === -1) {
+  //     return res.send(cacheData);
+  //   }
+  //   return res.send(
+  //     cacheData.slice(page * pageSize, (page + 1) * pageSize)
+  //   );
+  // }
 
   try {
-    await updateTreeCache(reqPath, req);
-    const result = getFromCache(reqPath) || [];
+    // await updateTreeCache(reqPath, req);
+    // const result = getFromCache(reqPath) || [];
+    const result = (await getItemsInFolder(id)) || [];
+    let data = [];
     if (!pageSize || pageSize === -1) {
-      return res.send(result);
+      data = result;
+    } else {
+      data = result.slice(page * pageSize, (page + 1) * pageSize);
     }
-    return res.send(result.slice(page * pageSize, (page + 1) * pageSize));
+    const parent = (await getItemById(id));
+    res.send({
+      parent,
+      data
+    });
   } catch (err) {
     console.error("Error fetching file list:", err);
     res.status(500).send({ message: "Failed to fetch file list." });

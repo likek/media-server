@@ -7,7 +7,7 @@ const progressBarValue = document.getElementById("progressBarValue");
 const btnRoot = document.getElementById("btnRoot");
 const fileInput = document.getElementById("fileInput");
 
-let currentPath = "";
+let currentFolderInfo = {};
 const baseServer = "";
 const fileCache = {};
 let totalFiles = [];
@@ -33,8 +33,7 @@ function deleteCache(path) {
 hideProgressBar();
 
 function goBackDir() {
-  const parentPath = currentPath.substring(0, currentPath.lastIndexOf("/"));
-  loadMedia(parentPath);
+  loadMedia(currentFolderInfo);
 }
 
 function getRowCount() {
@@ -78,7 +77,7 @@ async function handleSearch(event) {
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ query, path: currentPath }),
+      body: JSON.stringify({ query, id: currentFolderInfo.id }),
     });
     if (response.status === 200) {
       const files = await response.json();
@@ -86,7 +85,7 @@ async function handleSearch(event) {
       renderFiles(totalFiles.slice(0, pageSize)); // Render the first page
       checkAndRenderInitialFiles();
       btnRoot.style.display = "";
-      backButton.style.display = currentPath === "" ? "none" : "";
+      backButton.style.display = currentFolderInfo === "" ? "none" : "";
     } else {
       const data = await response.json();
       showToast(data.message, "warn");
@@ -104,11 +103,11 @@ async function updateCache() {
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ path: currentPath }),
+      body: JSON.stringify({ path: currentFolderInfo }),
     });
     if (response.status === 200) {
-      deleteCache(currentPath);
-      loadMedia(currentPath);
+      deleteCache(currentFolderInfo);
+      loadMedia(currentFolderInfo);
       showToast("刷新数据成功", "success");
     } else {
       const data = await response.json();
@@ -129,7 +128,7 @@ async function loadMedia(path = "", password) {
     totalFiles = cacheValue;
     renderFiles(totalFiles.slice(0, pageSize)); // Render the first page
     checkAndRenderInitialFiles();
-    updateCurrentPath(path);
+    updateCurrentFolder(path);
   } else {
     try {
       const response = await fetch(`${baseServer}/files`, {
@@ -141,11 +140,11 @@ async function loadMedia(path = "", password) {
       });
       const data = await response.json();
       if (response.status === 200) {
-        totalFiles = data; // Cache the result
-        setCache(path, data);
+        totalFiles = data.data; // Cache the result
+        setCache(path, totalFiles);
         renderFiles(totalFiles.slice(0, pageSize)); // Render the first page
         checkAndRenderInitialFiles();
-        updateCurrentPath(path);
+        updateCurrentFolder(data.parent);
       } else if (response.status === 403) {
 
         if (data.lock) {
@@ -171,16 +170,16 @@ async function loadMedia(path = "", password) {
   }
 }
 
-function updateCurrentPath(path) {
-  currentPath = path;
-  currentPathElem.innerHTML = `${currentPath || "/"}`;
+function updateCurrentFolder(currentFolder) {
+  currentFolderInfo = currentFolder;
+  currentPathElem.innerHTML = `${currentFolderInfo || "/"}`;
   currentPathElem.onclick = () => {
     copyText(currentPathElem);
   };
-  btnRoot.style.display = currentPath === "" ? "none" : "";
-  backButton.style.display = currentPath === "" ? "none" : "";
+  btnRoot.style.display = currentFolderInfo === "" ? "none" : "";
+  backButton.style.display = currentFolderInfo === "" ? "none" : "";
 
-  const paths = path.split("/");
+  const paths = currentFolder.path.split("/");
   const title =
     `${paths[paths.length - 2] ? paths[paths.length - 2] + "/" : ""}${
       paths[paths.length - 1]
@@ -205,7 +204,7 @@ function encodeUrl(url) {
 function renderFiles(files) {
   const fragment = document.createDocumentFragment();
   files.forEach((file) => {
-    const fileExt = file.filename.split(".").pop().toLowerCase();
+    const fileExt = file.name.split(".").pop().toLowerCase();
     const div = document.createElement("div");
     div.classList.add("media-item");
     if (file.type === "folder") {
@@ -215,8 +214,8 @@ function renderFiles(files) {
     const fileNameElement = document.createElement("p");
     const textSpan = document.createElement("span");
     textSpan.classList.add("touchable");
-    const filename = file.filename.substring(
-      file.filename.lastIndexOf("/") + 1
+    const filename = file.name.substring(
+      file.name.lastIndexOf("/") + 1
     );
     textSpan.textContent = filename;
     if (file.format) {
@@ -237,9 +236,9 @@ function renderFiles(files) {
       }
       e.stopPropagation();
       if (file.type === "folder") {
-        renameFile(file.filename, file.folder || currentPath, file.type);
+        renameFile(file.name, file.folder || currentFolderInfo, file.type);
       } else {
-        renameFile(filename, file.folder || currentPath, file.type);
+        renameFile(filename, file.folder || currentFolderInfo, file.type);
       }
     });
     div.appendChild(fileNameElement);
@@ -254,7 +253,7 @@ function renderFiles(files) {
       fileNameElement.insertBefore(folderIcon, textSpan);
       div.addEventListener("click", (e) => {
         e.stopPropagation();
-        loadMedia(file.path);
+        loadMedia(file);
       });
     } else if (["mp4", "webm", "ogg", "ts"].includes(fileExt)) {
       const video = document.createElement("video");
@@ -267,7 +266,7 @@ function renderFiles(files) {
       if (["ts"].includes(fileExt)) {
         // const source = document.createElement('source');
 
-        // source.src = baseServer + file.filename;
+        // source.src = baseServer + file.name;
         // source.type = 'video/mp2t';
 
         // video.appendChild(source);
@@ -278,7 +277,7 @@ function renderFiles(files) {
             showOverlay(div);
             await videoHelper.loadTs(
               video,
-              baseServer + file.filename,
+              baseServer + file.name,
               (error) => {
                 showToast(`视频加载失败`, "error");
               }
@@ -288,18 +287,18 @@ function renderFiles(files) {
           }
         });
       } else {
-        video.src = baseServer + file.filename;
+        video.src = baseServer + file.name;
       }
       div.appendChild(video);
     } else if (["jpg", "jpeg", "png", "gif"].includes(fileExt)) {
       const img = document.createElement("img");
-      img.src = encodeUrl(baseServer + file.filename);
+      img.src = encodeUrl(baseServer + file.name);
       img.className = "image";
       img.onclick = () => openImgModal(img);
       div.appendChild(img);
     } else if ("pdf" === fileExt) {
       const a = document.createElement("a");
-      a.href = encodeUrl(baseServer + file.filename);
+      a.href = encodeUrl(baseServer + file.name);
       a.innerText = filename;
       a.target = "_blank";
       div.appendChild(a);
@@ -336,9 +335,9 @@ function renderFiles(files) {
     deleteButton.addEventListener("click", (e) => {
       e.stopPropagation();
       if (file.type === "folder") {
-        deleteFile(file.filename, file.folder || currentPath, file.type);
+        deleteFile(file.name, file.folder || currentFolderInfo, file.type);
       } else {
-        deleteFile(filename, file.folder || currentPath, file.type);
+        deleteFile(filename, file.folder || currentFolderInfo, file.type);
       }
     });
     footer.appendChild(deleteButton);
@@ -349,7 +348,7 @@ function renderFiles(files) {
       convertButton.className = "warn-button";
       convertButton.addEventListener("click", (e) => {
         e.stopPropagation();
-        const originPath = `${file.folder || currentPath}/${filename}`;
+        const originPath = `${file.folder || currentFolderInfo}/${filename}`;
         const targetPath = originPath.replace(/\.[^/.]+$/, "_ts.mp4");
         showOverlay(div, "格式转换中...");
         convertFile(originPath, targetPath).finally(() => {
@@ -366,14 +365,14 @@ function renderFiles(files) {
       unzipButton.addEventListener("click", (e) => {
         e.stopPropagation();
         showOverlay(div, "解压中...");
-        unzipFile(`${file.folder || currentPath}/${filename}`).finally(() => {
+        unzipFile(`${file.folder || currentFolderInfo}/${filename}`).finally(() => {
           hideOverlay(div);
         });
       });
       footer.appendChild(unzipButton);
     }
 
-    if (file.folder && file.folder !== currentPath) {
+    if (file.folder && file.folder !== currentFolderInfo) {
       const fileInfoElement = document.createElement("p");
 
       const label = document.createElement("span");
@@ -386,7 +385,7 @@ function renderFiles(files) {
 
       value.addEventListener("click", (e) => {
         e.stopPropagation();
-        loadMedia(file.folder);
+        loadMedia(file);
       });
 
       fileInfoElement.append(label);
@@ -397,7 +396,7 @@ function renderFiles(files) {
     if (file.type !== "folder" && fileExt === "txt") {
       div.addEventListener("click", (e) => {
         e.stopPropagation();
-        viewTextFile(`${file.folder || currentPath}/${filename}`, 0, 18);
+        viewTextFile(`${file.folder || currentFolderInfo}/${filename}`, 0, 18);
       });
       div.classList.add("touchable");
 
@@ -407,7 +406,7 @@ function renderFiles(files) {
       convertBtn.addEventListener("click", (event) => {
         event.stopPropagation();
         showOverlay(div, "编码转换中...");
-        convertEncoding(`${file.folder || currentPath}/${filename}`)
+        convertEncoding(`${file.folder || currentFolderInfo}/${filename}`)
           .then((data) => {
             if (data.success) {
               showToast("转换编码成功", "success");
@@ -426,7 +425,7 @@ function renderFiles(files) {
       const audioPlayer = document.createElement("audio");
       audioPlayer.classList.add("audio-player");
       audioPlayer.controls = true;
-      audioPlayer.src = baseServer + file.filename;
+      audioPlayer.src = baseServer + file.name;
       div.appendChild(audioPlayer);
     }
 
@@ -440,17 +439,17 @@ function renderFiles(files) {
       targetFolder = targetFolder && targetFolder.trim();
       if (!targetFolder) {
         showToast("目标文件及不能为空", "warn");
-      } else if (targetFolder === (file.folder || currentPath)) {
+      } else if (targetFolder === (file.folder || currentFolderInfo)) {
         showToast("不能移动到相同目录", "warn");
       } else {
         if (file.type === "folder") {
           moveFileOrFolder(
-            file.filename,
+            file.name,
             targetFolder,
-            file.folder || currentPath
+            file.folder || currentFolderInfo
           );
         } else {
-          moveFileOrFolder(filename, targetFolder, file.folder || currentPath);
+          moveFileOrFolder(filename, targetFolder, file.folder || currentFolderInfo);
         }
       }
     });
@@ -460,7 +459,7 @@ function renderFiles(files) {
     if (file.type !== "folder") {
       const a = document.createElement("a");
       a.innerHTML = "下载";
-      a.href = baseServer + file.filename;
+      a.href = baseServer + file.name;
       a.download = filename;
       a.onclick = (e) => e.stopPropagation();
       footer.appendChild(a);
@@ -522,12 +521,12 @@ async function createFolder() {
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ folderName, path: currentPath }),
+      body: JSON.stringify({ folderName, path: currentFolderInfo }),
     });
     if (response.status === 200) {
       showToast("Folder created successfully.", "success");
-      deleteCache(currentPath);
-      loadMedia(currentPath); // 重新加载媒体列表
+      deleteCache(currentFolderInfo);
+      loadMedia(currentFolderInfo); // 重新加载媒体列表
     } else {
       const data = await response.json();
       showToast(data.message, "warn");
@@ -573,8 +572,8 @@ async function deleteFile(filename, path, type) {
       });
       if (response.status === 200) {
         showToast("File deleted successfully.", "success");
-        deleteCache(currentPath);
-        loadMedia(currentPath); // 重新加载媒体列表
+        deleteCache(currentFolderInfo);
+        loadMedia(currentFolderInfo); // 重新加载媒体列表
       } else {
         const data = await response.json();
         showToast(data.message, "warn");
@@ -610,8 +609,8 @@ async function uploadFile() {
   xhr.addEventListener("load", async () => {
     if (xhr.status === 200) {
       showToast("File uploaded successfully.", "success");
-      deleteCache(currentPath);
-      loadMedia(currentPath);
+      deleteCache(currentFolderInfo);
+      loadMedia(currentFolderInfo);
       fileInput.value = "";
       hideProgressBar();
     } else {
@@ -628,7 +627,7 @@ async function uploadFile() {
   });
 
   // 设置请求地址和方法
-  const url = `${baseServer}/upload?path=${encodeURIComponent(currentPath)}`;
+  const url = `${baseServer}/upload?path=${encodeURIComponent(currentFolderInfo)}`;
   xhr.open("POST", url);
 
   try {
@@ -683,8 +682,8 @@ function convertFile(inputFilePath, outputFilePath) {
     .then((response) => response.json())
     .then((data) => {
       if (data.outputFilePath) {
-        deleteCache(currentPath);
-        loadMedia(currentPath);
+        deleteCache(currentFolderInfo);
+        loadMedia(currentFolderInfo);
         showToast("File converted successfully.", "success");
       } else {
         showToast(data.message, "warn");
@@ -794,8 +793,8 @@ function unzipFile(zipFilePath) {
     .then((data) => {
       if (data.success) {
         showToast(data.message, "success");
-        deleteCache(currentPath);
-        loadMedia(currentPath); // 更新显示
+        deleteCache(currentFolderInfo);
+        loadMedia(currentFolderInfo); // 更新显示
       } else {
         showToast(data.message, "warn");
       }
@@ -1072,9 +1071,9 @@ function collectVideosFromText() {
           return showToast('取消下载')
         }
         if(!folder) {
-          path = currentPath
+          path = currentFolderInfo
         } else {
-          path = `${currentPath}/${folder}`
+          path = `${currentFolderInfo}/${folder}`
         }
         showToast('开始在后台提取资源，请稍后...')
         downloadFromText(text, path.replace('//', '/')).then((data) => {
@@ -1141,12 +1140,12 @@ function connectWs() {
         break
       case "updateCache":
         setCache(data.data.dirPath, data.data.fileInfos);
-          if (currentPath === data.data.dirPath) {
+          if (currentFolderInfo === data.data.dirPath) {
             const refresh = confirm(
               "当前文件夹已更新，是否立即更新(不更新则可能产生[访问错误])?"
             );
             if (refresh) {
-              loadMedia(currentPath)
+              loadMedia(currentFolderInfo)
                 .then(() => {
                   showToast("当前文件夹更新成功", "success");
                 })
@@ -1154,7 +1153,7 @@ function connectWs() {
                   showToast("当前文件夹更新失败", "warn");
                 });
             }
-          } else if (currentPath.startsWith(data.data.dirPath)) {
+          } else if (currentFolderInfo.startsWith(data.data.dirPath)) {
             const refresh = confirm(
               "检测到父级已更新，是否立即更新(不更新则可能产生[访问错误])?"
             );
