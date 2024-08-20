@@ -23,7 +23,7 @@ import { checkPermissions } from "./server/middleware/apiPermission.js";
 import { writeRequestLog, writeWsLog, writeFileAccessedLog } from "./server/logManager.js";
 import folderLockHandler from "./server/middleware/folderLockManager.js";
 import { UPLOAD_DIR, THUMB_DIR, uploadDirName, thumbnailDirName } from "./serverConfig.js";
-import { getItemsInFolderById, getItemById, initFilesDb, updateDatabaseFromFolder, removePath, searchItems } from "./server/fileManager2.js";
+import { getItemsInFolderById, getItemsInFolderByPath, getItemById, initFilesDb, updateDatabaseFromFolder, removePath, searchItems } from "./server/fileManager2.js";
 import dbPromise from './server/db.js';
 import pathNormalizer from "./server/middleware/pathNormalizer.js";
 

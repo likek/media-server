@@ -214,5 +214,6 @@ export {
   updateDatabaseFromFolder,
   getItemById,
   initFilesDb,
-  removePath
+  removePath,
+  getItemsInFolderByPath
 };
