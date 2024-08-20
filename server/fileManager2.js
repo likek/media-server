@@ -89,6 +89,13 @@ async function getItemsInFolderById(parentId) {
   return rows;
 }
 
+async function getItemsInFolderByPath(path) {
+  const db = await dbPromise;
+  const parentId = await db.get('SELECT id FROM file_system WHERE path = ?', [path]);
+  const rows = await db.all('SELECT * FROM file_system WHERE parent_id = ?', [parentId]);
+  return rows;
+}
+
 // 根据关键字搜索
 async function searchItems(keyword) {
   const db = await dbPromise;
@@ -198,11 +205,11 @@ async function initFilesDb() {
 }
 
 export {
-  deleteItemById as deleteItem,
-  renameItemById as renameItem,
-  moveItemById as moveItem,
-  createItemToParentId as createItem,
-  getItemsInFolderById as getItemsInFolder,
+  deleteItemById,
+  renameItemById,
+  moveItemById,
+  createItemToParentId,
+  getItemsInFolderById,
   searchItems,
   updateDatabaseFromFolder,
   getItemById,

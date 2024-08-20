@@ -23,7 +23,7 @@ import { checkPermissions } from "./server/middleware/apiPermission.js";
 import { writeRequestLog, writeWsLog, writeFileAccessedLog } from "./server/logManager.js";
 import folderLockHandler from "./server/middleware/folderLockManager.js";
 import { UPLOAD_DIR, THUMB_DIR, uploadDirName, thumbnailDirName } from "./serverConfig.js";
-import { getItemsInFolder, getItemById, initFilesDb, updateDatabaseFromFolder, removePath, searchItems } from "./server/fileManager2.js";
+import { getItemsInFolderById, getItemById, initFilesDb, updateDatabaseFromFolder, removePath, searchItems } from "./server/fileManager2.js";
 import dbPromise from './server/db.js';
 import pathNormalizer from "./server/middleware/pathNormalizer.js";
 
@@ -465,6 +465,7 @@ app.post("/upload", upload.single("file"), async (req, res) => {
 app.post("/files", async (req, res) => {
   // const reqPath = req.body.path || "";
   const id = req.body.id || 1;
+  const folder = req.body.folder;
   const page = parseInt(req.body.page) || 0;
   const pageSize = parseInt(req.body.pageSize); // 每页文件数
 
@@ -482,7 +483,14 @@ app.post("/files", async (req, res) => {
   try {
     // await updateTreeCache(reqPath, req);
     // const result = getFromCache(reqPath) || [];
-    const result = (await getItemsInFolder(id)) || [];
+    let result = [];
+    if (typeof id === 'number') {
+        result = (await getItemsInFolderById(id)) || []
+    } else if (typeof folder === 'string') {
+        result = (await getItemsInFolderByPath(folder)) || []
+    } else {
+        res.status(400).send({ message: "id or folder is required" });
+    }
     let data = [];
     if (!pageSize || pageSize === -1) {
       data = result;

@@ -119,7 +119,8 @@ async function updateCache() {
   }
 }
 
-async function loadMedia(path = "", password) {
+async function loadMedia(pathInfo, folder, password) {
+  const path = pathInfo?.path || "";
   renderedFilesCount = 0;
   totalFiles = [];
 
@@ -136,7 +137,7 @@ async function loadMedia(path = "", password) {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ path, pw: password }),
+        body: JSON.stringify({ id: pathInfo?.id, pw: password, folder }),
       });
       const data = await response.json();
       if (response.status === 200) {
@@ -155,7 +156,7 @@ async function loadMedia(path = "", password) {
           if (!pw) {
             showToast("密码不能为空", "warn");
           } else {
-            loadMedia(path, pw);
+            loadMedia(pathInfo, undefined, pw);
           }
         } else if(data.black_time_left) {
           window.location.reload();
@@ -236,9 +237,9 @@ function renderFiles(files) {
       }
       e.stopPropagation();
       if (file.type === "folder") {
-        renameFile(file.name, file.folder || currentFolderInfo, file.type);
+        renameFile(file.name, file.folder || currentFolderInfo, file.type, currentFolderInfo);
       } else {
-        renameFile(filename, file.folder || currentFolderInfo, file.type);
+        renameFile(filename, file.folder || currentFolderInfo, file.type, currentFolderInfo);
       }
     });
     div.appendChild(fileNameElement);
@@ -475,7 +476,7 @@ function renderFiles(files) {
   renderedFilesCount += files.length;
 }
 
-async function renameFile(filename, path, type) {
+async function renameFile(filename, path, type, fileFolderInfo) {
   const newFilename = prompt("请输入新的名称：", filename);
   if (!newFilename || newFilename === filename) {
     return; // 用户取消或未修改文件名
@@ -497,7 +498,7 @@ async function renameFile(filename, path, type) {
     if (response.status === 200) {
       showToast("File renamed successfully.", "success");
       deleteCache(path);
-      loadMedia(path); // 重新加载媒体列表
+      loadMedia(fileFolderInfo || currentFolderInfo); // 重新加载媒体列表
     } else {
       const data = await response.json();
       showToast(data.message, "warn");
@@ -656,9 +657,9 @@ function moveFileOrFolder(filename, targetFolder, currentPath) {
     .then((data) => {
       if (data.success) {
         showToast("File moved successfully", "success");
-        deleteCache(currentPath);
+        deleteCache(currentFolderInfo);
         deleteCache(targetFolder.replace(/^\/+/, ""));
-        loadMedia(currentPath);
+        loadMedia(currentFolderInfo);
       } else {
         showToast(data.message || "Error moving file", "error");
       }
@@ -1086,7 +1087,7 @@ function collectVideosFromText() {
           if(data.downloadSub.indexOf('/') !== -1) {
             deleteCache(data.downloadSub.substring(0, data.downloadSub.lastIndexOf('/')));
           }
-          loadMedia(target)
+          loadMedia(undefined, target)
         })
         return true;
       } catch(e) {
@@ -1158,7 +1159,7 @@ function connectWs() {
               "检测到父级已更新，是否立即更新(不更新则可能产生[访问错误])?"
             );
             if (refresh) {
-              loadMedia(data.data.dirPath)
+              loadMedia(undefined, data.data.dirPath)
                 .then(() => {
                   showToast("父级更新成功", "success");
                 })
@@ -1199,7 +1200,7 @@ function startReconnectTimer() {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
-  loadMedia();
+  loadMedia(undefined, '');
   registeUserId();
 });
 
