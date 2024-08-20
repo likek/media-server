@@ -2,7 +2,7 @@ import sqlite3 from 'sqlite3';
 import { open } from 'sqlite';
 import fs from 'fs';
 import path from 'path';
-import { UPLOAD_DIR, THUMB_DIR } from '../serverConfig.js';
+import { UPLOAD_DIR, THUMB_DIR, thumbnailDirName } from '../serverConfig.js';
 import { isVideoByName, generateThumbnail } from './utils/index.js';
 import { fileURLToPath } from "url";
 
@@ -15,14 +15,14 @@ const dbPromise = open({
 });
 
 // 删除文件或文件夹
-async function deleteItem(id) {
+async function deleteItemById(id) {
   const db = await dbPromise;
   const item = await db.get('SELECT * FROM file_system WHERE id = ?', [id]);
   if (item) {
     if (item.type === 'folder') {
       const children = await db.all('SELECT id FROM file_system WHERE parent_id = ?', [id]);
       for (const child of children) {
-        await deleteItem(child.id);
+        await deleteItemById(child.id);
       }
     }
     const fullPath = path.join(UPLOAD_DIR, item.path);
@@ -33,7 +33,7 @@ async function deleteItem(id) {
 }
 
 // 更名文件或文件夹
-async function renameItem(id, newName) {
+async function renameItemById(id, newName) {
   const item = await db.get('SELECT * FROM file_system WHERE id = ?', [id]);
   if (item) {
     const newPath = path.join(path.dirname(item.path), newName);
@@ -46,7 +46,7 @@ async function renameItem(id, newName) {
 }
 
 // 移动文件或文件夹
-async function moveItem(id, newParentId) {
+async function moveItemById(id, newParentId) {
   const db = await dbPromise;
   const item = await db.get('SELECT * FROM file_system WHERE id = ?', [id]);
   const newParent = await db.get('SELECT * FROM file_system WHERE id = ?', [newParentId]);
@@ -61,7 +61,7 @@ async function moveItem(id, newParentId) {
 }
 
 // 新建文件或文件夹
-async function createItem(name, parentId, type) {
+async function createItemToParentId(name, parentId, type) {
   const db = await dbPromise;
   const parent = await db.get('SELECT * FROM file_system WHERE id = ?', [parentId]);
   if (parent) {
@@ -82,7 +82,7 @@ async function createItem(name, parentId, type) {
 }
 
 // 查询某文件夹下的所有子级文件和文件夹
-async function getItemsInFolder(parentId) {
+async function getItemsInFolderById(parentId) {
   const db = await dbPromise;
   const rows = await db.all('SELECT * FROM file_system WHERE parent_id = ?', [parentId]);
   
@@ -105,30 +105,71 @@ async function getItemById(id) {
 }
 
 // 遍历并更新数据库
-async function updateDatabaseFromFolder(folderPath) {
+async function updateDatabaseFromFolder(folderPath, deep = false) {
   const db = await dbPromise;
+  let updated = false;
+
   async function recursiveUpdate(dirPath, parentId) {
     const items = fs.readdirSync(dirPath);
+
+    // 实际文件有，但数据库没有，插入到表
     for (const item of items) {
       const fullPath = path.join(dirPath, item);
       const stats = fs.statSync(fullPath);
       const type = stats.isDirectory() ? 'folder' : 'file';
       const relativePath = path.relative(UPLOAD_DIR, fullPath);
       const existingItem = await db.get('SELECT * FROM file_system WHERE path = ?', [relativePath]);
+      let thumbnail = '';
+      if (isVideoByName(relativePath)) {
+        const thumbnailPath = path.join(THUMB_DIR, `${relativePath}.png`);
+        await generateThumbnail(fullPath, thumbnailPath);
+        thumbnail = `${thumbnailDirName}/${path.relative(THUMB_DIR, thumbnailPath)}`;
+      }
       if (!existingItem) {
         await db.run(
-          'INSERT INTO file_system (name, path, type, parent_id, last_modified, size) VALUES (?, ?, ?, ?, ?, ?)',
-          [item, relativePath, type, parentId, stats.mtime.toISOString(), stats.size]
+          'INSERT INTO file_system (name, path, type, parent_id, last_modified, size, thumbnail) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          [item, relativePath, type, parentId, stats.mtime.toISOString(), stats.size, thumbnail]
         );
+        updated = true;
+      } else if (deep && type === 'folder') {
+        // 更新文件夹的 last_modified 和 size
+        await db.run(
+          'UPDATE file_system SET last_modified = ?, size = ? WHERE path = ?',
+          [stats.mtime.toISOString(), stats.size, relativePath]
+        );
+        updated = true;
       }
-      if (type === 'folder') {
+
+      if (deep && type === 'folder') {
         const newItem = await db.get('SELECT id FROM file_system WHERE path = ?', [relativePath]);
         await recursiveUpdate(fullPath, newItem.id);
       }
     }
+
+    // 实际没有，但表里有，从表删除
+    const dbItems = await db.all('SELECT * FROM file_system WHERE parent_id = ?', [parentId]);
+    const fsPaths = items.map(item => path.join(dirPath, item));
+
+    for (const dbItem of dbItems) {
+      if (!fsPaths.includes(dbItem.path)) {
+        await db.run('DELETE FROM file_system WHERE id = ?', [dbItem.id]);
+        updated = true;
+      }
+    }
   }
+
   await recursiveUpdate(folderPath, 1);
-  
+  return { updated };
+}
+
+// 移除以path为根的所有文件或文件夹(包括深层嵌套的文件或文件夹)
+async function removePath(path) {
+  const db = await dbPromise;
+  const relativePath = path;
+
+  // 删除数据库中的记录
+  const deleted = await db.run('DELETE FROM file_system WHERE path LIKE ?', [`${relativePath}/%`]);
+  return deleted
 }
 
 async function createRootRow() {
@@ -142,8 +183,8 @@ async function createRootRow() {
     const existingItem = await db.get('SELECT * FROM file_system WHERE path = ?', [relativePath]);
     if (!existingItem) {
         await db.run(
-            'INSERT INTO file_system (name, path, type, parent_id, last_modified, size) VALUES (?, ?, ?, ?, ?, ?)',
-            [item, relativePath, type, parentId, stats.mtime.toISOString(), stats.size]
+            'INSERT INTO file_system (name, path, type, parent_id, last_modified, size, thumbnail) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            [item, relativePath, type, parentId, stats.mtime.toISOString(), stats.size, '']
         );
     }
     
@@ -152,18 +193,19 @@ async function createRootRow() {
 async function initFilesDb() {
     console.log('正在初始化数据库...')
     await createRootRow();
-    await updateDatabaseFromFolder(UPLOAD_DIR);
+    await updateDatabaseFromFolder(UPLOAD_DIR, true);
     console.log('数据库初始化完成')
 }
 
 export {
-  deleteItem,
-  renameItem,
-  moveItem,
-  createItem,
-  getItemsInFolder,
+  deleteItemById as deleteItem,
+  renameItemById as renameItem,
+  moveItemById as moveItem,
+  createItemToParentId as createItem,
+  getItemsInFolderById as getItemsInFolder,
   searchItems,
   updateDatabaseFromFolder,
   getItemById,
-  initFilesDb
+  initFilesDb,
+  removePath
 };

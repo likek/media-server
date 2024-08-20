@@ -1,6 +1,7 @@
 import { getRequestInfo } from "./utils/index.js";
 import dbPromise from './db.js';
 import chalk from "chalk";
+import { uploadDirName } from "../serverConfig.js";
 
 // 插入日志到数据库
 const writeRequestLogToDB = async (logData) => {
@@ -34,7 +35,7 @@ const writeRequestLogToDB = async (logData) => {
 
 const writeRequestLog = async (req, res, next) => {
   res.on("finish", async () => {
-    if (!req.path.startsWith("/uploads/")) {
+    if (!req.path.startsWith(`${uploadDirName}`)) {
       const data = await getRequestInfo(req, res);
       console.log(
         [

@@ -6,8 +6,6 @@ import fs from "fs";
 import path from "path";
 import ffmpeg from "fluent-ffmpeg";
 import extract from "extract-zip";
-import iconv from "iconv-lite";
-import jschardet from "jschardet";
 import readline from "readline";
 import { fileURLToPath } from "url";
 import requestIp from "request-ip";
@@ -18,23 +16,22 @@ import WebSocket, { WebSocketServer } from "ws";
 import { serializeDb } from "./server/dbserialize.js";
 import { exec } from "child_process";
 import compression from "compression";
-import { getRequestInfo, normalizeIp, generateThumbnail } from "./server/utils/index.js";
+import { getRequestInfo, normalizeIp, generateThumbnail, convertTxtEncoding } from "./server/utils/index.js";
 import { limiter } from "./server/middleware/limiter.js";
 import { checkBlacklist } from "./server/middleware/blackList.js";
 import { checkPermissions } from "./server/middleware/apiPermission.js";
 import { writeRequestLog, writeWsLog, writeFileAccessedLog } from "./server/logManager.js";
 import folderLockHandler from "./server/middleware/folderLockManager.js";
-import { updateCache, invalidateCache, searchFromCache, getFromCache } from "./server/fileManager.js";
-import { UPLOAD_DIR, THUMB_DIR } from "./serverConfig.js";
-import { updateDatabaseFromFolder, getItemsInFolder, getItemById, initFilesDb } from "./server/fileManager2.js";
+import { UPLOAD_DIR, THUMB_DIR, uploadDirName, thumbnailDirName } from "./serverConfig.js";
+import { getItemsInFolder, getItemById, initFilesDb, updateDatabaseFromFolder, removePath, searchItems } from "./server/fileManager2.js";
 import dbPromise from './server/db.js';
+import pathNormalizer from "./server/middleware/pathNormalizer.js";
 
 async function initDB() {
   await serializeDb();
   await initFilesDb();
 }
 
-initDB();
 
 // 获取当前文件的目录名
 const __filename = fileURLToPath(import.meta.url);
@@ -72,16 +69,19 @@ const storage = multer.diskStorage({
 const upload = multer({ storage });
 
 function updateTreeCache(dirPath, req) {
-  return updateCache(dirPath, req).then((res) => {
-    const { updated, fileInfos } = res;
-    if (updated) {
-      broadcastMessage(
-        { event: "updateCache", data: { dirPath, fileInfos } },
-        req
-      );
-    }
-    return res
-  })
+    const fullPath = path.join(UPLOAD_DIR, dirPath);
+    return updateDatabaseFromFolder(fullPath)
+//   return updateCache(dirPath)
+    .then((res) => {
+        const { updated } = res;
+        if (updated) {
+        broadcastMessage(
+            { event: "updateCache", data: { dirPath } },
+            req
+        );
+        }
+        return res
+    })
 }
 
 // 创建上传和缩略图目录
@@ -112,7 +112,7 @@ app.use(checkPermissions);
 
 app.use((req, res, next) => {
   const path = decodeURIComponent(req.path);
-  if (path.startsWith("/uploads/")) {
+  if (path.startsWith(`/${uploadDirName}/`)) {
     const userIp = normalizeIp(req.clientIp || req.ip);
     console.log(
       `File accessed: ${path}, userId: `,
@@ -151,8 +151,8 @@ function broadcastMessage(message, req, onlySelf = false) {
   });
 }
 
-app.use("/uploads", express.static(UPLOAD_DIR));
-app.use("/thumbnails", express.static(THUMB_DIR));
+app.use(`/${uploadDirName}`, express.static(UPLOAD_DIR));
+app.use(`/${thumbnailDirName}`, express.static(THUMB_DIR));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, "static")));
@@ -347,7 +347,7 @@ app.post("/downloadFromText", async (req, res) => {
       .toLocaleString()
       .replace(/[:.\/\s]/g, "_")}_${uuidv4()}`;
   }
-  downloadDir = path.join(__dirname, "uploads", downloadRoot, downloadSub);
+  downloadDir = path.join(__dirname, `${uploadDirName}`, downloadRoot, downloadSub);
   if (!fs.existsSync(downloadDir)) {
     fs.mkdirSync(downloadDir, { recursive: true });
   }
@@ -448,16 +448,16 @@ app.post("/upload", upload.single("file"), async (req, res) => {
       await generateThumbnail(filePath, thumbnailPath);
       await updateTreeCache(currentPath, req); // 更新缓存
       res.send({
-        filename: "/uploads/" + currentPath + "/" + filename,
-        thumbnail: "/thumbnails/" + currentPath + "/" + filename + ".png",
+        filename: `/${uploadDirName}/` + currentPath + "/" + filename,
+        thumbnail: `/${thumbnailDirName}/` + currentPath + "/" + filename + ".png",
       });
     } catch (err) {
       console.error("Error generating thumbnail:", err);
-      res.send({ filename: "/uploads/" + currentPath + "/" + filename });
+      res.send({ filename: `/${uploadDirName}/` + currentPath + "/" + filename });
     }
   } else {
     await updateTreeCache(currentPath, req); // 更新缓存
-    res.send({ filename: "/uploads/" + currentPath + "/" + filename });
+    res.send({ filename: `/${uploadDirName}/` + currentPath + "/" + filename });
   }
 });
 
@@ -500,7 +500,7 @@ app.post("/files", async (req, res) => {
   }
 });
 
-app.post("/search", (req, res) => {
+app.post("/search", async (req, res) => {
   let { query, path: searchPath } = req.body;
 
   if (!query) {
@@ -510,7 +510,7 @@ app.post("/search", (req, res) => {
   if (!searchPath) {
     searchPath = "";
   }
-  const result = searchFromCache(searchPath, query);
+  const result = await searchItems(searchPath, query);
   res.send(result);
 });
 
@@ -580,7 +580,7 @@ app.post("/rename", (req, res) => {
       return res.status(500).send({ message: `Failed to rename ${type}` });
     }
 
-    invalidateCache(`${currentPath}/${oldName}`); // 如果rename的是文件夹，则该文件夹对应的缓存不应该再继续存在
+    removePath(`${currentPath}/${oldName}`); // 如果rename的是文件夹，则该文件夹对应的缓存不应该再继续存在
     await updateTreeCache(currentPath, req); // 更新缓存
 
     res.send({ message: `${type} renamed successfully` });
@@ -601,10 +601,10 @@ app.post("/updateCache", async (req, res) => {
 app.post("/move", (req, res) => {
   const { filename, targetFolder, currentPath } = req.body;
 
-  const sourcePath = path.join(__dirname, "uploads", currentPath, filename);
+  const sourcePath = path.join(__dirname, `${uploadDirName}`, currentPath, filename);
   const destinationPath = path.join(
     __dirname,
-    "uploads",
+    `${uploadDirName}`,
     targetFolder,
     filename
   );
@@ -615,7 +615,7 @@ app.post("/move", (req, res) => {
       .json({ message: "Source file/folder does not exist" });
   }
 
-  if (!fs.existsSync(path.join(__dirname, "uploads", targetFolder))) {
+  if (!fs.existsSync(path.join(__dirname, `${uploadDirName}`, targetFolder))) {
     return res.status(400).json({ message: "Target folder does not exist" });
   }
 
@@ -625,7 +625,7 @@ app.post("/move", (req, res) => {
       return res.status(500).json({ message: "Error moving file/folder" });
     }
 
-    invalidateCache(`${currentPath}/${filename}`); // 如果是文件夹，则该文件夹对应的缓存不应该再继续存在
+    removePath(`${currentPath}/${filename}`); // 如果是文件夹，则该文件夹对应的缓存不应该再继续存在
     await updateTreeCache(currentPath, req); // 更新缓存
     await updateTreeCache(targetFolder.replace(/^\/+/, ""), req); // 更新缓存
     res.json({ success: true });
@@ -736,49 +736,6 @@ app.post("/readTextFile", (req, res) => {
   });
 });
 
-function convertTxtEncoding(filePath, res) {
-  const extname = path.extname(filePath);
-  if (extname !== ".txt") {
-    res.status(400).json({ message: "不是txt文件，跳过编码转换" });
-    return;
-  }
-
-  fs.readFile(filePath, (err, data) => {
-    if (err) {
-      console.error("读取文件失败:", err);
-      res.status(500).json({ message: "读取文件失败" });
-      return;
-    }
-
-    // 检测文件编码
-    const detectedEncoding = jschardet.detect(data).encoding;
-    if (!detectedEncoding) {
-      res.status(500).json({ message: "文件编码检测失败" });
-      return;
-    }
-
-    // 判断文件是否为UTF-8编码
-    if (detectedEncoding.toLowerCase() === "utf-8") {
-      res.json({ message: "已经是UTF-8编码" });
-      return;
-    }
-
-    // 将文件内容从原编码转换为UTF-8
-    const content = iconv.decode(data, detectedEncoding);
-    const utf8Content = iconv.encode(content, "utf-8");
-
-    // 将转换后的内容写入文件
-    fs.writeFile(filePath, utf8Content, (err) => {
-      if (err) {
-        console.error("写入文件失败:", err);
-        res.status(500).json({ message: "写入文件失败" });
-        return;
-      }
-      res.json({ message: "编码修改为UTF-8成功", success: true });
-    });
-  });
-}
-
 app.post("/convertTxtEncoding", (req, res) => {
   const { filePath } = req.body;
   const absoluteFilePath = path.join(UPLOAD_DIR, filePath);
@@ -787,7 +744,11 @@ app.post("/convertTxtEncoding", (req, res) => {
     return res.status(400).json({ message: "File does not exist" });
   }
 
-  convertTxtEncoding(absoluteFilePath, res);
+  convertTxtEncoding(absoluteFilePath).then(() => {
+    res.json({ message: "编码修改为UTF-8成功", success: true });
+  }).catch(error => {
+    res.status(error.status).json({ message: error.message });
+  });
 });
 
 // 根路径返回 index.html
@@ -795,32 +756,8 @@ app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "static", "index.html"));
 });
 
-httpServer.listen(PORT, () => {
-  console.log(`Server is running on http://localhost:${PORT}`);
-});
-
-function pathNormalizer(req, res, next) {
-  const originalSend = res.send;
-  res.send = function (body) {
-    if (typeof body === "object") {
-      const normalizePaths = (obj) => {
-        if (Array.isArray(obj)) {
-          return obj.map(normalizePaths);
-        } else if (obj !== null && typeof obj === "object") {
-          for (let key in obj) {
-            if (typeof obj[key] === "string") {
-              obj[key] = obj[key].replace(/\\/g, "/");
-            } else if (typeof obj[key] === "object") {
-              obj[key] = normalizePaths(obj[key]);
-            }
-          }
-          return obj;
-        }
-        return obj;
-      };
-      body = normalizePaths(body);
-    }
-    return originalSend.call(this, body);
-  };
-  next();
-}
+initDB().then(() => {
+    httpServer.listen(PORT, () => {
+        console.log(`Server is running on http://localhost:${PORT}`);
+    });
+})

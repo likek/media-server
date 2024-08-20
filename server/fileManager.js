@@ -2,7 +2,7 @@
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import { UPLOAD_DIR, THUMB_DIR } from "../serverConfig.js";
+import { UPLOAD_DIR, THUMB_DIR, uploadDirName, thumbnailDirName } from "../serverConfig.js";
 import { isVideoByName, generateThumbnail } from "./utils/index.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -30,7 +30,7 @@ function loadCache() {
 loadCache();
 
 // 缓存管理函数
-const updateCache = async (dirPath, req) => {
+const updateCache = async (dirPath) => {
   if (dirPath.startsWith("/")) {
     dirPath = dirPath.slice(1);
   }
@@ -61,14 +61,14 @@ const updateCache = async (dirPath, req) => {
         let thumbnail = null;
 
         if (fs.existsSync(thumbnailPath)) {
-          thumbnail = "/thumbnails/" + path.join(dirPath, file + ".png");
+          thumbnail = `/${thumbnailDirName}/` + path.join(dirPath, file + ".png");
         } else if (isVideoByName(file)) {
           await generateThumbnail(filePath, thumbnailPath);
-          thumbnail = "/thumbnails/" + path.join(dirPath, file + ".png");
+          thumbnail = `/${thumbnailDirName}/` + path.join(dirPath, file + ".png");
         }
 
         return {
-          filename: "/uploads/" + path.join(dirPath, file),
+          filename: `/${uploadDirName}/` + path.join(dirPath, file),
           thumbnail: thumbnail,
           lastModified: stats.mtime,
           size: stats.size,
