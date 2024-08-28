@@ -350,7 +350,7 @@ app.post("/downloadFromText", async (req, res) => {
       const m3u8Regex = /https?:\/\/[^\s]+?\.m3u8(\?[^\s]*)?/i;
       const saveName = `${Date.now()}${Math.floor(Math.random() * 100000)}`;
       const command = m3u8Regex.test(link)
-        ? `N_m3u8DL-RE "${link}" --save-dir "${downloadDir}" --save-name ${saveName} --tmp-dir ${tempDir} --ui-language en-US`
+        ? `N_m3u8DL-RE --auto-select "${link}" --save-dir "${downloadDir}" --save-name ${saveName} --tmp-dir ${tempDir} --ui-language en-US`
         : `curl -L "${link}" -o "${path.join(downloadDir, saveName)}"`;
 
       console.log(`开始执行: ${command}`);
