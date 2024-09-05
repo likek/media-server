@@ -14,6 +14,6 @@ export {
     THUMB_DIR
 }
 export default {
-    maxRequestsPerMinute: 300,
+    maxRequestsPerMinute: 600,
     blacklistDurationMs: 1800000
 }
