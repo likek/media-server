@@ -29,15 +29,19 @@ const processFile = async (file, useGpu) => {
   console.log(`开始处理文件: "${file}"`);
 
   try {
-    const { stdout } = await execAsync(`cd "${fileDir}" && AtomicParsley "${fileName}" -T`);
-    const moovPosition = stdout.match(/Atom moov.*?@ (\d+)/);
-    const moovOffset = moovPosition ? parseInt(moovPosition[1], 10) : Infinity;
-
-    console.log(`moov atom 位置: ${moovPosition ? moovPosition[0] : "未知"}`);
-
-    if (moovOffset <= THRESHOLD) {
-      console.log(chalk.yellow(`无需修改: ${file}`));
-      return;
+    try {
+      const { stdout } = await execAsync(`cd "${fileDir}" && AtomicParsley "${fileName}" -T`);
+      const moovPosition = stdout.match(/Atom moov.*?@ (\d+)/);
+      const moovOffset = moovPosition ? parseInt(moovPosition[1], 10) : Infinity;
+  
+      console.log(`moov atom 位置: ${moovPosition ? moovPosition[0] : "未知"}`);
+  
+      if (moovOffset <= THRESHOLD) {
+        console.log(chalk.yellow(`无需修改: ${file}`));
+        return;
+      }
+    } catch(e) {
+      console.log(chalk.red(`moov atom 位置检测出错: ${e}`))
     }
 
     console.log(
