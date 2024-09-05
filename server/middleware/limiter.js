@@ -1,6 +1,7 @@
 import { rateLimit } from "express-rate-limit";
 import serverConfig from "../../serverConfig.js";
 import { normalizeIp } from "../utils/index.js";
+import db from "../dbserialize.js";
 
 const maxRequestsPerMinute = serverConfig.maxRequestsPerMinute;
 const blacklistDurationMs = serverConfig.blacklistDurationMs;
