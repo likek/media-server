@@ -198,10 +198,8 @@ async function createRootRow() {
 }
 
 async function initFilesDb() {
-    console.log('正在初始化数据库...')
     await createRootRow();
     await updateDatabaseFromFolder(UPLOAD_DIR, true);
-    console.log('数据库初始化完成')
 }
 
 export {

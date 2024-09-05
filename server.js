@@ -28,8 +28,15 @@ import dbPromise from './server/db.js';
 import pathNormalizer from "./server/middleware/pathNormalizer.js";
 
 async function initDB() {
-  await serializeDb();
-  await initFilesDb();
+  const shouldReinitialize = process.argv.includes('--init-db');
+  
+  if (shouldReinitialize) {
+    console.log('Reinitializing database...');
+    await serializeDb();
+    await initFilesDb();
+  } else {
+    console.log('Skipping database reinitialization.');
+  }
 }
 
 
