@@ -1065,12 +1065,18 @@ function collectVideosFromText() {
   showPromptModal(
     "请输入带有资源链接的文本内容(链接对应的资源将被上传到服务器)",
     async (text) => {
+      let folder = null;
       try {
-        const folder = prompt("请输入文件夹名称(可不填)")
-        let path = '';
-        if(folder === null) {
-          return showToast('取消下载')
+        if(/^title:[^\n]+/.test(text)) {
+          folder = text.match(/^title:([^\n]+)/)[1]
+        } else {
+          folder = prompt("请输入文件夹名称(可不填)")
+          if(folder === null) {
+            return showToast('取消下载')
+          }
         }
+
+        let path = '';
         if(!folder) {
           path = currentPath
         } else {

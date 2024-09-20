@@ -146,7 +146,7 @@ function broadcastMessage(message, req, onlySelf = false) {
 
 app.use("/uploads", express.static(UPLOAD_DIR));
 app.use("/thumbnails", express.static(THUMB_DIR));
-app.use(express.json());
+app.use(express.json({ limit: "3mb" }));
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, "static")));
 app.use(pathNormalizer);
@@ -302,6 +302,7 @@ app.post("/downloadFromText", async (req, res) => {
   const text = req.body.text || "";
   const folder = req.body.folder;
 
+  // Match HTTP links
   const urlRegex = /https?:\/\/[^\s]+/g;
   const allLinks = text.match(urlRegex) || [];
   const validLinkRegex =
@@ -310,14 +311,22 @@ app.post("/downloadFromText", async (req, res) => {
   const links = allLinks.filter((link) => validLinkRegex.test(link));
   const ignoreLinks = allLinks.filter((link) => !validLinkRegex.test(link));
 
-  // Array.from(document.querySelectorAll(`.dplayer[data-config]`)).map(item => JSON.parse(item?.dataset?.config || "{}").video?.url)
-  if (links.length === 0) {
-    return res
-      .status(400)
-      .json({ error: "没有找到任何有效的链接", ignoreLinks });
+  // Match base64-encoded images
+  const base64Regex = /data:image\/(png|jpeg|jpg|gif);base64,([a-zA-Z0-9+/=]+)/g;
+  const base64Images = [];
+  let match;
+  while ((match = base64Regex.exec(text)) !== null) {
+    base64Images.push({
+      mimeType: match[1],
+      base64: match[2],
+    });
   }
 
-  console.log("开始批量下载资源: ", links);
+  if (links.length === 0 && base64Images.length === 0) {
+    return res.status(400).json({ error: "没有找到任何有效的链接", ignoreLinks });
+  }
+
+  console.log("开始批量下载资源: ", links, base64Images);
 
   let downloadRoot = "";
   let downloadSub = "";
@@ -385,7 +394,7 @@ app.post("/downloadFromText", async (req, res) => {
             data: {
               link,
               progress: completedCount,
-              total: links.length,
+              total: links.length + base64Images.length,
               state: failed ? "failed" : "success",
             },
           },
@@ -397,13 +406,49 @@ app.post("/downloadFromText", async (req, res) => {
     });
   };
 
-  // 并行下载所有链接
-  await Promise.all(links.map(downloadLink));
+  // Save base64 images
+  const saveBase64Image = (image, index) => {
+    return new Promise((resolve) => {
+      const fileName = `image_${index}.${image.mimeType}`;
+      const filePath = path.join(downloadDir, fileName);
+      const imageBuffer = Buffer.from(image.base64, 'base64');
+
+      fs.writeFile(filePath, imageBuffer, (err) => {
+        if (err) {
+          console.error(`${chalk.red("保存失败")}: ${filePath}`);
+          failedLinks.push(filePath);
+        } else {
+          console.log(`${chalk.green("保存成功")}: ${filePath}`);
+        }
+        completedCount++;
+
+        // 通知前端保存进度
+        broadcastMessage(
+          {
+            event: "downloadProgress",
+            data: {
+              link: fileName,
+              progress: completedCount,
+              total: links.length + base64Images.length,
+              state: err ? "failed" : "success",
+            },
+          },
+          req,
+          true
+        );
+        resolve();
+      });
+    });
+  };
+
+  // 并行下载所有 HTTP 链接和保存 base64 图片
+  await Promise.all([...links.map(downloadLink), ...base64Images.map(saveBase64Image)]);
   await updateTreeCache(downloadRoot, req);
   await updateTreeCache(`${downloadRoot}/${downloadSub}`, req);
-  if(downloadSub.indexOf('/') !== -1) {
+  if (downloadSub.indexOf('/') !== -1) {
     await updateTreeCache(downloadSub.substring(0, downloadSub.lastIndexOf('/')), req);
   }
+
   res.json({
     failedLinks,
     successCount: completedCount - failedLinks.length,
@@ -412,6 +457,7 @@ app.post("/downloadFromText", async (req, res) => {
     ignoreLinks,
   });
 });
+
 
 // 上传文件并生成缩略图
 app.post("/upload", upload.single("file"), async (req, res) => {
