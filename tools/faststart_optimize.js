@@ -7,8 +7,12 @@ import path from "path";
 
 const execAsync = promisify(exec);
 const THRESHOLD = 1024 * 1024;
+const maxSize = 6 * 1024 * 1024 * 1024; // 最大允许处理的文件大小 6 GB
 
-// 判断是否支持 GPU 加速
+// 支持的文件扩展名
+const videoExtensions = ['mp4', 'mkv', 'avi', 'mov', 'wmv', 'flv', 'webm'];
+
+// 检查 GPU 加速是否支持
 const gpuAccelSupported = async () => {
   try {
     await execAsync('ffmpeg -encoders 2>&1 | grep "h264_nvenc"');
@@ -19,6 +23,49 @@ const gpuAccelSupported = async () => {
 };
 
 const temp_file_xxx = ".tempftf";
+
+// 转换为 MP4 格式
+const convertToMp4 = async (file) => {
+  const fileDir = path.dirname(file);
+  const fileName = path.basename(file);
+  const outputFileName = `${fileName.replace(/\.[^.]+$/, "")}.mp4`;
+  const outputPath = path.join(fileDir, outputFileName);
+
+  console.log(`开始转换文件: ${file} 为 MP4 格式`);
+
+  try {
+    const command = `cd "${fileDir}" && ffmpeg -i "${fileName}" "${outputFileName}"`;
+    await new Promise((resolve, reject) => {
+      const ffmpegProcess = spawn(command, { shell: true });
+
+      ffmpegProcess.stderr.on("data", (data) => {
+        console.log(`stderr: ${data}`);
+      });
+
+      ffmpegProcess.on("close", async (code) => {
+        if (code === 0) {
+          console.log(chalk.green(`转换成功: ${outputPath}`));
+           // 删除原始文件
+           try {
+            await fs.unlink(file);
+            console.log(chalk.green(`已删除原始非 MP4 文件: "${file}"`));
+          } catch (deleteError) {
+            console.error(chalk.red(`删除原始文件失败: ${deleteError}`));
+          }
+          resolve(outputPath);
+        } else {
+          console.error(chalk.red(`转换失败，FFmpeg 结束时状态码为 ${code}`));
+          reject(new Error(`FFmpeg 结束时状态码为 ${code}`));
+        }
+      });
+    });
+
+    return outputPath;
+  } catch (error) {
+    console.error(chalk.red(`转换文件时出错: ${error}`));
+    throw error;
+  }
+};
 
 // 处理单个文件
 const processFile = async (file, useGpu) => {
@@ -33,22 +80,18 @@ const processFile = async (file, useGpu) => {
       const { stdout } = await execAsync(`cd "${fileDir}" && AtomicParsley "${fileName}" -T`);
       const moovPosition = stdout.match(/Atom moov.*?@ (\d+)/);
       const moovOffset = moovPosition ? parseInt(moovPosition[1], 10) : Infinity;
-  
+
       console.log(`moov atom 位置: ${moovPosition ? moovPosition[0] : "未知"}`);
-  
+
       if (moovOffset <= THRESHOLD) {
         console.log(chalk.yellow(`无需修改: ${file}`));
         return;
       }
-    } catch(e) {
-      console.log(chalk.red(`moov atom 位置检测出错: ${e}`))
+    } catch (e) {
+      console.log(chalk.red(`moov atom 位置检测出错: ${e}`));
     }
 
-    console.log(
-      chalk.blue(
-        `${new Date().toLocaleString()} 正在处理中 (将 moov atom 移动到头部)...`
-      )
-    );
+    console.log(chalk.blue(`${new Date().toLocaleString()} 正在处理中 (将 moov atom 移动到头部)...`));
 
     const command = useGpu
       ? `cd "${fileDir}" && ffmpeg -y -hwaccel cuda -i "${fileName}" -c:v h264_nvenc -movflags faststart -threads 8 "${outputFileName}"`
@@ -59,7 +102,6 @@ const processFile = async (file, useGpu) => {
 
       ffmpegProcess.stderr.on("data", (data) => {
         const stderrData = data.toString();
-
         if (/frame=\s*\d+/.test(stderrData)) {
           process.stdout.write(`\r处理进度: ${stderrData}`);
         }
@@ -69,11 +111,7 @@ const processFile = async (file, useGpu) => {
         if (code === 0) {
           try {
             await fs.rename(path.join(fileDir, outputFileName), file);
-            console.log(
-              chalk.green(
-                `\n${new Date().toLocaleString()} 已成功处理并替换: ${file}`
-              )
-            );
+            console.log(chalk.green(`\n${new Date().toLocaleString()} 已成功处理并替换: ${file}`));
             resolve();
           } catch (err) {
             console.error(chalk.red(`重命名文件时出错: ${err}`));
@@ -115,74 +153,59 @@ try {
 }
 
 // 使用 glob 的 Promise 版本
-const findMp4Files = async (pattern) => {
+const findVideoFiles = async (pattern) => {
   console.log(`正在查找文件: ${pattern}`);
   const files = await glob(pattern, {});
-  const total = files.length;
-  console.log(`查找到 ${total} 个文件`);
-  const res = files.filter((file) => !file.endsWith(`${temp_file_xxx}.mp4`));
-  console.log(`排除了 ${total - res.length} 个临时文件`);
-  return res;
+  return files.filter((file) => !file.endsWith(`${temp_file_xxx}.mp4`));
 };
 
 // 主函数
 const main = async () => {
   try {
-    const maxSize = 6 * 1024 * 1024 * 1024;
-    // 遍历目标文件夹及其子文件夹下所有 mp4 文件
-    console.log("开始查找 MP4 文件...");
-    const files = await findMp4Files(`${normalizedTargetDir.replace(/\\/g, "/")}/**/*.mp4`);
-    console.log(`找到 ${files.length} 个 MP4 文件`);
+    // 查找所有视频文件（多种格式）
+    console.log("开始查找视频文件...");
+    const files = await findVideoFiles(`${normalizedTargetDir.replace(/\\/g, "/")}/**/*.{${videoExtensions.join(',')}}`);
+    console.log(`找到 ${files.length} 个视频文件`);
 
     // 检查是否支持 GPU 加速
     const useGpu = await gpuAccelSupported();
     console.log(`GPU 加速支持: ${useGpu}`);
 
-    let skippedFiles = []; // 用于记录跳过的文件
+    let skippedFiles = [];
     let i = 0;
     for (const file of files) {
       try {
         console.log(chalk.rgb(255, 0, 255)(`第${++i}/${files.length}个文件: ${file}`));
-        const stats = await fs.stat(file); // 获取文件信息
+        const stats = await fs.stat(file);
         const fileSizeInBytes = stats.size;
 
         if (fileSizeInBytes > maxSize) {
-          // 文件大小超过 6 GB
-          console.log(
-            chalk.yellow(
-              `文件过大 (${(fileSizeInBytes / (1024 * 1024 * 1024)).toFixed(
-                2
-              )} GB)，跳过处理`
-            )
-          );
-          skippedFiles.push(file); // 记录跳过的文件
-          console.log("\n");
+          console.log(chalk.yellow(`文件过大，跳过: ${file}`));
+          skippedFiles.push(file);
           continue;
         }
 
-        await processFile(file, useGpu);
+        let fileToProcess = file;
+
+        // 如果文件不是 MP4，则先转换为 MP4
+        if (!file.endsWith(".mp4")) {
+          fileToProcess = await convertToMp4(file);
+        }
+
+        await processFile(fileToProcess, useGpu);
       } catch (error) {
-        console.error(chalk.red(`文件 "${file}" 不存在或不可读: ${error}`));
+        console.error(chalk.red(`处理文件时出错: ${error}`));
       }
-      console.log("\n");
     }
 
-    // 汇总跳过的文件信息
     if (skippedFiles.length > 0) {
-      console.log(
-        chalk.yellow(
-          `以下文件由于大小超过 ${maxSize / (1024 * 1024 * 1024)} GB 而被跳过:`
-        )
-      );
-      skippedFiles.forEach((file) => {
-        console.log(`- ${file}`);
-      });
+      console.log(chalk.yellow(`以下文件由于大小超过限制而跳过:`));
+      skippedFiles.forEach((file) => console.log(`- ${file}`));
     }
-    console.log("\n");
 
     console.log(chalk.green("所有文件处理完成"));
   } catch (error) {
-    console.error(chalk.red(`Error finding .mp4 files: ${error}`));
+    console.error(chalk.red(`查找文件时出错: ${error}`));
   }
 };
 

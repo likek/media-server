@@ -256,7 +256,7 @@ function renderFiles(files) {
         e.stopPropagation();
         loadMedia(file.path);
       });
-    } else if (["mp4", "webm", "ogg", "ts"].includes(fileExt)) {
+    } else if (["mp4", "webm", "ogg", "ts", "avi"].includes(fileExt)) {
       const video = document.createElement("video");
       if (file.thumbnail) {
         video.poster = baseServer + file.thumbnail;
