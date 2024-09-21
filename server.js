@@ -183,6 +183,31 @@ wss.on("connection", async (ws, req) => {
     console.error("WebSocket error:", err);
   });
 
+  ws.on("message", async (message) => {
+    if (Buffer.isBuffer(message)) {
+        message = message.toString();
+    }
+    
+    try {
+        const parsedMessage = JSON.parse(message);
+        console.log("Received ws message:", parsedMessage);
+        switch (parsedMessage.event) {
+            case "location":
+              const { latitude, longitude } = parsedMessage.data;
+              writeWsLog({
+                userId,
+                userIp: ipAddress,
+                userRegion: region,
+                action: parsedMessage.event,
+                location: `${latitude},${longitude}`
+              });
+              break;
+        }
+    } catch (err) {
+        console.error("Failed to parse message:", err);
+    }
+  });
+
   try {
     region = reqInfo?.region || "unknown";
   } catch (e) {

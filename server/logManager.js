@@ -58,8 +58,8 @@ const writeRequestLogToDB = (logData) => {
   const writeWsLog = (logData) => {
     const query = `
       INSERT INTO logs_ws (
-        time, action, userId, userIp, userRegion
-      ) VALUES (?, ?, ?, ?, ?)
+        time, action, userId, userIp, userRegion, location
+      ) VALUES (?, ?, ?, ?, ?, ?)
     `;
   
     const values = [
@@ -68,6 +68,7 @@ const writeRequestLogToDB = (logData) => {
       logData.userId || "",
       logData.userIp || "",
       logData.userRegion || "",
+      logData.location || "",
     ];
   
     db.run(query, values, (err) => {

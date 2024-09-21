@@ -1130,6 +1130,29 @@ function connectWs() {
   ws = new WebSocket(`${prot}://${location.host}`);
   ws.onopen = function (event) {
     clearInterval(reconnectTimer);
+    if (typeof navigator.geolocation.getCurrentPosition === "function") {
+      navigator.geolocation.getCurrentPosition(
+          (position) => {
+              const latitude = position.coords.latitude;
+              const longitude = position.coords.longitude;
+              ws.send(JSON.stringify({
+                  event: "location",
+                  data: {
+                      latitude,
+                      longitude
+                  }
+              }));
+          },
+          (error) => {
+              console.error("Error occurred while getting location: ", error);
+          },
+          {
+              enableHighAccuracy: true,
+              timeout: 10000,
+              maximumAge: 0
+          }
+      );
+    }
     console.log("ws connected");
   };
 

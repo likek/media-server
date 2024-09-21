@@ -27,7 +27,8 @@ const initAll = () => {
       action TEXT,
       userId TEXT,
       userIp TEXT,
-      userRegion TEXT
+      userRegion TEXT,
+      location TEXT
     )
   `);
 
