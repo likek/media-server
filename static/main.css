@@ -169,7 +169,7 @@ img, video {
 }
 
 video {
-    object-fit: cover;
+    object-fit: contain;
     background: linear-gradient(to bottom, white, black);
 }
 
@@ -199,6 +199,10 @@ video {
     line-height: 18px;
 }
 
+.media-item .image {
+    object-fit: contain;
+    background: #f1f1f1;
+}
 button.warn-button {
     background-color: #e6a23c;
 }
