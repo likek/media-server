@@ -6,6 +6,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import useragent from "useragent";
 import ffmpeg from "fluent-ffmpeg";
+import puppeteer from 'puppeteer';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -121,10 +122,56 @@ async function generateThumbnail(filePath, thumbnailPath) {
     // .run();
   });
 }
+
+
+let browser;
+let page;
+
+async function get51PageInfo(pageUrl) {
+  if (!browser) {
+    browser = await puppeteer.launch();
+  }
+  if (!page) {
+    page = await browser.newPage();
+  }
+  await page.goto(pageUrl, { waitUntil: 'networkidle2' });
+
+  // 等待动态内容加载完成
+  await page.waitForSelector('img[data-xuid]', { timeout: 10000 });
+
+  const data = await page.evaluate(() => {
+    // 获取页面标题
+    const title = document.querySelector('h1.post-title').innerText;
+    const sanitizedTitle = title.replace(/[<>:"/\\|?*]+/g, '_'); // 替换非法字符
+    // 提取图片链接
+    const imgElements = Array.from(document.querySelectorAll('img[data-xuid]'));
+    const imgLinks = imgElements.map(img => img.src)
+    
+    // 提取视频链接
+    const videoElements = Array.from(document.querySelectorAll('.dplayer[data-config]'));
+    const videoLinks = videoElements.map(video => {
+        try {
+            const config = JSON.parse(video.dataset.config);
+            return config.video?.url;
+        } catch {
+            return null;
+        }
+    }).filter(url => url);
+
+    return {
+      title: sanitizedTitle,
+      imgLinks, 
+      videoLinks
+    };
+});
+
+return data
+}
   
   export {
     normalizeIp,
     getRequestInfo,
     isVideoByName,
-    generateThumbnail
+    generateThumbnail,
+    get51PageInfo
   }

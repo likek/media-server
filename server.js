@@ -18,7 +18,7 @@ import WebSocket, { WebSocketServer } from "ws";
 import db, { serializeDb } from "./server/dbserialize.js";
 import { exec } from "child_process";
 import compression from "compression";
-import { getRequestInfo, normalizeIp, generateThumbnail } from "./server/utils/index.js";
+import { getRequestInfo, normalizeIp, generateThumbnail, get51PageInfo } from "./server/utils/index.js";
 import { limiter } from "./server/middleware/limiter.js";
 import { checkBlacklist } from "./server/middleware/blackList.js";
 import { checkPermissions } from "./server/middleware/apiPermission.js";
@@ -26,6 +26,8 @@ import { writeRequestLog, writeWsLog, writeFileAccessedLog } from "./server/logM
 import folderLockHandler from "./server/middleware/folderLockManager.js";
 import { updateCache, invalidateCache, searchFromCache, getFromCache } from "./server/fileManager.js";
 import { UPLOAD_DIR, THUMB_DIR } from "./serverConfig.js";
+// import axios from "axios";
+// import * as cheerio from 'cheerio';
 
 serializeDb();
 
@@ -281,52 +283,10 @@ async function tryRegister(req, res) {
   return userId;
 }
 
-app.get("/register", async (req, res) => {
-  await tryRegister(req, res);
-  res.send({ success: true });
-});
-
-app.post("/users", async (req, res) => {
-  try {
-    const page = req.body.page || 1;
-    const limit = req.body.limit || 10;
-    const offset = (page - 1) * limit;
-
-    // 查询总记录数
-    const countQuery = `SELECT COUNT(*) AS total FROM userInfo`;
-    db.get(countQuery, [], (err, row) => {
-      if (err) {
-        console.error("Error executing count query:", err);
-        return res.status(500).send({ message: "Database error" });
-      }
-
-      // 分页查询
-      const query = `
-                SELECT * FROM userInfo
-                ORDER BY update_time DESC
-                LIMIT ? OFFSET ?
-            `;
-
-      db.all(query, [limit, offset], (err, rows) => {
-        if (err) {
-          console.error("Error executing query:", err);
-          return res.status(500).send({ message: "Database error" });
-        }
-
-        // 返回结果包括数据和总数
-        res.json({ data: rows, count: row.total });
-      });
-    });
-  } catch (error) {
-    console.error("Error handling request:", error);
-    res.status(500).send({ message: "Internal server error" });
-  }
-});
-
-app.post("/downloadFromText", async (req, res) => {
-  const text = req.body.text || "";
-  const folder = req.body.folder;
-
+async function downloadAllMediaByLinks(text, folder, successItemCb) {
+  console.log('开始下载：')
+  console.log(text)
+  console.log(folder)
   // Match HTTP links
   const urlRegex = /https?:\/\/[^\s]+/g;
   const allLinks = text.match(urlRegex) || [];
@@ -348,10 +308,14 @@ app.post("/downloadFromText", async (req, res) => {
   }
 
   if (links.length === 0 && base64Images.length === 0) {
-    return res.status(400).json({ error: "没有找到任何有效的链接", ignoreLinks });
+    return Promise.reject({
+      code: 400,
+      msg: "没有找到任何有效的链接",
+      ignoreLinks
+    })
   }
 
-  console.log("开始批量下载资源: ", links, base64Images);
+  console.log("开始批量下载资源: ", links, `${base64Images.length}个base64图片`);
 
   let downloadRoot = "";
   let downloadSub = "";
@@ -412,20 +376,12 @@ app.post("/downloadFromText", async (req, res) => {
         }
         completedCount++;
 
-        // 通知前端下载进度
-        broadcastMessage(
-          {
-            event: "downloadProgress",
-            data: {
-              link,
-              progress: completedCount,
-              total: links.length + base64Images.length,
-              state: failed ? "failed" : "success",
-            },
-          },
-          req,
-          true
-        );
+        successItemCb({
+          link,
+          progress: completedCount,
+          total: links.length + base64Images.length,
+          state: failed ? "failed" : "success",
+        })
         resolve();
       });
     });
@@ -446,21 +402,13 @@ app.post("/downloadFromText", async (req, res) => {
           console.log(`${chalk.green("保存成功")}: ${filePath}`);
         }
         completedCount++;
-
-        // 通知前端保存进度
-        broadcastMessage(
-          {
-            event: "downloadProgress",
-            data: {
-              link: fileName,
-              progress: completedCount,
-              total: links.length + base64Images.length,
-              state: err ? "failed" : "success",
-            },
-          },
-          req,
-          true
-        );
+        
+        successItemCb({
+          link: fileName,
+          progress: completedCount,
+          total: links.length + base64Images.length,
+          state: err ? "failed" : "success",
+        })
         resolve();
       });
     });
@@ -468,6 +416,138 @@ app.post("/downloadFromText", async (req, res) => {
 
   // 并行下载所有 HTTP 链接和保存 base64 图片
   await Promise.all([...links.map(downloadLink), ...base64Images.map(saveBase64Image)]);
+  return Promise.resolve({
+    downloadRoot, downloadSub, completedCount, ignoreLinks, failedLinks
+  });
+}
+
+app.get("/register", async (req, res) => {
+  await tryRegister(req, res);
+  res.send({ success: true });
+});
+
+app.post("/users", async (req, res) => {
+  try {
+    const page = req.body.page || 1;
+    const limit = req.body.limit || 10;
+    const offset = (page - 1) * limit;
+
+    // 查询总记录数
+    const countQuery = `SELECT COUNT(*) AS total FROM userInfo`;
+    db.get(countQuery, [], (err, row) => {
+      if (err) {
+        console.error("Error executing count query:", err);
+        return res.status(500).send({ message: "Database error" });
+      }
+
+      // 分页查询
+      const query = `
+                SELECT * FROM userInfo
+                ORDER BY update_time DESC
+                LIMIT ? OFFSET ?
+            `;
+
+      db.all(query, [limit, offset], (err, rows) => {
+        if (err) {
+          console.error("Error executing query:", err);
+          return res.status(500).send({ message: "Database error" });
+        }
+
+        // 返回结果包括数据和总数
+        res.json({ data: rows, count: row.total });
+      });
+    });
+  } catch (error) {
+    console.error("Error handling request:", error);
+    res.status(500).send({ message: "Internal server error" });
+  }
+});
+
+app.post("/downloadFromText", async (req, res) => { 
+  const folder = req.body.folder;
+  let text = req.body.text || "";
+  const successItemCb = data => {
+    // 单个文件下载成功，通知前端下载进度
+    broadcastMessage(
+      {
+        event: "downloadProgress",
+        data
+      },
+      req,
+      true
+    );
+  }
+
+  const failedCb = (e) => {
+    const { code, msg, ignoreLinks } = e
+    // 失败
+    return res.status(code || 400).json({ error: msg || e, ignoreLinks: ignoreLinks || [] });
+  }
+
+  const reg = /^\W*51[:：]\W*/
+  if (reg.test(text)) {
+    let completedCountAll = 0;
+    let ignoreLinksAll = []
+    let failedLinksAll = [];
+    let downloadRootAll = ''
+    let downloadSubAll = []
+    text = text.replace(reg, '')
+    const pageUrlList = text.split('\n')
+    for (const pageUrl of pageUrlList) {
+      // 使用cheerio获取title, document.querySelector('h1.post-title').innerText
+      // const { data: pageData } = await axios.get(pageUrl)
+      // const $ = cheerio.load(pageData)
+      // const title = $('h1.post-title').text()
+      // const inputText = $('img[data-xuid]').map((i, item) => item.attribs.src).toArray().join('\n') + '\n' + $('.dplayer[data-config]').map((i, item) => JSON.parse(item?.dataset?.config || "{}").video?.url).toArray().join('\n')
+      const pageInfo = await get51PageInfo(pageUrl);
+      const title = pageInfo.title
+      const inputText = [...pageInfo.imgLinks, ...pageInfo.videoLinks].join('\n')
+      
+      const targetFolder = `${folder}/${title}`;
+      let result;
+      try {
+        result = await downloadAllMediaByLinks(inputText, targetFolder, successItemCb)
+      } catch(e) {
+        failedCb(e)
+        return
+      }
+      // 当前页面 所有文件下载成功
+      const { downloadRoot, downloadSub, completedCount, ignoreLinks, failedLinks } = result
+      await updateTreeCache(`${downloadRoot}/${downloadSub}`, req)
+      if (downloadSub.indexOf('/') !== -1) {
+        await updateTreeCache(downloadSub.substring(0, downloadSub.lastIndexOf('/')), req);
+      }
+      downloadRootAll = downloadRoot
+      downloadSubAll.push(downloadSub)
+      completedCountAll += completedCount
+      ignoreLinksAll = ignoreLinksAll.concat(ignoreLinks)
+      failedLinksAll = failedLinksAll.concat(failedLinks)
+    }
+
+    const downloadRoot = downloadRootAll
+    const downloadSub = downloadSubAll[0]
+    // 所有页面，所有文件下载成功
+    await updateTreeCache(downloadRoot, req);
+    res.json({
+      failedLinks: failedLinksAll,
+      successCount: completedCountAll - failedLinksAll.length,
+      downloadRoot,
+      downloadSub,
+      ignoreLinks: ignoreLinksAll,
+    });
+
+    return
+  }
+  
+  let result;
+  try {
+    result = await downloadAllMediaByLinks(text, folder, successItemCb)
+  } catch(e) {
+    failedCb(e)
+    return
+  }
+  // 所有文件下载成功
+  const { downloadRoot, downloadSub, completedCount, ignoreLinks, failedLinks } = result
   await updateTreeCache(downloadRoot, req);
   await updateTreeCache(`${downloadRoot}/${downloadSub}`, req);
   if (downloadSub.indexOf('/') !== -1) {
