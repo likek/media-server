@@ -284,9 +284,7 @@ async function tryRegister(req, res) {
 }
 
 async function downloadAllMediaByLinks(text, folder, successItemCb) {
-  console.log('开始下载：')
-  console.log(text)
-  console.log(folder)
+  console.log('开始下载：', text.length > 300 ? `${text.slice(0, 300)}......` : text, folder)
   // Match HTTP links
   const urlRegex = /https?:\/\/[^\s]+/g;
   const allLinks = text.match(urlRegex) || [];
