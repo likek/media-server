@@ -25,7 +25,7 @@ import { checkPermissions } from "./server/middleware/apiPermission.js";
 import { writeRequestLog, writeWsLog, writeFileAccessedLog } from "./server/logManager.js";
 import folderLockHandler from "./server/middleware/folderLockManager.js";
 import { updateCache, invalidateCache, searchFromCache, getFromCache } from "./server/fileManager.js";
-import { UPLOAD_DIR, THUMB_DIR } from "./serverConfig.js";
+import { UPLOAD_DIR, THUMB_DIR, UPLOAD_ROUTE, THUMB_ROUTE } from "./serverConfig.js";
 // import axios from "axios";
 // import * as cheerio from 'cheerio';
 
@@ -107,7 +107,7 @@ app.use(checkPermissions);
 
 app.use((req, res, next) => {
   const path = decodeURIComponent(req.path);
-  if (path.startsWith("/uploads/")) {
+  if (path.startsWith(`${UPLOAD_ROUTE}/`)) {
     const userIp = normalizeIp(req.clientIp || req.ip);
     console.log(
       `File accessed: ${path}, userId: `,
@@ -146,8 +146,8 @@ function broadcastMessage(message, req, onlySelf = false) {
   });
 }
 
-app.use("/uploads", express.static(UPLOAD_DIR));
-app.use("/thumbnails", express.static(THUMB_DIR));
+app.use(`${UPLOAD_ROUTE}`, express.static(UPLOAD_DIR));
+app.use(`${THUMB_ROUTE}`, express.static(THUMB_DIR));
 app.use(express.json({ limit: "3mb" }));
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, "static")));
@@ -327,7 +327,7 @@ async function downloadAllMediaByLinks(text, folder, successItemCb) {
       .toLocaleString()
       .replace(/[:.\/\s]/g, "_")}_${uuidv4()}`;
   }
-  downloadDir = path.join(__dirname, "uploads", downloadRoot, downloadSub);
+  downloadDir = path.join(UPLOAD_DIR, downloadRoot, downloadSub);
   if (!fs.existsSync(downloadDir)) {
     fs.mkdirSync(downloadDir, { recursive: true });
   }
@@ -581,16 +581,16 @@ app.post("/upload", upload.single("file"), async (req, res) => {
       await generateThumbnail(filePath, thumbnailPath);
       await updateTreeCache(currentPath, req); // 更新缓存
       res.send({
-        filename: "/uploads/" + currentPath + "/" + filename,
-        thumbnail: "/thumbnails/" + currentPath + "/" + filename + ".png",
+        filename: `${UPLOAD_ROUTE}/` + currentPath + "/" + filename,
+        thumbnail: `${THUMB_ROUTE}/` + currentPath + "/" + filename + ".png",
       });
     } catch (err) {
       console.error("Error generating thumbnail:", err);
-      res.send({ filename: "/uploads/" + currentPath + "/" + filename });
+      res.send({ filename: `${UPLOAD_ROUTE}/` + currentPath + "/" + filename });
     }
   } else {
     await updateTreeCache(currentPath, req); // 更新缓存
-    res.send({ filename: "/uploads/" + currentPath + "/" + filename });
+    res.send({ filename: `${UPLOAD_ROUTE}/` + currentPath + "/" + filename });
   }
 });
 
@@ -725,10 +725,9 @@ app.post("/updateCache", async (req, res) => {
 app.post("/move", (req, res) => {
   const { filename, targetFolder, currentPath } = req.body;
 
-  const sourcePath = path.join(__dirname, "uploads", currentPath, filename);
+  const sourcePath = path.join(UPLOAD_DIR, currentPath, filename);
   const destinationPath = path.join(
-    __dirname,
-    "uploads",
+    UPLOAD_DIR,
     targetFolder,
     filename
   );
@@ -739,7 +738,7 @@ app.post("/move", (req, res) => {
       .json({ message: "Source file/folder does not exist" });
   }
 
-  if (!fs.existsSync(path.join(__dirname, "uploads", targetFolder))) {
+  if (!fs.existsSync(path.join(UPLOAD_DIR, targetFolder))) {
     return res.status(400).json({ message: "Target folder does not exist" });
   }
 
