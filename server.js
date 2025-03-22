@@ -122,12 +122,12 @@ app.use(folderLockHandler);
 
 wsInit(httpServer);
 
-app.get("/register", async (req, res) => {
+app.get("/api/register", async (req, res) => {
   await tryRegister(req, res);
   res.send({ success: true });
 });
 
-app.post("/users", async (req, res) => {
+app.post("/api/users", async (req, res) => {
   try {
     const page = req.body.page || 1;
     const limit = req.body.limit || 10;
@@ -164,7 +164,7 @@ app.post("/users", async (req, res) => {
   }
 });
 
-app.post("/downloadFromText", async (req, res) => { 
+app.post("/api/downloadFromText", async (req, res) => { 
   const folder = req.body.folder;
   let text = req.body.text || "";
   const successItemCb = data => {
@@ -267,7 +267,7 @@ app.post("/downloadFromText", async (req, res) => {
 
 
 // 上传文件并生成缩略图
-app.post("/upload", upload.single("file"), async (req, res) => {
+app.post("/api/upload", upload.single("file"), async (req, res) => {
   const currentPath = req.query.path || "";
   const filename = Buffer.from(req.file.filename, "latin1").toString("utf-8");
   const filePath = path.join(UPLOAD_DIR, currentPath, filename);
@@ -299,7 +299,7 @@ app.post("/upload", upload.single("file"), async (req, res) => {
 });
 
 // 获取文件列表
-app.post("/files", async (req, res) => {
+app.post("/api/files", async (req, res) => {
   const reqPath = req.body.path || "";
   const page = parseInt(req.body.page) || 0;
   const pageSize = parseInt(req.body.pageSize); // 每页文件数
@@ -328,7 +328,7 @@ app.post("/files", async (req, res) => {
   }
 });
 
-app.post("/search", (req, res) => {
+app.post("/api/search", (req, res) => {
   let { query, path: searchPath } = req.body;
 
   if (!query) {
@@ -343,25 +343,26 @@ app.post("/search", (req, res) => {
 });
 
 // 删除文件或文件夹
-app.post("/delete", async (req, res) => {
-  const { filename, path: currentPath, type } = req.body;
-  const filePath = path.join(UPLOAD_DIR, currentPath, filename);
+app.post("/api/delete", async (req, res) => {
+  const { path: filepath, type } = req.body;
+  const fileFullPath = path.join(UPLOAD_DIR, filepath);
 
-  const deleteRecursively = async (filePath) => {
-    if (fs.lstatSync(filePath).isDirectory()) {
-      fs.readdirSync(filePath).forEach((file, index) => {
-        const curPath = path.join(filePath, file);
+  const deleteRecursively = async (fileFullPath) => {
+    if (fs.lstatSync(fileFullPath).isDirectory()) {
+      fs.readdirSync(fileFullPath).forEach((file, index) => {
+        const curPath = path.join(fileFullPath, file);
         deleteRecursively(curPath);
       });
-      fs.rmdirSync(filePath);
+      fs.rmdirSync(fileFullPath);
     } else {
-      fs.unlinkSync(filePath);
+      fs.unlinkSync(fileFullPath);
     }
   };
 
   try {
-    await deleteRecursively(filePath);
-    await updateTreeCache(currentPath, req); // 更新缓存
+    await deleteRecursively(fileFullPath);
+    const parentPath = path.dirname(`/${filepath}`)
+    await updateTreeCache(parentPath, req); // 更新缓存
     res.send({ message: `${type} deleted successfully` });
   } catch (err) {
     console.error(`Error deleting ${type}:`, err);
@@ -370,7 +371,7 @@ app.post("/delete", async (req, res) => {
 });
 
 // 新建文件夹
-app.post("/createFolder", (req, res) => {
+app.post("/api/createFolder", (req, res) => {
   const { path: currentPath, folderName } = req.body;
   const folderPath = path.join(UPLOAD_DIR, currentPath, folderName);
 
@@ -391,10 +392,12 @@ app.post("/createFolder", (req, res) => {
 });
 
 // 重命名文件或文件夹
-app.post("/rename", (req, res) => {
-  const { path: currentPath, oldName, newName, type } = req.body;
-  const oldPath = path.join(UPLOAD_DIR, currentPath, oldName);
-  const newPath = path.join(UPLOAD_DIR, currentPath, newName);
+app.post("/api/rename", (req, res) => {
+  const { sourcePath, newName, type } = req.body;
+  const parentPath = path.dirname(`/${sourcePath}`);
+
+  const oldPath = path.join(UPLOAD_DIR, sourcePath);
+  const newPath = path.join(UPLOAD_DIR, parentPath, newName);
 
   if (fs.existsSync(newPath)) {
     return res
@@ -408,14 +411,14 @@ app.post("/rename", (req, res) => {
       return res.status(500).send({ message: `Failed to rename ${type}` });
     }
 
-    invalidateCache(`${currentPath}/${oldName}`); // 如果rename的是文件夹，则该文件夹对应的缓存不应该再继续存在
-    await updateTreeCache(currentPath, req); // 更新缓存
+    invalidateCache(sourcePath); // 如果rename的是文件夹，则该文件夹对应的缓存不应该再继续存在
+    await updateTreeCache(parentPath, req); // 更新缓存
 
     res.send({ message: `${type} renamed successfully` });
   });
 });
 
-app.post("/updateCache", async (req, res) => {
+app.post("/api/updateCache", async (req, res) => {
   try {
     const currentPath = req.body.path || "";
     await updateTreeCache(currentPath, req);
@@ -426,40 +429,41 @@ app.post("/updateCache", async (req, res) => {
   }
 });
 
-app.post("/move", (req, res) => {
-  const { filename, targetFolder, currentPath } = req.body;
+app.post("/api/move", (req, res) => {
+  const { targetFolder, sourcePath } = req.body;
 
-  const sourcePath = path.join(UPLOAD_DIR, currentPath, filename);
+  const filename = path.basename(sourcePath);
+  const sourceFullPath = path.join(UPLOAD_DIR, sourcePath);
   const destinationPath = path.join(
     UPLOAD_DIR,
     targetFolder,
     filename
   );
 
-  if (!fs.existsSync(sourcePath)) {
+  if (!fs.existsSync(sourceFullPath)) {
     return res
       .status(400)
-      .json({ message: "Source file/folder does not exist" });
+      .json({ message: `Source ${sourceFullPath} does not exist` });
   }
 
   if (!fs.existsSync(path.join(UPLOAD_DIR, targetFolder))) {
     return res.status(400).json({ message: "Target folder does not exist" });
   }
 
-  fs.rename(sourcePath, destinationPath, async (err) => {
+  fs.rename(sourceFullPath, destinationPath, async (err) => {
     if (err) {
       console.error("Error moving file/folder:", err);
       return res.status(500).json({ message: "Error moving file/folder" });
     }
 
-    invalidateCache(`${currentPath}/${filename}`); // 如果是文件夹，则该文件夹对应的缓存不应该再继续存在
-    await updateTreeCache(currentPath, req); // 更新缓存
+    invalidateCache(sourcePath); // 如果是文件夹，则该文件夹对应的缓存不应该再继续存在
+    await updateTreeCache(path.dirname(`/${sourcePath}`), req); // 更新缓存
     await updateTreeCache(targetFolder.replace(/^\/+/, ""), req); // 更新缓存
     res.json({ success: true });
   });
 });
 
-app.post("/convert", (req, res) => {
+app.post("/api/convert", (req, res) => {
   const { inputFilePath, outputFilePath } = req.body;
 
   const absoluteInputPath = path.join(UPLOAD_DIR, inputFilePath);
@@ -496,7 +500,7 @@ app.post("/convert", (req, res) => {
     });
 });
 
-app.post("/unzip", async (req, res) => {
+app.post("/api/unzip", async (req, res) => {
   const { zipFilePath } = req.body;
   const currentPath = path.dirname(zipFilePath);
   const absoluteZipPath = path.join(UPLOAD_DIR, zipFilePath);
@@ -525,7 +529,7 @@ app.post("/unzip", async (req, res) => {
   }
 });
 
-app.post("/readTextFile", (req, res) => {
+app.post("/api/readTextFile", (req, res) => {
   const { filePath, start = 0, numLines = 50, encoding = "utf8" } = req.body;
   const absoluteFilePath = path.join(UPLOAD_DIR, filePath);
 
@@ -563,7 +567,7 @@ app.post("/readTextFile", (req, res) => {
   });
 });
 
-app.post("/convertTxtEncoding", (req, res) => {
+app.post("/api/convertTxtEncoding", (req, res) => {
   const { filePath } = req.body;
   const absoluteFilePath = path.join(UPLOAD_DIR, filePath);
 
@@ -572,6 +576,11 @@ app.post("/convertTxtEncoding", (req, res) => {
   }
 
   convertTxtEncoding(absoluteFilePath, res);
+});
+
+// 处理所有非API路由，返回index.html，支持前端路由
+app.get(/^\/(?!api|uploads|thumbnails).*/, (req, res) => {
+  res.sendFile(path.join(__dirname, "static", "index.html"));
 });
 
 // 根路径返回 index.html

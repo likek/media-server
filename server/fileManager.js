@@ -2,7 +2,7 @@
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import { UPLOAD_DIR, THUMB_DIR, UPLOAD_ROUTE, THUMB_ROUTE } from "../serverConfig.js";
+import { UPLOAD_DIR, THUMB_DIR } from "../serverConfig.js";
 import { isVideoByName, generateThumbnail } from "./utils/index.js";
 import { wsBroadcastMessage } from "./websocketManager.js";
 
@@ -35,6 +35,7 @@ const updateCache = async (dirPath, req) => {
   if (dirPath.startsWith("/")) {
     dirPath = dirPath.slice(1);
   }
+  console.log('updateCache:::::', dirPath)
   const oldFileInfosStr = JSON.stringify(cache[dirPath] || []);
   const fullPath = path.join(UPLOAD_DIR, dirPath);
   const files = await new Promise((resolve, reject) => {
