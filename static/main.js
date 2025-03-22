@@ -20,18 +20,6 @@ let ws;
 let reconnectInterval = 3000;
 let reconnectTimer;
 
-function getCache(path) {
-  return fileCache["uploads/" + path];
-}
-
-function setCache(path, value) {
-  fileCache["uploads/" + path] = value;
-}
-
-function deleteCache(path) {
-  delete fileCache["uploads/" + path];
-}
-
 hideProgressBar();
 
 function goBackDir() {
@@ -109,7 +97,6 @@ async function updateCache() {
       body: JSON.stringify({ path: currentPath }),
     });
     if (response.status === 200) {
-      deleteCache(currentPath);
       loadMedia(currentPath);
       showToast("刷新数据成功", "success");
     } else {
@@ -125,51 +112,41 @@ async function updateCache() {
 async function loadMedia(path = "", password) {
   renderedFilesCount = 0;
   totalFiles = [];
+  try {
+    const response = await fetch(`${baseServerApi}/files`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ path, pw: password }),
+    });
+    const data = await response.json();
+    if (response.status === 200) {
+      totalFiles = data; // Cache the result
+      renderFiles(totalFiles.slice(0, pageSize)); // Render the first page
+      checkAndRenderInitialFiles();
+      updateCurrentPath(path);
+    } else if (response.status === 403) {
 
-  const cacheValue = getCache(path);
-  if (cacheValue) {
-    totalFiles = cacheValue;
-    renderFiles(totalFiles.slice(0, pageSize)); // Render the first page
-    checkAndRenderInitialFiles();
-    updateCurrentPath(path);
-  } else {
-    try {
-      const response = await fetch(`${baseServerApi}/files`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ path, pw: password }),
-      });
-      const data = await response.json();
-      if (response.status === 200) {
-        totalFiles = data; // Cache the result
-        setCache(path, data);
-        renderFiles(totalFiles.slice(0, pageSize)); // Render the first page
-        checkAndRenderInitialFiles();
-        updateCurrentPath(path);
-      } else if (response.status === 403) {
-
-        if (data.lock) {
-          const pw = prompt("请输入文件夹密码");
-          if(pw === null) {
-            return;
-          }
-          if (!pw) {
-            showToast("密码不能为空", "warn");
-          } else {
-            loadMedia(path, pw);
-          }
-        } else if(data.black_time_left) {
-          window.location.reload();
+      if (data.lock) {
+        const pw = prompt("请输入文件夹密码");
+        if(pw === null) {
+          return;
         }
-      } else {
-        showToast(data.message, "warn");
+        if (!pw) {
+          showToast("密码不能为空", "warn");
+        } else {
+          loadMedia(path, pw);
+        }
+      } else if(data.black_time_left) {
+        window.location.reload();
       }
-    } catch (error) {
-      console.error("Error loading media:", error);
-      alert("Failed to load media.");
+    } else {
+      showToast(data.message, "warn");
     }
+  } catch (error) {
+    console.error("Error loading media:", error);
+    alert("Failed to load media.");
   }
 }
 
@@ -491,7 +468,6 @@ async function renameFile(filename, path, type) {
     });
     if (response.status === 200) {
       showToast("File renamed successfully.", "success");
-      deleteCache(path);
       loadMedia(path); // 重新加载媒体列表
     } else {
       const data = await response.json();
@@ -520,7 +496,6 @@ async function createFolder() {
     });
     if (response.status === 200) {
       showToast("Folder created successfully.", "success");
-      deleteCache(currentPath);
       loadMedia(currentPath); // 重新加载媒体列表
     } else {
       const data = await response.json();
@@ -567,7 +542,6 @@ async function deleteFile(filename, path, type) {
       });
       if (response.status === 200) {
         showToast("File deleted successfully.", "success");
-        deleteCache(currentPath);
         loadMedia(currentPath); // 重新加载媒体列表
       } else {
         const data = await response.json();
@@ -604,7 +578,6 @@ async function uploadFile() {
   xhr.addEventListener("load", async () => {
     if (xhr.status === 200) {
       showToast("File uploaded successfully.", "success");
-      deleteCache(currentPath);
       loadMedia(currentPath);
       fileInput.value = "";
       hideProgressBar();
@@ -651,8 +624,6 @@ function moveFileOrFolder(filename, targetFolder, currentPath) {
     .then((data) => {
       if (data.success) {
         showToast("File moved successfully", "success");
-        deleteCache(currentPath);
-        deleteCache(targetFolder.replace(/^\/+/, ""));
         loadMedia(currentPath);
       } else {
         showToast(data.message || "Error moving file", "error");
@@ -677,7 +648,6 @@ function convertFile(inputFilePath, outputFilePath) {
     .then((response) => response.json())
     .then((data) => {
       if (data.outputFilePath) {
-        deleteCache(currentPath);
         loadMedia(currentPath);
         showToast("File converted successfully.", "success");
       } else {
@@ -788,7 +758,6 @@ function unzipFile(zipFilePath) {
     .then((data) => {
       if (data.success) {
         showToast(data.message, "success");
-        deleteCache(currentPath);
         loadMedia(currentPath); // 更新显示
       } else {
         showToast(data.message, "warn");
@@ -1081,12 +1050,7 @@ function collectVideosFromText() {
           showToast(`提取成功${data.successCount}条, 失败${data.failedLinks.length}`, "success");
 
           console.log('执行成功:', data);
-          deleteCache(data.downloadRoot);
           const target = (`${data.downloadRoot}/${data.downloadSub}`).replace(/^\//, '')
-          deleteCache(target)
-          if(data.downloadSub.indexOf('/') !== -1) {
-            deleteCache(data.downloadSub.substring(0, data.downloadSub.lastIndexOf('/')));
-          }
           loadMedia(target)
         })
         return true;
@@ -1163,7 +1127,6 @@ function connectWs() {
         showToast(`第${data.data.progress}个资源提取${data.data.state === 'failed' ? '失败' : '成功'}`, `${data.data.state === 'failed' ? 'warn' : 'success'}`)
         break
       case "updateCache":
-        setCache(data.data.dirPath, data.data.fileInfos);
           if (currentPath === data.data.dirPath) {
             const refresh = confirm(
               "当前文件夹已更新，是否立即更新(不更新则可能产生[访问错误])?"
