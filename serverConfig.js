@@ -11,6 +11,7 @@ const UPLOAD_PATH = "../uploads";
 const THUMB_PATH = "../thumbnails";
 const UPLOAD_DIR = path.join(__dirname, `${UPLOAD_PATH}`);
 const THUMB_DIR = path.join(__dirname, THUMB_PATH);
+const TEMP_DIR = path.join(__dirname, "../temp");
 
 
 export {
@@ -19,7 +20,8 @@ export {
     UPLOAD_PATH as UPLOAD_DIR_NAME,
     THUMB_PATH as THUMB_DIR_NAME,
     UPLOAD_ROUTE,
-    THUMB_ROUTE
+    THUMB_ROUTE,
+    TEMP_DIR
 }
 export default {
     maxRequestsPerMinute: 6000,

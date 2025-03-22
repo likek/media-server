@@ -6,28 +6,26 @@ import fs from "fs";
 import path from "path";
 import ffmpeg from "fluent-ffmpeg";
 import extract from "extract-zip";
-import iconv from "iconv-lite";
-import jschardet from "jschardet";
 import readline from "readline";
 import { fileURLToPath } from "url";
 import requestIp from "request-ip";
 import cookieParser from "cookie-parser";
-import { v4 as uuidv4 } from "uuid";
 import { createServer } from "http";
-import WebSocket, { WebSocketServer } from "ws";
 import db, { serializeDb } from "./server/dbserialize.js";
-import { exec } from "child_process";
 import compression from "compression";
-import { getRequestInfo, normalizeIp, generateThumbnail, get51PageInfo } from "./server/utils/index.js";
+import { normalizeIp, generateThumbnail, get51PageInfo } from "./server/utils/index.js";
 import { limiter } from "./server/middleware/limiter.js";
 import { checkBlacklist } from "./server/middleware/blackList.js";
 import { checkPermissions } from "./server/middleware/apiPermission.js";
-import { writeRequestLog, writeWsLog, writeFileAccessedLog } from "./server/logManager.js";
+import { writeRequestLog, writeFileAccessedLog } from "./server/logManager.js";
 import folderLockHandler from "./server/middleware/folderLockManager.js";
-import { updateCache, invalidateCache, searchFromCache, getFromCache } from "./server/fileManager.js";
+import { invalidateCache, searchFromCache, getFromCache, updateTreeCache } from "./server/fileManager.js";
 import { UPLOAD_DIR, THUMB_DIR, UPLOAD_ROUTE, THUMB_ROUTE } from "./serverConfig.js";
-// import axios from "axios";
-// import * as cheerio from 'cheerio';
+import { pathNormalizer } from "./server/middleware/pathNormalizer.js";
+import { wsBroadcastMessage, wsInit } from "./server/websocketManager.js";
+import { convertTxtEncoding } from "./server/tools/textFileTools.js";
+import { tryRegister } from "./server/userManager.js";
+import { downloadAllMediaByLinks } from "./server/downloadManager.js";
 
 serializeDb();
 
@@ -39,9 +37,6 @@ const app = express();
 const PORT = 7777;
 
 const httpServer = createServer(app);
-const wss = new WebSocketServer({ server: httpServer });
-const clientsById = new Map();
-
 
 app.set("trust proxy", 1);
 
@@ -65,19 +60,6 @@ const storage = multer.diskStorage({
 });
 
 const upload = multer({ storage });
-
-function updateTreeCache(dirPath, req) {
-  return updateCache(dirPath, req).then((res) => {
-    const { updated, fileInfos } = res;
-    if (updated) {
-      broadcastMessage(
-        { event: "updateCache", data: { dirPath, fileInfos } },
-        req
-      );
-    }
-    return res
-  })
-}
 
 // 创建上传和缩略图目录
 if (!fs.existsSync(UPLOAD_DIR)) {
@@ -129,23 +111,6 @@ app.use((req, res, next) => {
   next();
 });
 
-function broadcastMessage(message, req, onlySelf = false) {
-  const userId = req.cookies.userId;
-  if (onlySelf) {
-    const userId = req.cookies.userId;
-    const client = clientsById.get(userId);
-    if (client && client.readyState === WebSocket.OPEN) {
-      client.send(JSON.stringify(message));
-    }
-    return;
-  }
-  clientsById.forEach((client, id) => {
-    if (id !== userId && client.readyState === WebSocket.OPEN) {
-      client.send(JSON.stringify(message));
-    }
-  });
-}
-
 app.use(`${UPLOAD_ROUTE}`, express.static(UPLOAD_DIR));
 app.use(`${THUMB_ROUTE}`, express.static(THUMB_DIR));
 app.use(express.json({ limit: "3mb" }));
@@ -155,269 +120,7 @@ app.use(pathNormalizer);
 app.use(writeRequestLog);
 app.use(folderLockHandler);
 
-
-wss.on("connection", async (ws, req) => {
-  const reqInfo = await getRequestInfo(req);
-  const cookies = reqInfo?.cookies;
-
-  let ipAddress = reqInfo.userIp;
-  const userId = cookies.userId;
-
-  let region = "";
-
-  clientsById.set(userId, ws);
-  ws.on("close", () => {
-    clientsById.delete(userId);
-    console.log(
-      `[${new Date().toLocaleString()}] 用户${chalk.yellow(
-        "已断开"
-      )}: [${userId}] - [${ipAddress}] - [${region}]`
-    );
-    writeWsLog({
-      userId,
-      userIp: ipAddress,
-      userRegion: region,
-      action: "disconnect",
-    });
-  });
-
-  ws.on("error", function error(err) {
-    console.error("WebSocket error:", err);
-  });
-
-  ws.on("message", async (message) => {
-    if (Buffer.isBuffer(message)) {
-        message = message.toString();
-    }
-    
-    try {
-        const parsedMessage = JSON.parse(message);
-        console.log("Received ws message:", parsedMessage);
-        switch (parsedMessage.event) {
-            case "location":
-              const { latitude, longitude } = parsedMessage.data;
-              writeWsLog({
-                userId,
-                userIp: ipAddress,
-                userRegion: region,
-                action: parsedMessage.event,
-                location: `${latitude},${longitude}`
-              });
-              break;
-        }
-    } catch (err) {
-        console.error("Failed to parse message:", err);
-    }
-  });
-
-  try {
-    region = reqInfo?.region || "unknown";
-  } catch (e) {
-    console.error("获取ip属地出错: ", e);
-  }
-  console.log(
-    `[${new Date().toLocaleString()}] 用户${chalk.green(
-      "已连接"
-    )}: [${userId}] - [${ipAddress}] - [${region}]`
-  );
-  writeWsLog({
-    userId,
-    userIp: ipAddress,
-    userRegion: region,
-    action: "connect",
-  });
-});
-
-async function tryRegister(req, res) {
-  let userId = req.cookies.userId;
-
-  if (!userId) {
-    userId = uuidv4();
-    res.cookie("userId", userId, {
-      maxAge: 3650 * 24 * 60 * 60 * 1000,
-      httpOnly: true,
-      sameSite: "strict",
-    });
-  }
-
-  const userInfo = await getRequestInfo(req);
-  db.run(
-    `INSERT OR IGNORE INTO userInfo (userId, ip, create_time, update_time, userAgent, region, device, os, browser) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [
-      userId,
-      userInfo.userIp,
-      userInfo.requestTime,
-      userInfo.requestTime,
-      userInfo.userAgent,
-      userInfo.region,
-      userInfo.device,
-      userInfo.os,
-      userInfo.browser,
-    ],
-    (err) => {
-      if (err) {
-        console.error("Error inserting user info:", err);
-      }
-    }
-  );
-
-  // 修改除create_time外的其他所有字段
-  db.run(
-    `UPDATE userInfo SET ip = ?, update_time = ?, userAgent = ?, region = ?, device = ?, os = ?, browser = ? WHERE userId = ?`,
-    [
-      userInfo.userIp,
-      userInfo.requestTime,
-      userInfo.userAgent,
-      userInfo.region,
-      userInfo.device,
-      userInfo.os,
-      userInfo.browser,
-      userId,
-    ],
-    (err) => {
-      if (err) {
-        console.error("Error updating user info:", err);
-      }
-    }
-  );
-  return userId;
-}
-
-async function downloadAllMediaByLinks(text, folder, successItemCb) {
-  console.log('开始下载：', text.length > 300 ? `${text.slice(0, 300)}......` : text, folder)
-  // Match HTTP links
-  const urlRegex = /https?:\/\/[^\s]+/g;
-  const allLinks = text.match(urlRegex) || [];
-  const validLinkRegex =
-    /https?:\/\/[^\s]+?\.(m3u8|mp4|ts|avi|mkv|mov|wmv|webm|flv|ogv|mpeg|pdf|png|jpg|mp3|txt|zip|exe|apk)(\?[^\s]*)?/i;
-
-  const links = allLinks.filter((link) => validLinkRegex.test(link));
-  const ignoreLinks = allLinks.filter((link) => !validLinkRegex.test(link));
-
-  // Match base64-encoded images
-  const base64Regex = /data:image\/(png|jpeg|jpg|gif);base64,([a-zA-Z0-9+/=]+)/g;
-  const base64Images = [];
-  let match;
-  while ((match = base64Regex.exec(text)) !== null) {
-    base64Images.push({
-      mimeType: match[1],
-      base64: match[2],
-    });
-  }
-
-  if (links.length === 0 && base64Images.length === 0) {
-    return Promise.reject({
-      code: 400,
-      msg: "没有找到任何有效的链接",
-      ignoreLinks
-    })
-  }
-
-  console.log("开始批量下载资源: ", links, `${base64Images.length}个base64图片`);
-
-  let downloadRoot = "";
-  let downloadSub = "";
-  let downloadDir = "";
-  if (folder) {
-    downloadRoot = "";
-    downloadSub = folder;
-  } else {
-    downloadRoot = "从文本中链接提取的资源";
-    downloadSub = `${new Date()
-      .toLocaleString()
-      .replace(/[:.\/\s]/g, "_")}_${uuidv4()}`;
-  }
-  downloadDir = path.join(UPLOAD_DIR, downloadRoot, downloadSub);
-  if (!fs.existsSync(downloadDir)) {
-    fs.mkdirSync(downloadDir, { recursive: true });
-  }
-
-  const failedLinks = [];
-  let completedCount = 0;
-
-  const downloadLink = (link) => {
-    return new Promise((resolve) => {
-      const tempDir = path.join(
-        __dirname,
-        "temp",
-        "batch_download",
-        `${Date.now()}`
-      );
-      const m3u8Regex = /https?:\/\/[^\s]+?\.m3u8(\?[^\s]*)?/i;
-      const saveName = `${Date.now()}${Math.floor(Math.random() * 100000)}`;
-      const command = m3u8Regex.test(link)
-        ? `N_m3u8DL-RE --auto-select "${link}" --save-dir "${downloadDir}" --save-name ${saveName} --tmp-dir ${tempDir} --ui-language en-US`
-        : `curl -L "${link}" -o "${path.join(downloadDir, saveName)}"`;
-
-      console.log(`开始执行: ${command}`);
-
-      const child = exec(command, {
-        env: { ...process.env, LANG: "en-US.UTF-8" },
-      });
-
-      child.stdout.on("data", (data) => {
-        process.stdout.write(`stdout: ${data}`);
-      });
-
-      child.stderr.on("data", (data) => {
-        process.stderr.write(`stderr: ${data}`);
-      });
-
-      child.on("close", (code) => {
-        let failed = false;
-        if (code !== 0) {
-          failed = true;
-          console.error(`${chalk.red("下载失败")}: ${link}`);
-          failedLinks.push(link);
-        } else {
-          console.log(`${chalk.green("下载成功")}: ${link}`);
-        }
-        completedCount++;
-
-        successItemCb({
-          link,
-          progress: completedCount,
-          total: links.length + base64Images.length,
-          state: failed ? "failed" : "success",
-        })
-        resolve();
-      });
-    });
-  };
-
-  // Save base64 images
-  const saveBase64Image = (image, index) => {
-    return new Promise((resolve) => {
-      const fileName = `image_${index}.${image.mimeType}`;
-      const filePath = path.join(downloadDir, fileName);
-      const imageBuffer = Buffer.from(image.base64, 'base64');
-
-      fs.writeFile(filePath, imageBuffer, (err) => {
-        if (err) {
-          console.error(`${chalk.red("保存失败")}: ${filePath}`);
-          failedLinks.push(filePath);
-        } else {
-          console.log(`${chalk.green("保存成功")}: ${filePath}`);
-        }
-        completedCount++;
-        
-        successItemCb({
-          link: fileName,
-          progress: completedCount,
-          total: links.length + base64Images.length,
-          state: err ? "failed" : "success",
-        })
-        resolve();
-      });
-    });
-  };
-
-  // 并行下载所有 HTTP 链接和保存 base64 图片
-  await Promise.all([...links.map(downloadLink), ...base64Images.map(saveBase64Image)]);
-  return Promise.resolve({
-    downloadRoot, downloadSub, completedCount, ignoreLinks, failedLinks
-  });
-}
+wsInit(httpServer);
 
 app.get("/register", async (req, res) => {
   await tryRegister(req, res);
@@ -466,7 +169,7 @@ app.post("/downloadFromText", async (req, res) => {
   let text = req.body.text || "";
   const successItemCb = data => {
     // 单个文件下载成功，通知前端下载进度
-    broadcastMessage(
+    wsBroadcastMessage(
       {
         event: "downloadProgress",
         data
@@ -479,6 +182,7 @@ app.post("/downloadFromText", async (req, res) => {
   const failedCb = (e) => {
     const { code, msg, ignoreLinks } = e
     // 失败
+    console.error(chalk.red('下载出错:'), e);
     return res.status(code || 400).json({ error: msg || e, ignoreLinks: ignoreLinks || [] });
   }
 
@@ -859,49 +563,6 @@ app.post("/readTextFile", (req, res) => {
   });
 });
 
-function convertTxtEncoding(filePath, res) {
-  const extname = path.extname(filePath);
-  if (extname !== ".txt") {
-    res.status(400).json({ message: "不是txt文件，跳过编码转换" });
-    return;
-  }
-
-  fs.readFile(filePath, (err, data) => {
-    if (err) {
-      console.error("读取文件失败:", err);
-      res.status(500).json({ message: "读取文件失败" });
-      return;
-    }
-
-    // 检测文件编码
-    const detectedEncoding = jschardet.detect(data).encoding;
-    if (!detectedEncoding) {
-      res.status(500).json({ message: "文件编码检测失败" });
-      return;
-    }
-
-    // 判断文件是否为UTF-8编码
-    if (detectedEncoding.toLowerCase() === "utf-8") {
-      res.json({ message: "已经是UTF-8编码" });
-      return;
-    }
-
-    // 将文件内容从原编码转换为UTF-8
-    const content = iconv.decode(data, detectedEncoding);
-    const utf8Content = iconv.encode(content, "utf-8");
-
-    // 将转换后的内容写入文件
-    fs.writeFile(filePath, utf8Content, (err) => {
-      if (err) {
-        console.error("写入文件失败:", err);
-        res.status(500).json({ message: "写入文件失败" });
-        return;
-      }
-      res.json({ message: "编码修改为UTF-8成功", success: true });
-    });
-  });
-}
-
 app.post("/convertTxtEncoding", (req, res) => {
   const { filePath } = req.body;
   const absoluteFilePath = path.join(UPLOAD_DIR, filePath);
@@ -921,29 +582,3 @@ app.get("/", (req, res) => {
 httpServer.listen(PORT, () => {
   console.log(`Server is running on http://localhost:${PORT}`);
 });
-
-function pathNormalizer(req, res, next) {
-  const originalSend = res.send;
-  res.send = function (body) {
-    if (typeof body === "object") {
-      const normalizePaths = (obj) => {
-        if (Array.isArray(obj)) {
-          return obj.map(normalizePaths);
-        } else if (obj !== null && typeof obj === "object") {
-          for (let key in obj) {
-            if (typeof obj[key] === "string") {
-              obj[key] = obj[key].replace(/\\/g, "/");
-            } else if (typeof obj[key] === "object") {
-              obj[key] = normalizePaths(obj[key]);
-            }
-          }
-          return obj;
-        }
-        return obj;
-      };
-      body = normalizePaths(body);
-    }
-    return originalSend.call(this, body);
-  };
-  next();
-}

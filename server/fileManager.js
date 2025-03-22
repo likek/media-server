@@ -4,6 +4,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { UPLOAD_DIR, THUMB_DIR, UPLOAD_ROUTE, THUMB_ROUTE } from "../serverConfig.js";
 import { isVideoByName, generateThumbnail } from "./utils/index.js";
+import { wsBroadcastMessage } from "./websocketManager.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -114,6 +115,19 @@ const updateCache = async (dirPath, req) => {
   }
 };
 
+function updateTreeCache(dirPath, req) {
+  return updateCache(dirPath, req).then((res) => {
+    const { updated, fileInfos } = res;
+    if (updated) {
+      wsBroadcastMessage(
+        { event: "updateCache", data: { dirPath, fileInfos } },
+        req
+      );
+    }
+    return res
+  })
+}
+
 const invalidateCache = (dirPath) => {
   if (dirPath.startsWith("/")) {
     dirPath = dirPath.slice(1);
@@ -154,5 +168,6 @@ export {
     updateCache,
     invalidateCache,
     getFromCache,
-    searchFromCache
+    searchFromCache,
+    updateTreeCache
 }
