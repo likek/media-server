@@ -45,35 +45,32 @@ const updateCache = async (dirPath, req) => {
   });
 
   const fileInfos = await Promise.all(
-    files.map(async (file) => {
-      const filePath = path.join(fullPath, file);
+    files.map(async (fileName) => {
+      const filePath = path.join(fullPath, fileName);
       const stats = await fs.promises.stat(filePath);
 
       if (stats.isDirectory()) {
         return {
           type: "folder",
-          filename: file,
-          path: path.join(dirPath, file).replace(/\\/g, "/"),
+          filename: fileName,
+          path: path.join(dirPath, fileName).replace(/\\/g, "/"),
           lastModified: stats.mtime,
           size: stats.size,
         };
       } else {
-        const thumbnailPath = path.join(THUMB_DIR, dirPath, file + ".png");
-        let thumbnail = null;
-
-        if (fs.existsSync(thumbnailPath)) {
-          thumbnail = `${THUMB_ROUTE}/` + path.join(dirPath, file + ".png");
-        } else if (isVideoByName(file)) {
+        const thumbnailPath = path.join(THUMB_DIR, dirPath, fileName + ".png");
+        if (isVideoByName(fileName) && !fs.existsSync(thumbnailPath)) {
           await generateThumbnail(filePath, thumbnailPath);
-          thumbnail = `${THUMB_ROUTE}/` + path.join(dirPath, file + ".png");
         }
+        const thumbnail = path.join(dirPath, fileName + ".png");
 
         return {
-          filename: `${UPLOAD_ROUTE}/` + path.join(dirPath, file),
+          type: "file",
+          filename: fileName,
+          path: path.join(dirPath, fileName).replace(/\\/g, "/"),
           thumbnail: thumbnail,
           lastModified: stats.mtime,
           size: stats.size,
-          type: "file",
         };
       }
     })

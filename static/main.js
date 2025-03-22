@@ -8,7 +8,9 @@ const btnRoot = document.getElementById("btnRoot");
 const fileInput = document.getElementById("fileInput");
 
 let currentPath = "";
-const baseServer = "";
+const baseServerApi = "";
+const baseServerThumbnail = "/thumbnails/";
+const baseServerMedia = "/uploads/";
 const fileCache = {};
 let totalFiles = [];
 let renderedFilesCount = 0;
@@ -73,7 +75,7 @@ async function handleSearch(event) {
   try {
     renderedFilesCount = 0;
     totalFiles = [];
-    const response = await fetch(`${baseServer}/search`, {
+    const response = await fetch(`${baseServerApi}/search`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -99,7 +101,7 @@ async function handleSearch(event) {
 
 async function updateCache() {
   try {
-    const response = await fetch(`${baseServer}/updateCache`, {
+    const response = await fetch(`${baseServerApi}/updateCache`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -132,7 +134,7 @@ async function loadMedia(path = "", password) {
     updateCurrentPath(path);
   } else {
     try {
-      const response = await fetch(`${baseServer}/files`, {
+      const response = await fetch(`${baseServerApi}/files`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -215,9 +217,7 @@ function renderFiles(files) {
     const fileNameElement = document.createElement("p");
     const textSpan = document.createElement("span");
     textSpan.classList.add("touchable");
-    const filename = file.filename.substring(
-      file.filename.lastIndexOf("/") + 1
-    );
+    const filename = file.filename
     textSpan.textContent = filename;
     if (file.format) {
       textSpan.textContent += ` (${file.format})`;
@@ -237,9 +237,9 @@ function renderFiles(files) {
       }
       e.stopPropagation();
       if (file.type === "folder") {
-        renameFile(file.filename, file.folder || currentPath, file.type);
+        renameFile(file.filename, currentPath, file.type);
       } else {
-        renameFile(filename, file.folder || currentPath, file.type);
+        renameFile(filename, currentPath, file.type);
       }
     });
     div.appendChild(fileNameElement);
@@ -259,18 +259,12 @@ function renderFiles(files) {
     } else if (["mp4", "webm", "ogg", "ts", "avi"].includes(fileExt)) {
       const video = document.createElement("video");
       if (file.thumbnail) {
-        video.poster = baseServer + file.thumbnail;
+        video.poster = baseServerThumbnail + file.thumbnail;
       }
       video.controls = true;
       video.playsInline = true;
       video.preload = "metadata";
       if (["ts"].includes(fileExt)) {
-        // const source = document.createElement('source');
-
-        // source.src = baseServer + file.filename;
-        // source.type = 'video/mp2t';
-
-        // video.appendChild(source);
         video.addEventListener("click", async (e) => {
           e.preventDefault();
           e.stopPropagation();
@@ -278,7 +272,7 @@ function renderFiles(files) {
             showOverlay(div);
             await videoHelper.loadTs(
               video,
-              baseServer + file.filename,
+              baseServerMedia + file.path,
               (error) => {
                 showToast(`视频加载失败`, "error");
               }
@@ -288,18 +282,18 @@ function renderFiles(files) {
           }
         });
       } else {
-        video.src = baseServer + file.filename;
+        video.src = baseServerMedia + file.path;
       }
       div.appendChild(video);
     } else if (["jpg", "jpeg", "png", "gif"].includes(fileExt)) {
       const img = document.createElement("img");
-      img.src = encodeUrl(baseServer + file.filename);
+      img.src = encodeUrl(baseServerMedia + file.path);
       img.className = "image";
       img.onclick = () => openImgModal(img);
       div.appendChild(img);
     } else if ("pdf" === fileExt) {
       const a = document.createElement("a");
-      a.href = encodeUrl(baseServer + file.filename);
+      a.href = encodeUrl(baseServerMedia + file.path);
       a.innerText = filename;
       a.target = "_blank";
       div.appendChild(a);
@@ -336,9 +330,9 @@ function renderFiles(files) {
     deleteButton.addEventListener("click", (e) => {
       e.stopPropagation();
       if (file.type === "folder") {
-        deleteFile(file.filename, file.folder || currentPath, file.type);
+        deleteFile(file.filename, currentPath, file.type);
       } else {
-        deleteFile(filename, file.folder || currentPath, file.type);
+        deleteFile(filename, currentPath, file.type);
       }
     });
     footer.appendChild(deleteButton);
@@ -426,7 +420,7 @@ function renderFiles(files) {
       const audioPlayer = document.createElement("audio");
       audioPlayer.classList.add("audio-player");
       audioPlayer.controls = true;
-      audioPlayer.src = baseServer + file.filename;
+      audioPlayer.src = baseServerMedia + file.path;
       div.appendChild(audioPlayer);
     }
 
@@ -445,7 +439,7 @@ function renderFiles(files) {
       } else {
         if (file.type === "folder") {
           moveFileOrFolder(
-            file.filename,
+            file.path,
             targetFolder,
             file.folder || currentPath
           );
@@ -460,7 +454,7 @@ function renderFiles(files) {
     if (file.type !== "folder") {
       const a = document.createElement("a");
       a.innerHTML = "下载";
-      a.href = baseServer + file.filename;
+      a.href = baseServerMedia + file.path;
       a.download = filename;
       a.onclick = (e) => e.stopPropagation();
       footer.appendChild(a);
@@ -483,7 +477,7 @@ async function renameFile(filename, path, type) {
   }
 
   try {
-    const response = await fetch(`${baseServer}/rename`, {
+    const response = await fetch(`${baseServerApi}/rename`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -517,7 +511,7 @@ async function createFolder() {
   }
 
   try {
-    const response = await fetch(`${baseServer}/createFolder`, {
+    const response = await fetch(`${baseServerApi}/createFolder`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -564,7 +558,7 @@ async function deleteFile(filename, path, type) {
   const userConfirmed = confirm(`确定要删除文件 ${filename} 吗？`);
   if (userConfirmed) {
     try {
-      const response = await fetch(`${baseServer}/delete`, {
+      const response = await fetch(`${baseServerApi}/delete`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -628,7 +622,7 @@ async function uploadFile() {
   });
 
   // 设置请求地址和方法
-  const url = `${baseServer}/upload?path=${encodeURIComponent(currentPath)}`;
+  const url = `${baseServerApi}/upload?path=${encodeURIComponent(currentPath)}`;
   xhr.open("POST", url);
 
   try {
@@ -639,7 +633,7 @@ async function uploadFile() {
   }
 }
 function moveFileOrFolder(filename, targetFolder, currentPath) {
-  const url = `${baseServer}/move`;
+  const url = `${baseServerApi}/move`;
   const body = JSON.stringify({
     filename,
     targetFolder,
@@ -671,7 +665,7 @@ function moveFileOrFolder(filename, targetFolder, currentPath) {
 }
 
 function convertFile(inputFilePath, outputFilePath) {
-  const url = `${baseServer}/convert`;
+  const url = `${baseServerApi}/convert`;
 
   return fetch(url, {
     method: "POST",

@@ -89,7 +89,7 @@ const normalizeIp = (ip) => {
   }
 
 // 生成视频文件缩略图
-async function generateThumbnail(filePath, thumbnailPath) {
+async function generateThumbnail(videoPath, thumbnailPath) {
   // 确保缩略图目录存在
   const thumbnailDir = path.dirname(thumbnailPath);
   if (!fs.existsSync(thumbnailDir)) {
@@ -97,13 +97,13 @@ async function generateThumbnail(filePath, thumbnailPath) {
   }
 
   return new Promise((resolve, reject) => {
-    ffmpeg(filePath)
+    ffmpeg(videoPath)
       // windows上是取视频中间位置帧
       .screenshots({
         count: 1,
         folder: thumbnailDir,
         filename: path.basename(thumbnailPath),
-        size: "320x240",
+        size: "?x240",
       })
       .on("end", () => resolve(true))
       .on("error", (err) => {
