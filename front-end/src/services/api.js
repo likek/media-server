@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { routeMedia, routeThumbnail} from '@/config'
 
 const api = axios.create({
   baseURL: '/api',
@@ -8,7 +9,15 @@ const api = axios.create({
 // 获取文件列表
 export const getFiles = async (path, page = 0, pageSize = -1) => {
   const response = await api.post('/files', { path, page, pageSize })
-  return response.data
+  return response.data.map((file) => {
+    if(file.type === 'file' && file.path) {
+      file.path = `${routeMedia}${file.path}`
+    }
+    if(file.thumbnail) {
+      file.thumbnail = `${routeThumbnail}${file.thumbnail}`
+    }
+    return file
+  })
 }
 
 // 搜索文件

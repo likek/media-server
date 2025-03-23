@@ -42,23 +42,33 @@
         <video 
           v-if="isVideo" 
           controls 
-          class="preview-content"
-          :poster="file.thumbnail ? serverThumbnailPath + file.thumbnail : ''"
-          :src="serverMediaPath + file.path"
+          class="preview-content video-preview"
+          :poster="file.thumbnail ? file.thumbnail : ''"
+          :src="file.path"
         ></video>
         
         <!-- 图片预览 -->
-        <img 
-          v-else-if="isImage" 
-          class="preview-content" 
-          :src="serverMediaPath + file.path"
-          @click="previewImage"
-        >
+        <el-image
+          v-else-if="isImage"
+          class="preview-content image-preview"
+          :src="file.path"
+          :zoom-rate="1.2"
+          :max-scale="7"
+          :min-scale="0.2"
+          show-progress
+          fit="contain"
+          :preview-src-list="imageList"
+          :initial-index="imageIndex"
+          :hide-on-click-modal="true"
+          :preview-teleported="true"
+          :infinite="false"
+        />
+        <!-- 文本预览 -->
         
         <!-- PDF链接 -->
         <a 
           v-else-if="isPdf" 
-          :href="serverMediaPath + file.path" 
+          :href="file.path" 
           target="_blank"
           class="pdf-link"
         >
@@ -70,7 +80,7 @@
           v-else-if="isAudio" 
           controls 
           class="preview-content audio-preview"
-          :src="serverMediaPath + file.path"
+          :src="file.path"
         ></audio>
       </div>
       
@@ -88,20 +98,25 @@ import { computed } from 'vue'
 import { Document, Edit, Delete, Position, Download, Folder } from '@element-plus/icons-vue'
 import { ElMessageBox } from 'element-plus'
 import { unzipFile } from '../services/api'
-import { routeMedia, routeThumbnail } from '@/config'
 
 const props = defineProps({
   file: {
     type: Object,
     required: true
-  }
+  },
+  imageIndex: {
+    type: Number,
+    required: false,
+    default: 0
+  },
+  imageList: {
+    type: Array,
+    required: false,
+    default: () => []
+  },
 })
 
-const emit = defineEmits(['rename', 'delete', 'preview-image', 'move', 'download', 'refresh', 'viewText', 'convert'])
-
-// 基础路径
-const serverMediaPath = routeMedia
-const serverThumbnailPath = routeThumbnail
+const emit = defineEmits(['rename', 'delete', 'move', 'download', 'refresh', 'viewText', 'convertTs'])
 
 // 文件类型判断
 const fileExt = computed(() => {
@@ -154,11 +169,6 @@ const formatFileSize = (size) => {
 // 格式化日期
 const formatDate = (date) => {
   return new Date(date).toLocaleString()
-}
-
-// 预览图片
-const previewImage = () => {
-  emit('preview-image', serverMediaPath + props.file.path)
 }
 
 // 查看文本文件
@@ -247,8 +257,12 @@ const unzipArchive = async () => {
 
 .preview-content {
   max-width: 100%;
-  max-height: 200px;
+  max-height: 240px;
   border-radius: 4px;
+}
+
+.video-preview,.image-preview {
+  height: 240px;
 }
 
 .audio-preview {

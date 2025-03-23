@@ -54,15 +54,16 @@
                         @delete="confirmDelete"
                     />
                 </template>
-                <template v-else-if="file.type === 'file'">
+                <template v-else>
                     <file-item
                         :key="file.path"
                         :file="file"
+                        :imageList="imageList"
+                        :imageIndex="imageList.indexOf(file.path)"
                         @rename="showRenameDialog"
                         @move="showMoveDialog"
                         @download="downloadFile"
                         @delete="confirmDelete"
-                        @previewImage="previewImage"
                         @refresh="refreshCache"
                         @viewText="viewTextFile"
                         @convertTs="convertTsFile"
@@ -114,11 +115,6 @@
         </span>
       </template>
     </el-dialog>
-
-    <!-- 图片预览 -->
-    <el-dialog v-model="imagePreviewVisible" width="80%">
-      <img :src="previewImageUrl" style="width: 100%;height: 100%;" />
-    </el-dialog>
     
     <!-- 移动文件/文件夹对话框 -->
     <el-dialog v-model="moveDialogVisible" title="移动到" width="80%">
@@ -165,10 +161,12 @@ import { Loading, DocumentCopy } from '@element-plus/icons-vue'
 import FolderItem from '../components/FolderItem.vue'
 import FileItem from '../components/FileItem.vue'
 import { getFiles, searchFiles, updateCache, createNewFolder, renameFile, deleteFileOrFolder, uploadFileToServer, downloadFromText, moveFile, readTextFile, convertTextEncoding, convertFileToMp4 } from '../services/api'
-import { routeMedia } from '@/config'
 
 const router = useRouter()
 const route = useRoute()
+
+// 基础路径
+
 
 // 状态变量
 const files = ref([])
@@ -193,8 +191,6 @@ const newName = ref('')
 const currentItem = ref(null)
 const textLinkDialogVisible = ref(false)
 const linkText = ref('')
-const imagePreviewVisible = ref(false)
-const previewImageUrl = ref('')
 const moveDialogVisible = ref(false)
 const targetFolder = ref('')
 const availableFolders = ref([])
@@ -223,6 +219,13 @@ const updateCurrentPath = () => {
 const pathSegments = computed(() => {
   if (!currentPath.value) return []
   return currentPath.value.split('/')
+})
+
+const imageList = computed(() => {
+  return files.value.filter(file => {
+    const ext = file.filename.split('.').pop().toLowerCase()
+    return ['jpg', 'jpeg', 'png', 'gif'].includes(ext)
+  }).map(file => file.path)
 })
 
 // 导航到指定路径段
@@ -492,12 +495,6 @@ const uploadFromLinks = async () => {
     ElMessage.error('添加下载任务失败')
     console.error('Error adding download tasks:', error)
   }
-}
-
-// 预览图片
-const previewImage = (url) => {
-  previewImageUrl.value = url
-  imagePreviewVisible.value = true
 }
 
 // 显示移动对话框
