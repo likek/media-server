@@ -1,5 +1,6 @@
 import { fileURLToPath } from "url";
 import path from "path";
+import fs from "fs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -32,9 +33,32 @@ const MEDIA_ROUTE = "/media";
 const THUMB_ROUTE = "/thumbnails";
 const ENTRY_ROUTE_REGEX = /^\/(?!api|media|thumbnails).*/;
 
-// 允许配置路径
-// 使用path.resolve确保路径总是绝对路径
-const MEDIA_FULL_PATH = cmdArgs.path ? path.resolve(cmdArgs.path) : path.join(__dirname, "../media");
+if (!cmdArgs.path) {
+    console.error("请提供文件夹路径参数 --path");
+    process.exit(1);
+}
+
+const inputPath = path.resolve(cmdArgs.path);
+
+// 检查路径是否存在
+if (!fs.existsSync(inputPath)) {
+    console.error(`文件夹 ${inputPath} 不存在`);
+    process.exit(1);
+}
+
+// 检查是否是文件夹
+if (!fs.lstatSync(inputPath).isDirectory()) {
+    console.error(`路径 ${inputPath} 不是一个文件夹`);
+    process.exit(1);
+}
+
+const currentDir = path.resolve(__dirname);
+if (inputPath === currentDir || inputPath.startsWith(currentDir) || currentDir.startsWith(inputPath)) {
+    console.error(`path不能包含当前程序所在目录`);
+    process.exit(1);
+}
+
+const MEDIA_FULL_PATH = inputPath;
 
 
 export {
