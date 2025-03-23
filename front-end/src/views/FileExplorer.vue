@@ -161,6 +161,7 @@ import { Loading, DocumentCopy } from '@element-plus/icons-vue'
 import FolderItem from '../components/FolderItem.vue'
 import FileItem from '../components/FileItem.vue'
 import { getFiles, searchFiles, updateCache, createNewFolder, renameFile, deleteFileOrFolder, uploadFileToServer, downloadFromText, moveFile, readTextFile, convertTextEncoding, convertFileToMp4 } from '../services/api'
+import { copyText } from '@/utils'
 
 const router = useRouter()
 const route = useRoute()
@@ -335,14 +336,7 @@ const navigateToRoot = () => {
 
 // 复制当前路径
 const copyCurrentPath = () => {
-  navigator.clipboard.writeText(currentPath.value || '/')
-    .then(() => {
-      ElMessage.success('路径已复制到剪贴板')
-    })
-    .catch(err => {
-      ElMessage.error('复制失败')
-      console.error('Failed to copy path:', err)
-    })
+    copyText(currentPath.value || '/')
 }
 
 // 触发文件上传
