@@ -2,7 +2,7 @@
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import { UPLOAD_DIR, THUMB_DIR } from "../serverConfig.js";
+import { MEDIA_FULL_PATH, THUMB_FULL_PATH } from "../serverConfig.js";
 import { isVideoByName, generateThumbnail } from "./utils/index.js";
 import { wsBroadcastMessage } from "./websocketManager.js";
 
@@ -37,7 +37,7 @@ const updateCache = async (dirPath, req) => {
   }
   console.log('updateCache:::::', dirPath)
   const oldFileInfosStr = JSON.stringify(cache[dirPath] || []);
-  const fullPath = path.join(UPLOAD_DIR, dirPath);
+  const fullPath = path.join(MEDIA_FULL_PATH, dirPath);
   const files = await new Promise((resolve, reject) => {
     fs.readdir(fullPath, (err, files) => {
       if (err) return reject(err);
@@ -59,7 +59,7 @@ const updateCache = async (dirPath, req) => {
           size: stats.size,
         };
       } else {
-        const thumbnailPath = path.join(THUMB_DIR, dirPath, fileName + ".png");
+        const thumbnailPath = path.join(THUMB_FULL_PATH, dirPath, fileName + ".png");
         if (isVideoByName(fileName) && !fs.existsSync(thumbnailPath)) {
           await generateThumbnail(filePath, thumbnailPath);
         }

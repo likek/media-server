@@ -4,7 +4,7 @@ import { v4 as uuidv4 } from "uuid";
 import fs from "fs";
 import path from "path";
 import chalk from "chalk";
-import { TEMP_DIR, UPLOAD_DIR } from "../serverConfig.js";
+import { TEMP_FULL_PATH, MEDIA_FULL_PATH } from "../serverConfig.js";
 
 
 async function downloadAllMediaByLinks(text, folder, successItemCb) {
@@ -51,7 +51,7 @@ async function downloadAllMediaByLinks(text, folder, successItemCb) {
         .toLocaleString()
         .replace(/[:.\/\s]/g, "_")}_${uuidv4()}`;
     }
-    downloadDir = path.join(UPLOAD_DIR, downloadRoot, downloadSub);
+    downloadDir = path.join(MEDIA_FULL_PATH, downloadRoot, downloadSub);
     if (!fs.existsSync(downloadDir)) {
       fs.mkdirSync(downloadDir, { recursive: true });
     }
@@ -62,7 +62,7 @@ async function downloadAllMediaByLinks(text, folder, successItemCb) {
     const downloadLink = (link) => {
       return new Promise((resolve) => {
         const tempDir = path.join(
-          TEMP_DIR,
+          TEMP_FULL_PATH,
           "batch_download",
           `${Date.now()}`
         );

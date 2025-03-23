@@ -157,6 +157,7 @@ import { Loading } from '@element-plus/icons-vue'
 import FolderItem from '../components/FolderItem.vue'
 import FileItem from '../components/FileItem.vue'
 import { getFiles, searchFiles, updateCache, createNewFolder, renameFile, deleteFileOrFolder, uploadFileToServer, downloadFromText, moveFile, readTextFile, convertTextEncoding, convertFileToMp4 } from '../services/api'
+import { routeMedia } from '@/config'
 
 const router = useRouter()
 const route = useRoute()
@@ -541,7 +542,7 @@ const moveItem = async () => {
 // 下载文件
 const downloadFile = (file) => {
   const link = document.createElement('a')
-  link.href = `/uploads/${file.path}`
+  link.href = `/${routeMedia}/${file.path}`
   link.download = file.filename
   document.body.appendChild(link)
   link.click()

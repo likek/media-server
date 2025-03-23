@@ -4,24 +4,43 @@ import path from "path";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const UPLOAD_ROUTE = "/uploads";
+// 解析命令行参数
+function parseCommandLineArgs() {
+    const args = process.argv.slice(2);
+    const params = {};
+    
+    for (let i = 0; i < args.length; i++) {
+        if (args[i].startsWith('--')) {
+            const param = args[i].slice(2);
+            const value = args[i + 1] && !args[i + 1].startsWith('--') ? args[i + 1] : true;
+            params[param] = value;
+            if (value !== true) i++;
+        }
+    }
+    
+    return params;
+}
+
+const cmdArgs = parseCommandLineArgs();
+
+// 项目内部固定路径
+const THUMB_FULL_PATH = path.join(__dirname, "./.thumbnails");
+const TEMP_FULL_PATH = path.join(__dirname, "./.temp");
+
+// 路由名称配置
+const UPLOAD_ROUTE = "/media";
 const THUMB_ROUTE = "/thumbnails";
 
-const UPLOAD_PATH = "../uploads";
-const THUMB_PATH = "../thumbnails";
-const UPLOAD_DIR = path.join(__dirname, `${UPLOAD_PATH}`);
-const THUMB_DIR = path.join(__dirname, THUMB_PATH);
-const TEMP_DIR = path.join(__dirname, "../temp");
+// 允许配置路径
+const MEDIA_FULL_PATH = cmdArgs.path || path.join(__dirname, "../media");
 
 
 export {
-    UPLOAD_DIR,
-    THUMB_DIR,
-    UPLOAD_PATH as UPLOAD_DIR_NAME,
-    THUMB_PATH as THUMB_DIR_NAME,
+    MEDIA_FULL_PATH,
+    THUMB_FULL_PATH,
     UPLOAD_ROUTE,
     THUMB_ROUTE,
-    TEMP_DIR
+    TEMP_FULL_PATH
 }
 export default {
     maxRequestsPerMinute: 6000,

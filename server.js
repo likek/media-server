@@ -20,7 +20,7 @@ import { checkPermissions } from "./server/middleware/apiPermission.js";
 import { writeRequestLog, writeFileAccessedLog } from "./server/logManager.js";
 import folderLockHandler from "./server/middleware/folderLockManager.js";
 import { invalidateCache, searchFromCache, getFromCache, updateTreeCache } from "./server/fileManager.js";
-import { UPLOAD_DIR, THUMB_DIR, UPLOAD_ROUTE, THUMB_ROUTE } from "./serverConfig.js";
+import { MEDIA_FULL_PATH, THUMB_FULL_PATH, UPLOAD_ROUTE, THUMB_ROUTE } from "./serverConfig.js";
 import { pathNormalizer } from "./server/middleware/pathNormalizer.js";
 import { wsBroadcastMessage, wsInit } from "./server/websocketManager.js";
 import { convertTxtEncoding } from "./server/tools/textFileTools.js";
@@ -44,7 +44,7 @@ app.set("trust proxy", 1);
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     const currentPath = req.query.path || "";
-    const uploadPath = path.join(UPLOAD_DIR, currentPath);
+    const uploadPath = path.join(MEDIA_FULL_PATH, currentPath);
 
     if (!fs.existsSync(uploadPath)) {
       fs.mkdirSync(uploadPath, { recursive: true });
@@ -62,12 +62,12 @@ const storage = multer.diskStorage({
 const upload = multer({ storage });
 
 // 创建上传和缩略图目录
-if (!fs.existsSync(UPLOAD_DIR)) {
-  fs.mkdirSync(UPLOAD_DIR);
+if (!fs.existsSync(MEDIA_FULL_PATH)) {
+  fs.mkdirSync(MEDIA_FULL_PATH);
 }
 
-if (!fs.existsSync(THUMB_DIR)) {
-  fs.mkdirSync(THUMB_DIR);
+if (!fs.existsSync(THUMB_FULL_PATH)) {
+  fs.mkdirSync(THUMB_FULL_PATH);
 }
 
 app.use(compression({
@@ -111,8 +111,8 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use(`${UPLOAD_ROUTE}`, express.static(UPLOAD_DIR));
-app.use(`${THUMB_ROUTE}`, express.static(THUMB_DIR));
+app.use(`${UPLOAD_ROUTE}`, express.static(MEDIA_FULL_PATH));
+app.use(`${THUMB_ROUTE}`, express.static(THUMB_FULL_PATH));
 app.use(express.json({ limit: "3mb" }));
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, "static")));
@@ -270,10 +270,10 @@ app.post("/api/downloadFromText", async (req, res) => {
 app.post("/api/upload", upload.single("file"), async (req, res) => {
   const currentPath = req.query.path || "";
   const filename = Buffer.from(req.file.filename, "latin1").toString("utf-8");
-  const filePath = path.join(UPLOAD_DIR, currentPath, filename);
+  const filePath = path.join(MEDIA_FULL_PATH, currentPath, filename);
 
   // 确保缩略图目录存在
-  const thumbnailDir = path.join(THUMB_DIR, currentPath);
+  const thumbnailDir = path.join(THUMB_FULL_PATH, currentPath);
   if (!fs.existsSync(thumbnailDir)) {
     fs.mkdirSync(thumbnailDir, { recursive: true });
   }
@@ -345,7 +345,7 @@ app.post("/api/search", (req, res) => {
 // 删除文件或文件夹
 app.post("/api/delete", async (req, res) => {
   const { path: filepath, type } = req.body;
-  const fileFullPath = path.join(UPLOAD_DIR, filepath);
+  const fileFullPath = path.join(MEDIA_FULL_PATH, filepath);
 
   const deleteRecursively = async (fileFullPath) => {
     if (fs.lstatSync(fileFullPath).isDirectory()) {
@@ -373,7 +373,7 @@ app.post("/api/delete", async (req, res) => {
 // 新建文件夹
 app.post("/api/createFolder", (req, res) => {
   const { path: currentPath, folderName } = req.body;
-  const folderPath = path.join(UPLOAD_DIR, currentPath, folderName);
+  const folderPath = path.join(MEDIA_FULL_PATH, currentPath, folderName);
 
   if (fs.existsSync(folderPath)) {
     return res.status(400).send({ message: "Folder already exists" });
@@ -396,8 +396,8 @@ app.post("/api/rename", (req, res) => {
   const { sourcePath, newName, type } = req.body;
   const parentPath = path.dirname(`/${sourcePath}`);
 
-  const oldPath = path.join(UPLOAD_DIR, sourcePath);
-  const newPath = path.join(UPLOAD_DIR, parentPath, newName);
+  const oldPath = path.join(MEDIA_FULL_PATH, sourcePath);
+  const newPath = path.join(MEDIA_FULL_PATH, parentPath, newName);
 
   if (fs.existsSync(newPath)) {
     return res
@@ -433,9 +433,9 @@ app.post("/api/move", (req, res) => {
   const { targetFolder, sourcePath } = req.body;
 
   const filename = path.basename(sourcePath);
-  const sourceFullPath = path.join(UPLOAD_DIR, sourcePath);
+  const sourceFullPath = path.join(MEDIA_FULL_PATH, sourcePath);
   const destinationPath = path.join(
-    UPLOAD_DIR,
+    MEDIA_FULL_PATH,
     targetFolder,
     filename
   );
@@ -446,7 +446,7 @@ app.post("/api/move", (req, res) => {
       .json({ message: `Source ${sourceFullPath} does not exist` });
   }
 
-  if (!fs.existsSync(path.join(UPLOAD_DIR, targetFolder))) {
+  if (!fs.existsSync(path.join(MEDIA_FULL_PATH, targetFolder))) {
     return res.status(400).json({ message: "Target folder does not exist" });
   }
 
@@ -466,8 +466,8 @@ app.post("/api/move", (req, res) => {
 app.post("/api/convert", (req, res) => {
   const { inputFilePath, outputFilePath } = req.body;
 
-  const absoluteInputPath = path.join(UPLOAD_DIR, inputFilePath);
-  const absoluteOutputPath = path.join(UPLOAD_DIR, outputFilePath);
+  const absoluteInputPath = path.join(MEDIA_FULL_PATH, inputFilePath);
+  const absoluteOutputPath = path.join(MEDIA_FULL_PATH, outputFilePath);
 
   if (!fs.existsSync(absoluteInputPath)) {
     return res.status(400).json({ message: "Input file does not exist" });
@@ -503,8 +503,8 @@ app.post("/api/convert", (req, res) => {
 app.post("/api/unzip", async (req, res) => {
   const { zipFilePath } = req.body;
   const currentPath = path.dirname(zipFilePath);
-  const absoluteZipPath = path.join(UPLOAD_DIR, zipFilePath);
-  const extractToPath = path.join(UPLOAD_DIR, currentPath);
+  const absoluteZipPath = path.join(MEDIA_FULL_PATH, zipFilePath);
+  const extractToPath = path.join(MEDIA_FULL_PATH, currentPath);
 
   if (!fs.existsSync(absoluteZipPath)) {
     return res.status(400).json({ message: "Zip file does not exist" });
@@ -531,7 +531,7 @@ app.post("/api/unzip", async (req, res) => {
 
 app.post("/api/readTextFile", (req, res) => {
   const { filePath, start = 0, numLines = 50, encoding = "utf8" } = req.body;
-  const absoluteFilePath = path.join(UPLOAD_DIR, filePath);
+  const absoluteFilePath = path.join(MEDIA_FULL_PATH, filePath);
 
   if (!fs.existsSync(absoluteFilePath)) {
     return res.status(400).json({ message: "File does not exist" });
@@ -569,7 +569,7 @@ app.post("/api/readTextFile", (req, res) => {
 
 app.post("/api/convertTxtEncoding", (req, res) => {
   const { filePath } = req.body;
-  const absoluteFilePath = path.join(UPLOAD_DIR, filePath);
+  const absoluteFilePath = path.join(MEDIA_FULL_PATH, filePath);
 
   if (!fs.existsSync(absoluteFilePath)) {
     return res.status(400).json({ message: "File does not exist" });
@@ -579,7 +579,7 @@ app.post("/api/convertTxtEncoding", (req, res) => {
 });
 
 // 处理所有非API路由，返回index.html，支持前端路由
-app.get(/^\/(?!api|uploads|thumbnails).*/, (req, res) => {
+app.get(/^\/(?!api|media|thumbnails).*/, (req, res) => {
   res.sendFile(path.join(__dirname, "static", "index.html"));
 });
 

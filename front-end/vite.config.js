@@ -31,7 +31,7 @@ export default defineConfig({
         target: 'http://localhost:7777',
         changeOrigin: true
       },
-      '/uploads': {
+      '/media': {
         target: 'http://localhost:7777',
         changeOrigin: true
       },

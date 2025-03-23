@@ -43,22 +43,22 @@
           v-if="isVideo" 
           controls 
           class="preview-content"
-          :poster="file.thumbnail ? baseServerThumbnail + file.thumbnail : ''"
-          :src="baseServerMedia + file.path"
+          :poster="file.thumbnail ? serverThumbnailPath + file.thumbnail : ''"
+          :src="serverMediaPath + file.path"
         ></video>
         
         <!-- 图片预览 -->
         <img 
           v-else-if="isImage" 
           class="preview-content" 
-          :src="baseServerMedia + file.path"
+          :src="serverMediaPath + file.path"
           @click="previewImage"
         >
         
         <!-- PDF链接 -->
         <a 
           v-else-if="isPdf" 
-          :href="baseServerMedia + file.path" 
+          :href="serverMediaPath + file.path" 
           target="_blank"
           class="pdf-link"
         >
@@ -70,7 +70,7 @@
           v-else-if="isAudio" 
           controls 
           class="preview-content audio-preview"
-          :src="baseServerMedia + file.path"
+          :src="serverMediaPath + file.path"
         ></audio>
       </div>
       
@@ -84,10 +84,11 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 import { Document, Edit, Delete, Position, Download, Folder } from '@element-plus/icons-vue'
 import { ElMessageBox } from 'element-plus'
 import { unzipFile } from '../services/api'
+import { routeMedia, routeThumbnail } from '@/config'
 
 const props = defineProps({
   file: {
@@ -99,8 +100,8 @@ const props = defineProps({
 const emit = defineEmits(['rename', 'delete', 'preview-image', 'move', 'download', 'refresh', 'viewText', 'convert'])
 
 // 基础路径
-const baseServerMedia = '/uploads/'
-const baseServerThumbnail = '/thumbnails/'
+const serverMediaPath = routeMedia
+const serverThumbnailPath = routeThumbnail
 
 // 文件类型判断
 const fileExt = computed(() => {
@@ -157,7 +158,7 @@ const formatDate = (date) => {
 
 // 预览图片
 const previewImage = () => {
-  emit('preview-image', baseServerMedia + props.file.path)
+  emit('preview-image', serverMediaPath + props.file.path)
 }
 
 // 查看文本文件
