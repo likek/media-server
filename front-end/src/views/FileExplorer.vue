@@ -9,9 +9,6 @@
             class="search-input"
             />
         </el-form>
-        <el-button @click="navigateToRoot" type="primary">
-            <el-icon><HomeFilled /></el-icon>
-        </el-button>
         <el-button @click="refreshCache"><el-icon><Refresh /></el-icon></el-button>
         <el-button @click="showCreateFolderDialog"><el-icon><FolderAdd /></el-icon></el-button>
         <el-button @click="triggerFileUpload"><el-icon><UploadFilled /></el-icon></el-button>
@@ -21,8 +18,19 @@
         <input ref="fileInput" type="file" style="display: none" @change="uploadFile" />
         <el-progress v-if="uploading" :percentage="uploadProgress" />
       </div>
+      <!-- 面包屑导航 -->
       <div class="path-navigation">
-        <div class="current-path" @click="copyCurrentPath">{{ currentPath || '/' }}</div>
+        <el-breadcrumb separator="/">
+          <el-breadcrumb-item @click="navigateToRoot">
+            <el-icon><HomeFilled /></el-icon>
+          </el-breadcrumb-item>
+          <template v-for="(segment, index) in pathSegments" :key="index">
+            <el-breadcrumb-item @click="navigateToSegment(index)">{{ segment }}</el-breadcrumb-item>
+          </template>
+        </el-breadcrumb>
+        <el-button class="copy-path-btn" size="small" @click="copyCurrentPath" type="info" plain>
+          <el-icon><DocumentCopy /></el-icon>
+        </el-button>
       </div>
     </div>
 
@@ -150,10 +158,10 @@
 </template>
 
 <script setup>
-import { ref, watch, onMounted, onUnmounted } from 'vue'
+import { ref, watch, onMounted, onUnmounted, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Loading } from '@element-plus/icons-vue'
+import { Loading, DocumentCopy } from '@element-plus/icons-vue'
 import FolderItem from '../components/FolderItem.vue'
 import FileItem from '../components/FileItem.vue'
 import { getFiles, searchFiles, updateCache, createNewFolder, renameFile, deleteFileOrFolder, uploadFileToServer, downloadFromText, moveFile, readTextFile, convertTextEncoding, convertFileToMp4 } from '../services/api'
@@ -209,6 +217,23 @@ const updateCurrentPath = () => {
   } else {
     currentPath.value = ''
   }
+}
+
+// 计算路径段
+const pathSegments = computed(() => {
+  if (!currentPath.value) return []
+  return currentPath.value.split('/')
+})
+
+// 导航到指定路径段
+const navigateToSegment = (index) => {
+  if (index < 0) return
+  
+  const segments = pathSegments.value
+  if (index >= segments.length) return
+  
+  const targetPath = segments.slice(0, index + 1).join('/')
+  router.push(`/folder/${targetPath}`)
 }
 
 
@@ -747,11 +772,30 @@ onUnmounted(() => {
   padding: 8px 12px;
   border-radius: 4px;
   margin-top: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
 .current-path {
   cursor: pointer;
   font-family: monospace;
+}
+
+.el-breadcrumb :deep(.el-breadcrumb__item) {
+  cursor: pointer;
+}
+
+.el-breadcrumb :deep(.el-breadcrumb__inner) {
+  color: #409eff;
+}
+
+.el-breadcrumb :deep(.el-breadcrumb__inner):hover {
+  color: #66b1ff;
+}
+
+.copy-path-btn {
+  margin-left: 10px;
 }
 
 .media-container {

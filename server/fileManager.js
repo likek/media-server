@@ -35,7 +35,6 @@ const updateCache = async (dirPath, req) => {
   if (dirPath.startsWith("/")) {
     dirPath = dirPath.slice(1);
   }
-  console.log('updateCache:::::', dirPath)
   const oldFileInfosStr = JSON.stringify(cache[dirPath] || []);
   const fullPath = path.join(MEDIA_FULL_PATH, dirPath);
   const files = await new Promise((resolve, reject) => {

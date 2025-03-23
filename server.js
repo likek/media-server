@@ -91,11 +91,6 @@ app.use((req, res, next) => {
   const path = decodeURIComponent(req.path);
   if (path.startsWith(`${MEDIA_ROUTE}/`)) {
     const userIp = normalizeIp(req.clientIp || req.ip);
-    console.log(
-      `File accessed: ${path}, userId: `,
-      req.cookies?.userId,
-      userIp
-    );
     writeFileAccessedLog({
       userId: req.cookies?.userId,
       userIp,

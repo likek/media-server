@@ -92,20 +92,23 @@ const normalizeIp = (ip) => {
 async function generateThumbnail(videoPath, thumbnailPath) {
   // 确保缩略图目录存在
   const thumbnailDir = path.dirname(thumbnailPath);
+  const thumbnailFileName = path.basename(thumbnailPath);
   if (!fs.existsSync(thumbnailDir)) {
     fs.mkdirSync(thumbnailDir, { recursive: true });
   }
 
   return new Promise((resolve, reject) => {
     ffmpeg(videoPath)
-      // windows上是取视频中间位置帧
       .screenshots({
         count: 1,
         folder: thumbnailDir,
-        filename: path.basename(thumbnailPath),
+        filename: thumbnailFileName,
         size: "?x240",
+        timestamps: ['00:00:01'] // 指定从视频开始1秒处截图，避免开头可能的黑屏
       })
-      .on("end", () => resolve(true))
+      .on("end", () => {
+        resolve(true);
+      })
       .on("error", (err) => {
         console.error("Error generating thumbnail:", err);
         resolve(false);
