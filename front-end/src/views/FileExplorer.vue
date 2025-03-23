@@ -38,12 +38,12 @@
       <template v-if="loading">
         <el-skeleton :rows="20" animated :throttle="300"/>
       </template>
-      <template v-else-if="files.length === 0">
+      <template v-else-if="searchRes ? searchRes.length === 0 : files.length === 0">
         <el-empty description="没有文件" />
       </template>
       <template v-else>
         <div class="media-grid">
-            <template v-for="file in files">
+            <template v-for="file in (searchRes || files)">
                 <template v-if="file.type === 'folder'">
                     <folder-item
                         :key="file.path"
@@ -170,6 +170,7 @@ const route = useRoute()
 
 // 状态变量
 const files = ref([])
+const searchRes = ref([])
 const searchQuery = ref('')
 const currentPath = ref('')
 const loading = ref(false)
@@ -278,11 +279,12 @@ const loadFiles = async (resetPage = true) => {
 
 // 监听路由变化
 watch(() => route.params.path, () => {
+  searchRes.value = undefined
   updateCurrentPath()
   if (stateCache[currentPath.value]) {
     files.value = stateCache[currentPath.value].files || []
     currentPage.value = stateCache[currentPath.value].currentPage || 0
-    hasMoreFiles.value = stateCache[currentPath.value].hasMoreFiles || false
+    hasMoreFiles.value = stateCache[currentPath.value].hasMoreFiles ? stateCache[currentPath.value].hasMoreFiles : true
     nextTick(() => {
       // 检查首屏内容是否填满容器，如果不足且有更多文件，则自动加载更多
       checkContentHeight()
@@ -306,30 +308,22 @@ watch(() => currentPage.value, (newPage) => {
 watch(() => hasMoreFiles.value, (hasMore) => {
   stateCache[currentPath.value] = stateCache[currentPath.value] || {}
   stateCache[currentPath.value].hasMoreFiles = hasMore
+  console.log('hasMoreFiles changed:', hasMore)
 })
 
 
 // 搜索文件
 const handleSearch = async () => {
   if (!searchQuery.value.trim()) {
-    if (!currentPath.value) {
-      await loadFiles()
-      return
-    }
-    router.push('/')
+    searchRes.value = undefined
+    await loadFiles()
     return
   }
-  
-  // 重置分页状态
-  currentPage.value = 0
-  hasMoreFiles.value = true
   
   loading.value = true
   try {
     const response = await searchFiles(searchQuery.value, currentPath.value)
-    files.value = response
-    // 搜索结果暂不支持分页，所以设置为没有更多文件
-    hasMoreFiles.value = false
+    searchRes.value = response
   } catch (error) {
     ElMessage.error('搜索失败')
     console.error('Error searching files:', error)
@@ -735,7 +729,9 @@ const loadMoreFiles = async () => {
 
 // 检查滚动位置并加载更多文件
 const checkScrollPosition = () => {
-  if (!mediaContainer.value || loading.value || !hasMoreFiles.value) return
+  if (!mediaContainer.value || loading.value || !hasMoreFiles.value || searchRes.value) {
+    return
+  }
   
   const { scrollTop, scrollHeight, clientHeight } = mediaContainer.value
   // 当滚动到距离底部100px以内时加载更多

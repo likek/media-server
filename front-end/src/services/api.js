@@ -23,7 +23,15 @@ export const getFiles = async (path, page = 0, pageSize = -1) => {
 // 搜索文件
 export const searchFiles = async (query, path) => {
   const response = await api.post('/search', { query, path })
-  return response.data
+  return response.data.map((file) => {
+    if(file.type === 'file' && file.path) {
+      file.path = `${routeMedia}${file.path}`
+    }
+    if(file.thumbnail) {
+      file.thumbnail = `${routeThumbnail}${file.thumbnail}`
+    }
+    return file
+  })
 }
 
 // 更新缓存
