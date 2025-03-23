@@ -59,7 +59,8 @@ const updateCache = async (dirPath, req) => {
         };
       } else {
         const thumbnailPath = path.join(THUMB_FULL_PATH, dirPath, fileName + ".png");
-        if (isVideoByName(fileName) && !fs.existsSync(thumbnailPath)) {
+        const isVideo = isVideoByName(fileName);
+        if (isVideo && !fs.existsSync(thumbnailPath)) {
           await generateThumbnail(filePath, thumbnailPath);
         }
         const thumbnail = path.join(dirPath, fileName + ".png");
@@ -68,7 +69,7 @@ const updateCache = async (dirPath, req) => {
           type: "file",
           filename: fileName,
           path: path.join(dirPath, fileName).replace(/\\/g, "/"),
-          thumbnail: thumbnail,
+          thumbnail: isVideo ? thumbnail : undefined,
           lastModified: stats.mtime,
           size: stats.size,
         };
