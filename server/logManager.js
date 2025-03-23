@@ -1,7 +1,7 @@
 import { getRequestInfo } from "./utils/index.js";
 import db from "./dbserialize.js";
 import chalk from "chalk";
-import { UPLOAD_ROUTE } from "../serverConfig.js";
+import { MEDIA_ROUTE } from "../serverConfig.js";
 const writeRequestLogToDB = (logData) => {
     // 插入日志到数据库
     const query = `
@@ -33,7 +33,7 @@ const writeRequestLogToDB = (logData) => {
 
  const writeRequestLog = async (req, res, next) => {
     res.on("finish", async () => {
-      if (!req.path.startsWith(`${UPLOAD_ROUTE}/`)) {
+      if (!req.path.startsWith(`${MEDIA_ROUTE}/`)) {
         const data = await getRequestInfo(req, res);
         console.log(
           [

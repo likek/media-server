@@ -28,20 +28,23 @@ const THUMB_FULL_PATH = path.join(__dirname, "./.thumbnails");
 const TEMP_FULL_PATH = path.join(__dirname, "./.temp");
 
 // 路由名称配置
-const UPLOAD_ROUTE = "/media";
+const MEDIA_ROUTE = "/media";
 const THUMB_ROUTE = "/thumbnails";
+const ENTRY_ROUTE_REGEX = /^\/(?!api|media|thumbnails).*/;
 
 // 允许配置路径
-const MEDIA_FULL_PATH = cmdArgs.path || path.join(__dirname, "../media");
+// 使用path.resolve确保路径总是绝对路径
+const MEDIA_FULL_PATH = cmdArgs.path ? path.resolve(cmdArgs.path) : path.join(__dirname, "../media");
 
 
 export {
+    MEDIA_ROUTE,
+    THUMB_ROUTE,
     MEDIA_FULL_PATH,
     THUMB_FULL_PATH,
-    UPLOAD_ROUTE,
-    THUMB_ROUTE,
-    TEMP_FULL_PATH
-}
+    TEMP_FULL_PATH,
+    ENTRY_ROUTE_REGEX
+};
 export default {
     maxRequestsPerMinute: 6000,
     blacklistDurationMs: 1800000

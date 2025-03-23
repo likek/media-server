@@ -20,7 +20,7 @@ import { checkPermissions } from "./server/middleware/apiPermission.js";
 import { writeRequestLog, writeFileAccessedLog } from "./server/logManager.js";
 import folderLockHandler from "./server/middleware/folderLockManager.js";
 import { invalidateCache, searchFromCache, getFromCache, updateTreeCache } from "./server/fileManager.js";
-import { MEDIA_FULL_PATH, THUMB_FULL_PATH, UPLOAD_ROUTE, THUMB_ROUTE } from "./serverConfig.js";
+import { MEDIA_FULL_PATH, THUMB_FULL_PATH, MEDIA_ROUTE, THUMB_ROUTE, ENTRY_ROUTE_REGEX } from "./serverConfig.js";
 import { pathNormalizer } from "./server/middleware/pathNormalizer.js";
 import { wsBroadcastMessage, wsInit } from "./server/websocketManager.js";
 import { convertTxtEncoding } from "./server/tools/textFileTools.js";
@@ -89,7 +89,7 @@ app.use(checkPermissions);
 
 app.use((req, res, next) => {
   const path = decodeURIComponent(req.path);
-  if (path.startsWith(`${UPLOAD_ROUTE}/`)) {
+  if (path.startsWith(`${MEDIA_ROUTE}/`)) {
     const userIp = normalizeIp(req.clientIp || req.ip);
     console.log(
       `File accessed: ${path}, userId: `,
@@ -111,7 +111,7 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use(`${UPLOAD_ROUTE}`, express.static(MEDIA_FULL_PATH));
+app.use(`${MEDIA_ROUTE}`, express.static(MEDIA_FULL_PATH));
 app.use(`${THUMB_ROUTE}`, express.static(THUMB_FULL_PATH));
 app.use(express.json({ limit: "3mb" }));
 app.use(express.urlencoded({ extended: true }));
@@ -285,16 +285,16 @@ app.post("/api/upload", upload.single("file"), async (req, res) => {
       await generateThumbnail(filePath, thumbnailPath);
       await updateTreeCache(currentPath, req); // 更新缓存
       res.send({
-        filename: `${UPLOAD_ROUTE}/` + currentPath + "/" + filename,
+        filename: `${MEDIA_ROUTE}/` + currentPath + "/" + filename,
         thumbnail: `${THUMB_ROUTE}/` + currentPath + "/" + filename + ".png",
       });
     } catch (err) {
       console.error("Error generating thumbnail:", err);
-      res.send({ filename: `${UPLOAD_ROUTE}/` + currentPath + "/" + filename });
+      res.send({ filename: `${MEDIA_ROUTE}/` + currentPath + "/" + filename });
     }
   } else {
     await updateTreeCache(currentPath, req); // 更新缓存
-    res.send({ filename: `${UPLOAD_ROUTE}/` + currentPath + "/" + filename });
+    res.send({ filename: `${MEDIA_ROUTE}/` + currentPath + "/" + filename });
   }
 });
 
@@ -579,12 +579,7 @@ app.post("/api/convertTxtEncoding", (req, res) => {
 });
 
 // 处理所有非API路由，返回index.html，支持前端路由
-app.get(/^\/(?!api|media|thumbnails).*/, (req, res) => {
-  res.sendFile(path.join(__dirname, "static", "index.html"));
-});
-
-// 根路径返回 index.html
-app.get("/", (req, res) => {
+app.get(ENTRY_ROUTE_REGEX, (req, res) => {
   res.sendFile(path.join(__dirname, "static", "index.html"));
 });
 
