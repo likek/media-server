@@ -154,7 +154,7 @@
 </template>
 
 <script setup>
-import { ref, watch, onMounted, onUnmounted, computed } from 'vue'
+import { ref, watch, onMounted, onUnmounted, computed, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Loading, DocumentCopy } from '@element-plus/icons-vue'
@@ -163,11 +163,10 @@ import FileItem from '../components/FileItem.vue'
 import { getFiles, searchFiles, updateCache, createNewFolder, renameFile, deleteFileOrFolder, uploadFileToServer, downloadFromText, moveFile, readTextFile, convertTextEncoding, convertFileToMp4 } from '../services/api'
 import { copyText } from '@/utils'
 
+const stateCache = {}
+
 const router = useRouter()
 const route = useRoute()
-
-// 基础路径
-
 
 // 状态变量
 const files = ref([])
@@ -280,8 +279,35 @@ const loadFiles = async (resetPage = true) => {
 // 监听路由变化
 watch(() => route.params.path, () => {
   updateCurrentPath()
-  loadFiles()
+  if (stateCache[currentPath.value]) {
+    files.value = stateCache[currentPath.value].files || []
+    currentPage.value = stateCache[currentPath.value].currentPage || 0
+    hasMoreFiles.value = stateCache[currentPath.value].hasMoreFiles || false
+    nextTick(() => {
+      // 检查首屏内容是否填满容器，如果不足且有更多文件，则自动加载更多
+      checkContentHeight()
+      mediaContainer.value.scrollTop = stateCache[currentPath.value].scrollTop || 0
+    })
+  } else {
+    loadFiles()
+  }
 }, { immediate: true })
+
+watch(() => files.value, (files) => {
+  stateCache[currentPath.value] = stateCache[currentPath.value] || {}
+  stateCache[currentPath.value].files = [...files]
+})
+
+watch(() => currentPage.value, (newPage) => {
+  stateCache[currentPath.value] = stateCache[currentPath.value] || {}
+  stateCache[currentPath.value].currentPage = newPage
+})
+
+watch(() => hasMoreFiles.value, (hasMore) => {
+  stateCache[currentPath.value] = stateCache[currentPath.value] || {}
+  stateCache[currentPath.value].hasMoreFiles = hasMore
+})
+
 
 // 搜索文件
 const handleSearch = async () => {
@@ -718,10 +744,18 @@ const checkScrollPosition = () => {
   }
 }
 
+const cacheScrollPosition = () => {
+  if (mediaContainer.value) {
+    stateCache[currentPath.value] = stateCache[currentPath.value] || {}
+    stateCache[currentPath.value].scrollTop = mediaContainer.value.scrollTop
+  }
+}
+
 // 设置滚动事件监听
 onMounted(() => {
   if (mediaContainer.value) {
     mediaContainer.value.addEventListener('scroll', checkScrollPosition)
+    mediaContainer.value.addEventListener('scroll', cacheScrollPosition)
   }
 })
 
@@ -729,6 +763,7 @@ onMounted(() => {
 onUnmounted(() => {
   if (mediaContainer.value) {
     mediaContainer.value.removeEventListener('scroll', checkScrollPosition)
+    mediaContainer.value.removeEventListener('scroll', cacheScrollPosition)
   }
 })
 </script>
