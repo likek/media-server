@@ -7,8 +7,9 @@ const api = axios.create({
 })
 
 // 获取文件列表
-export const getFiles = async (path, page = 0, pageSize = -1) => {
-  const response = await api.post('/files', { path, page, pageSize })
+export const getFiles = async (id = null, page = 0, pageSize = -1) => {
+  const params = { id, page, pageSize };
+  const response = await api.post('/files', params)
   return response.data.map((file) => {
     if(file.type === 'file' && file.path) {
       file.path = `${routeMedia}${file.path}`
@@ -20,9 +21,18 @@ export const getFiles = async (path, page = 0, pageSize = -1) => {
   })
 }
 
+// 获取文件夹详细信息
+export const getFolderInfo = async (id) => {
+  if (!id) return null;
+  const params = { id };
+  const response = await api.post('/folderInfo', params)
+  return response.data
+}
+
 // 搜索文件
-export const searchFiles = async (query, path) => {
-  const response = await api.post('/search', { query, path })
+export const searchFiles = async (query, id = null) => {
+  const params = { query, id };
+  const response = await api.post('/search', params)
   return response.data.map((file) => {
     if(file.type === 'file' && file.path) {
       file.path = `${routeMedia}${file.path}`
@@ -35,35 +45,41 @@ export const searchFiles = async (query, path) => {
 }
 
 // 更新缓存
-export const updateCache = async (path) => {
-  const response = await api.post('/updateCache', { path })
+export const updateCache = async (id = null) => {
+  const params = { id };
+  const response = await api.post('/updateCache', params)
   return response.data
 }
 
 // 创建文件夹
-export const createNewFolder = async (folderName, path) => {
-  const response = await api.post('/createFolder', { folderName, path })
+export const createNewFolder = async (folderName, parentId = null) => {
+  const params = { folderName, parentId };
+  const response = await api.post('/createFolder', params)
   return response.data
 }
 
 // 重命名文件或文件夹
-export const renameFile = async (sourcePath, newName, type) => {
-  const response = await api.post('/rename', { sourcePath, newName, type })
+export const renameFile = async (id, newName, type) => {
+  const params = { id, newName, type };
+  const response = await api.post('/rename', params)
   return response.data
 }
 
 // 删除文件或文件夹
-export const deleteFileOrFolder = async (path, type) => {
-  const response = await api.post('/delete', { path, type })
+export const deleteFileOrFolder = async (id, type) => {
+  const params = { id, type };
+  const response = await api.post('/delete', params)
   return response.data
 }
 
 // 上传文件
-export const uploadFileToServer = async (file, path, onProgress) => {
+export const uploadFileToServer = async (file, parentId, onProgress) => {
   const formData = new FormData()
   formData.append('file', file)
   
-  const response = await api.post(`/upload?path=${encodeURIComponent(path)}`, formData, {
+  const url = `/upload?parentId=${encodeURIComponent(parentId)}`;
+    
+  const response = await api.post(url, formData, {
     headers: {
       'Content-Type': 'multipart/form-data'
     },
@@ -77,14 +93,15 @@ export const uploadFileToServer = async (file, path, onProgress) => {
 }
 
 // 从文本链接下载
-export const downloadFromText = async (text, folder) => {
-  const response = await api.post('/downloadFromText', { text, folder })
+export const downloadFromText = async (text, folderId) => {
+  const response = await api.post('/downloadFromText', { text, folderId })
   return response.data
 }
 
 // 移动文件
-export const moveFile = async (sourcePath, targetFolder) => {
-  const response = await api.post('/move', { sourcePath, targetFolder })
+export const moveFile = async (sourceId, targetId) => {
+  const params = { sourceId, targetId };
+  const response = await api.post('/move', params)
   return response.data
 }
 

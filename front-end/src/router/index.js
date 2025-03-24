@@ -4,12 +4,12 @@ import FileExplorer from '../views/FileExplorer.vue'
 const routes = [
   {
     path: '/',
-    name: 'Home',
+    name: 'home',
     component: FileExplorer
   },
   {
-    path: '/folder/:path(.*)',
-    name: 'Folder',
+    path: '/folder/:id?',
+    name: 'folder',
     component: FileExplorer
   }
 ]

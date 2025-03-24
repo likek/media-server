@@ -52,7 +52,7 @@
           v-else-if="isImage"
           class="preview-content image-preview"
           :src="file.path"
-          :zoom-rate="1.2"
+          :zoom-rate="1.02"
           :max-scale="7"
           :min-scale="0.2"
           show-progress
@@ -61,7 +61,7 @@
           :initial-index="imageIndex"
           :hide-on-click-modal="true"
           :preview-teleported="true"
-          :infinite="false"
+          :infinite="true"
         />
         <!-- 文本预览 -->
         

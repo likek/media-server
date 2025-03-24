@@ -4,7 +4,7 @@ media
 log.txt
 cache.json
 permission.json
-folderLockCfg.json
+
 database.db
 .temp
 static

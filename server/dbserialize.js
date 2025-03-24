@@ -68,6 +68,32 @@ const initAll = () => {
     `)
 
   db.run(`
+    CREATE TABLE IF NOT EXISTS logs_file_accessed (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      time TEXT,
+      userId TEXT,
+      userIp TEXT,
+      filePath TEXT
+    )
+  `);
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS files (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      type TEXT NOT NULL,
+      parent_id INTEGER,
+      path TEXT,
+      size INTEGER,
+      last_modified TEXT,
+      thumbnail TEXT,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (parent_id) REFERENCES files(id) ON DELETE CASCADE
+    )
+  `);
+
+  db.run(`
     CREATE TRIGGER IF NOT EXISTS limit_logs_request
     AFTER INSERT ON logs_request
     WHEN (SELECT COUNT(*) FROM logs_request) > 10000

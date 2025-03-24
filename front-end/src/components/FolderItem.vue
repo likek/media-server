@@ -33,7 +33,7 @@ const props = defineProps({
 const emit = defineEmits(['navigate', 'rename', 'move', 'delete'])
 
 const navigate = () => {
-  emit('navigate', props.folder.path)
+  emit('navigate', props.folder.id)
 }
 </script>
 

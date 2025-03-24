@@ -24,8 +24,8 @@
           <el-breadcrumb-item @click="navigateToRoot">
             <el-icon><HomeFilled /></el-icon>
           </el-breadcrumb-item>
-          <template v-for="(segment, index) in pathSegments" :key="index">
-            <el-breadcrumb-item @click="navigateToSegment(index)">{{ segment }}</el-breadcrumb-item>
+          <template v-for="(folder, index) in breadcrumbPath" :key="folder.id">
+            <el-breadcrumb-item @click="navigateToFolder(folder.id)">{{ folder.name }}</el-breadcrumb-item>
           </template>
         </el-breadcrumb>
         <el-button class="copy-path-btn" size="small" @click="copyCurrentPath" type="info" plain>
@@ -160,7 +160,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Loading, DocumentCopy } from '@element-plus/icons-vue'
 import FolderItem from '../components/FolderItem.vue'
 import FileItem from '../components/FileItem.vue'
-import { getFiles, searchFiles, updateCache, createNewFolder, renameFile, deleteFileOrFolder, uploadFileToServer, downloadFromText, moveFile, readTextFile, convertTextEncoding, convertFileToMp4 } from '../services/api'
+import { getFiles, searchFiles, updateCache, createNewFolder, renameFile, deleteFileOrFolder, uploadFileToServer, downloadFromText, moveFile, readTextFile, convertTextEncoding, convertFileToMp4, getFolderInfo } from '../services/api'
 import { copyText } from '@/utils'
 
 const stateCache = {}
@@ -178,6 +178,7 @@ const uploading = ref(false)
 const uploadProgress = ref(0)
 const fileInput = ref(null)
 const mediaContainer = ref(null) // 添加滚动容器的ref
+const breadcrumbPath = ref([]) // 存储面包屑导航路径
 
 // 分页状态
 const currentPage = ref(0)
@@ -261,7 +262,10 @@ const loadFiles = async (resetPage = true) => {
       currentPage.value = 0
     }
     
-    const response = await getFiles(currentPath.value, currentPage.value, pageSize.value)
+    // 获取当前文件夹ID（如果有）
+    const folderId = route.params.id
+    
+    const response = await getFiles(folderId, currentPage.value, pageSize.value)
     files.value = response
     
     // 判断是否还有更多文件
@@ -277,18 +281,47 @@ const loadFiles = async (resetPage = true) => {
   }
 }
 
+// 获取文件夹的完整路径信息（包括所有父文件夹）
+const loadFolderPath = async (folderId) => {
+  if (!folderId) {
+    breadcrumbPath.value = []
+    return
+  }
+  
+  const path = []
+  let currentId = folderId
+  
+  while (currentId) {
+    const folderInfo = await getFolderInfo(currentId)
+    if (!folderInfo) break
+    
+    path.unshift({
+      id: folderInfo.id,
+      name: folderInfo.filename
+    })
+    
+    currentId = folderInfo.parent_id
+  }
+  
+  breadcrumbPath.value = path
+}
+
 // 监听路由变化
-watch(() => route.params.path, () => {
+watch(() => route.params.id, async () => {
   searchRes.value = undefined
   updateCurrentPath()
-  if (stateCache[currentPath.value]) {
-    files.value = stateCache[currentPath.value].files || []
-    currentPage.value = stateCache[currentPath.value].currentPage || 0
-    hasMoreFiles.value = stateCache[currentPath.value].hasMoreFiles ? stateCache[currentPath.value].hasMoreFiles : true
+  
+  // 加载面包屑导航路径
+  await loadFolderPath(route.params.id)
+  
+  if (stateCache[route.params.id]) {
+    files.value = stateCache[route.params.id].files || []
+    currentPage.value = stateCache[route.params.id].currentPage || 0
+    hasMoreFiles.value = stateCache[route.params.id].hasMoreFiles ? stateCache[route.params.id].hasMoreFiles : true
     nextTick(() => {
       // 检查首屏内容是否填满容器，如果不足且有更多文件，则自动加载更多
       checkContentHeight()
-      mediaContainer.value.scrollTop = stateCache[currentPath.value].scrollTop || 0
+      mediaContainer.value.scrollTop = stateCache[route.params.id].scrollTop || 0
     })
   } else {
     loadFiles()
@@ -296,19 +329,18 @@ watch(() => route.params.path, () => {
 }, { immediate: true })
 
 watch(() => files.value, (files) => {
-  stateCache[currentPath.value] = stateCache[currentPath.value] || {}
-  stateCache[currentPath.value].files = [...files]
+  stateCache[route.params.id] = stateCache[route.params.id] || {}
+  stateCache[route.params.id].files = [...files]
 })
 
 watch(() => currentPage.value, (newPage) => {
-  stateCache[currentPath.value] = stateCache[currentPath.value] || {}
-  stateCache[currentPath.value].currentPage = newPage
+  stateCache[route.params.id] = stateCache[route.params.id] || {}
+  stateCache[route.params.id].currentPage = newPage
 })
 
 watch(() => hasMoreFiles.value, (hasMore) => {
-  stateCache[currentPath.value] = stateCache[currentPath.value] || {}
-  stateCache[currentPath.value].hasMoreFiles = hasMore
-  console.log('hasMoreFiles changed:', hasMore)
+  stateCache[route.params.id] = stateCache[route.params.id] || {}
+  stateCache[route.params.id].hasMoreFiles = hasMore
 })
 
 
@@ -322,7 +354,10 @@ const handleSearch = async () => {
   
   loading.value = true
   try {
-    const response = await searchFiles(searchQuery.value, currentPath.value)
+    // 获取当前文件夹ID（如果有）
+    const folderId = route.params.id
+    
+    const response = await searchFiles(searchQuery.value, folderId)
     searchRes.value = response
   } catch (error) {
     ElMessage.error('搜索失败')
@@ -335,7 +370,10 @@ const handleSearch = async () => {
 // 刷新缓存
 const refreshCache = async () => {
   try {
-    await updateCache(currentPath.value)
+    // 获取当前文件夹ID（如果有）
+    const folderId = route.params.id
+    
+    await updateCache(folderId)
     await loadFiles()
     ElMessage.success('刷新数据成功')
   } catch (error) {
@@ -345,13 +383,13 @@ const refreshCache = async () => {
 }
 
 // 导航到文件夹
-const navigateToFolder = (folderPath) => {
-  router.push(`/folder/${folderPath}`)
+const navigateToFolder = (folderId) => {
+  router.push({ name: 'folder', params: { id: folderId } })
 }
 
 // 导航到根目录
 const navigateToRoot = () => {
-  router.push('/')
+  router.push({ name: 'home' })
 }
 
 // 复制当前路径
@@ -373,7 +411,10 @@ const uploadFile = async (event) => {
   uploadProgress.value = 0
   
   try {
-    await uploadFileToServer(file, currentPath.value, (progress) => {
+    // 获取当前文件夹ID（如果有）
+    const parentId = route.params.id || null
+    
+    await uploadFileToServer(file, parentId, (progress) => {
       uploadProgress.value = Math.round(progress)
     })
     
@@ -403,7 +444,10 @@ const createFolder = async () => {
   }
   
   try {
-    await createNewFolder(newFolderName.value, currentPath.value)
+    // 获取当前文件夹ID（如果有）
+    const parentId = route.params.id || null
+    
+    await createNewFolder(newFolderName.value, parentId)
     createFolderDialogVisible.value = false
     ElMessage.success('创建文件夹成功')
     await loadFiles()
@@ -428,7 +472,7 @@ const renameItem = async () => {
   }
   
   try {
-    await renameFile(currentItem.value.path, newName.value, currentItem.value.type)
+    await renameFile(currentItem.value.id, newName.value, currentItem.value.type)
     renameDialogVisible.value = false
     ElMessage.success('重命名成功')
     await loadFiles()
@@ -451,7 +495,7 @@ const confirmDelete = (item) => {
   )
     .then(async () => {
       try {
-        await deleteFileOrFolder(item.path, item.type)
+        await deleteFileOrFolder(item.id, item.type)
         ElMessage.success('删除成功')
         await loadFiles()
       } catch (error) {
@@ -478,30 +522,19 @@ const uploadFromLinks = async () => {
   }
   
   const text = linkText.value
-  let folder = null
-  let path = currentPath.value
-  
-  // 检查是否包含title标记
-  if (/^title:[^\n]+/.test(text)) {
-    folder = text.match(/^title:([^\n]+)/)[1]
-    if (folder) {
-      path = currentPath.value ? `${currentPath.value}/${folder}` : folder
-    }
-  }
+  // 获取当前文件夹ID（如果有）
+  const folderId = route.params.id || null
   
   try {
     textLinkDialogVisible.value = false
     ElMessage.success('开始在后台提取资源，请稍后...')
-    const response = await downloadFromText(text, path)
+    const response = await downloadFromText(text, folderId)
     ElMessage.success(`提取成功${response.successCount}条, 失败${response.failedLinks.length}条`)
     
     // 下载完成后导航到目标文件夹
-    if (response.downloadRoot && response.downloadSub) {
-      const target = `${response.downloadRoot}/${response.downloadSub}`.replace(/^\//, '')
-      if (target) {
-        router.push(`/folder/${target}`)
-        return // 导航会触发路由变化，会自动加载文件，不需要再调用loadFiles
-      }
+    if (response.downloadId) {
+      router.push({ name: 'folder', params: { id: response.downloadId } })
+      return // 导航会触发路由变化，会自动加载文件，不需要再调用loadFiles
     }
     
     await loadFiles()
@@ -565,7 +598,14 @@ const moveItem = async () => {
   }
   
   try {
-    await moveFile(currentItem.value.path, targetFolder.value)
+    // 获取目标文件夹的ID
+    const targetId = availableFolders.value.find(folder => folder.path === targetFolder.value)?.id || null
+    if (!targetId && targetFolder.value !== '') {
+      ElMessage.warning('目标文件夹ID无效')
+      return
+    }
+    
+    await moveFile(currentItem.value.id, targetId)
     moveDialogVisible.value = false
     ElMessage.success('移动成功')
     await loadFiles()
@@ -703,8 +743,11 @@ const loadMoreFiles = async () => {
   try {
     const scrollContainer = mediaContainer.value
     const currScrollTop = scrollContainer ? scrollContainer.scrollTop : 0
+    
+    // 获取当前文件夹ID（如果有）
+    const folderId = route.params.id
 
-    const response = await getFiles(currentPath.value, currentPage.value, pageSize.value)
+    const response = await getFiles(folderId, currentPage.value, pageSize.value)
     
     if (response.length > 0) {
       files.value = [...files.value, ...response]
@@ -742,8 +785,8 @@ const checkScrollPosition = () => {
 
 const cacheScrollPosition = () => {
   if (mediaContainer.value) {
-    stateCache[currentPath.value] = stateCache[currentPath.value] || {}
-    stateCache[currentPath.value].scrollTop = mediaContainer.value.scrollTop
+    stateCache[route.params.id] = stateCache[route.params.id] || {}
+    stateCache[route.params.id].scrollTop = mediaContainer.value.scrollTop
   }
 }
 
