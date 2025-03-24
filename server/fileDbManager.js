@@ -2,7 +2,6 @@ import fs from "fs";
 import path from "path";
 import { MEDIA_FULL_PATH, THUMB_FULL_PATH } from "../serverConfig.js";
 import { isVideoByName, generateThumbnail } from "./utils/index.js";
-import { wsBroadcastMessage } from "./websocketManager.js";
 import db from "./dbserialize.js";
 
 // 获取文件夹的ID
@@ -90,7 +89,7 @@ const createFolder = (folderName, parentId) => {
 };
 
 // 更新文件夹内容
-const updateFolderContents = async (folderId, folderPath, req) => {
+const updateFolderContents = async (folderId, folderPath) => {
   // 规范化路径
   if (folderPath.startsWith("/")) {
     folderPath = folderPath.slice(1);
@@ -263,10 +262,10 @@ const updateFolderContents = async (folderId, folderPath, req) => {
 };
 
 // 根据路径更新文件夹内容
-const updateFolderByPath = async (folderPath, req) => {
+const updateFolderByPath = async (folderPath) => {
   try {
     const folderId = await getFolderId(folderPath);
-    return await updateFolderContents(folderId, folderPath, req);
+    return await updateFolderContents(folderId, folderPath);
   } catch (err) {
     console.error("Error updating folder by path:", err);
     throw err;
@@ -663,7 +662,7 @@ const moveFileById = (fileId, targetFolderId) => {
 };
 
 // 初始化根目录
-const initRootDirectory = async (req) => {
+const initRootDirectory = async () => {
   try {
     // 检查根目录是否已存在于数据库中
     const rootExists = await new Promise((resolve, reject) => {
@@ -678,7 +677,7 @@ const initRootDirectory = async (req) => {
     
     if (!rootExists) {
       // 扫描根目录并添加到数据库
-      await updateFolderByPath("", req);
+      await updateFolderByPath("");
       console.log("Root directory initialized in database");
     }
   } catch (err) {

@@ -159,6 +159,14 @@ app.post("/api/users", async (req, res) => {
 
 app.post("/api/downloadFromText", async (req, res) => { 
   const folderId = req.body.folderId;
+  let folderPath = "";
+  const folderInfo = await getFileById(folderId);
+  if (folderInfo) {
+    folderPath = folderInfo.path;
+  }
+  let downloadRootAll = folderPath;
+  let downloadSubAll = [];
+  const folder = folderPath;
   let text = req.body.text || "";
   const successItemCb = data => {
     // 单个文件下载成功，通知前端下载进度
@@ -184,7 +192,6 @@ app.post("/api/downloadFromText", async (req, res) => {
     let completedCountAll = 0;
     let ignoreLinksAll = []
     let failedLinksAll = [];
-    let downloadId = null;
     text = text.replace(reg, '')
     const pageUrlList = text.split('\n')
     for (const pageUrl of pageUrlList) {
@@ -207,9 +214,9 @@ app.post("/api/downloadFromText", async (req, res) => {
       }
       // 当前页面 所有文件下载成功
       const { downloadRoot, downloadSub, completedCount, ignoreLinks, failedLinks } = result
-      await updateTreeCache(`${downloadRoot}/${downloadSub}`, req)
+      await updateFolderByPath(`${downloadRoot}/${downloadSub}`); // 更新数据库
       if (downloadSub.indexOf('/') !== -1) {
-        await updateTreeCache(downloadSub.substring(0, downloadSub.lastIndexOf('/')), req);
+        await updateFolderByPath(downloadSub.substring(0, downloadSub.lastIndexOf('/'))); // 更新数据库
       }
       downloadRootAll = downloadRoot
       downloadSubAll.push(downloadSub)
@@ -221,7 +228,7 @@ app.post("/api/downloadFromText", async (req, res) => {
     const downloadRoot = downloadRootAll
     const downloadSub = downloadSubAll[0]
     // 所有页面，所有文件下载成功
-    await updateTreeCache(downloadRoot, req);
+    await updateFolderByPath(downloadRoot);
     res.json({
       failedLinks: failedLinksAll,
       successCount: completedCountAll - failedLinksAll.length,
@@ -242,10 +249,10 @@ app.post("/api/downloadFromText", async (req, res) => {
   }
   // 所有文件下载成功
   const { downloadRoot, downloadSub, completedCount, ignoreLinks, failedLinks } = result
-  await updateTreeCache(downloadRoot, req);
-  await updateTreeCache(`${downloadRoot}/${downloadSub}`, req);
+  await updateFolderByPath(downloadRoot);
+  await updateFolderByPath(`${downloadRoot}/${downloadSub}`); // 更新数据库
   if (downloadSub.indexOf('/') !== -1) {
-    await updateTreeCache(downloadSub.substring(0, downloadSub.lastIndexOf('/')), req);
+    await updateFolderByPath(downloadSub.substring(0, downloadSub.lastIndexOf('/'))); // 更新数据库
   }
 
   res.json({
@@ -284,7 +291,7 @@ app.post("/api/upload", upload.single("file"), async (req, res) => {
       const thumbnailPath = path.join(thumbnailDir, filename + ".png");
       try {
         await generateThumbnail(filePath, thumbnailPath);
-        await updateFolderByPath(folderPath, req); // 更新数据库
+        await updateFolderByPath(folderPath); // 更新数据库
         
         // 获取新创建的文件信息
         const fileInfo = await getFileByPath(path.join(folderPath, filename));
@@ -299,7 +306,7 @@ app.post("/api/upload", upload.single("file"), async (req, res) => {
         res.send({ filename: `${MEDIA_ROUTE}/` + folderPath + "/" + filename });
       }
     } else {
-      await updateFolderByPath(folderPath, req); // 更新数据库
+      await updateFolderByPath(folderPath); // 更新数据库
       
       // 获取新创建的文件信息
       const fileInfo = await getFileByPath(path.join(folderPath, filename));
@@ -405,7 +412,7 @@ app.post("/api/createFolder", async (req, res) => {
     
     // 更新数据库
     const parentPath = parentInfo ? parentInfo.path : "";
-    await updateFolderByPath(parentPath, req);
+    await updateFolderByPath(parentPath);
     
     res.send({ message: "Folder created successfully" });
   } catch (err) {
@@ -466,7 +473,7 @@ app.post("/api/updateCache", async (req, res) => {
     
     // 更新文件夹内容
     const folderPath = folderInfo ? folderInfo.path : "";
-    await updateFolderByPath(folderPath, req);
+    await updateFolderByPath(folderPath);
     
     res.send({ message: "Update cache successfully" });
   } catch (error) {
@@ -520,7 +527,7 @@ app.post("/api/convert", (req, res) => {
     .save(absoluteOutputPath)
     .on("end", async () => {
       const currentPath = path.dirname(inputFilePath);
-      await updateTreeCache(currentPath, req); // 更新缓存
+      await updateFolderByPath(currentPath); // 更新数据库
       res.json({ outputFilePath: outputFilePath });
     })
     .on("error", (err) => {
@@ -544,7 +551,7 @@ app.post("/api/unzip", async (req, res) => {
   if (fileExtension === ".zip") {
     extract(absoluteZipPath, { dir: extractToPath })
       .then(async () => {
-        await updateTreeCache(currentPath, req);
+        await updateFolderByPath(currentPath); // 更新数据库
         res.json({ message: "File unzipped successfully", success: true });
       })
       .catch((err) => {

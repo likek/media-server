@@ -121,12 +121,12 @@
       <div class="move-dialog-content">
         <p>当前位置: {{ currentPath || '/' }}</p>
         <p>选择目标文件夹:</p>
-        <el-select v-model="targetFolder" placeholder="选择目标文件夹" style="width: 100%">
+        <el-select v-model="targetFolderId" placeholder="选择目标文件夹" style="width: 100%">
           <el-option
             v-for="folder in availableFolders"
-            :key="folder.path"
+            :key="folder.id"
             :label="folder.displayPath"
-            :value="folder.path"
+            :value="folder.id"
           />
         </el-select>
       </div>
@@ -194,7 +194,7 @@ const currentItem = ref(null)
 const textLinkDialogVisible = ref(false)
 const linkText = ref('')
 const moveDialogVisible = ref(false)
-const targetFolder = ref('')
+const targetFolderId = ref('')
 const availableFolders = ref([])
 
 // 文本查看对话框状态
@@ -510,8 +510,19 @@ const confirmDelete = (item) => {
 
 // 显示文本链接上传对话框
 const showTextLinkUploadDialog = () => {
+  // 获取剪切板权限和内容
+  const clipboard = navigator.clipboard
   linkText.value = ''
-  textLinkDialogVisible.value = true
+  if (clipboard) {
+    clipboard.readText()
+    .then((clipboardText) => {
+      linkText.value = clipboardText
+    }).finally(() => {
+      textLinkDialogVisible.value = true
+    })
+  } else {
+    textLinkDialogVisible.value = true
+  }
 }
 
 // 从链接上传
@@ -563,13 +574,14 @@ const loadAvailableFolders = async () => {
         if (item.type === 'folder') {
           // 排除当前项及其子文件夹
           if (currentItem.value && 
-              (item.path === currentItem.value.path || 
+              (item.id === currentItem.value.id || 
                item.path.startsWith(currentItem.value.path + '/'))) {
             return
           }
           
           const displayPath = '　'.repeat(level) + item.filename
           folders.push({
+            id: item.id,
             path: item.path,
             displayPath
           })
@@ -592,19 +604,14 @@ const loadAvailableFolders = async () => {
 
 // 移动文件或文件夹
 const moveItem = async () => {
-  if (!targetFolder.value && targetFolder.value !== '') {
+  if (!targetFolderId.value && targetFolderId.value !== null) {
     ElMessage.warning('请选择目标文件夹')
     return
   }
   
   try {
     // 获取目标文件夹的ID
-    const targetId = availableFolders.value.find(folder => folder.path === targetFolder.value)?.id || null
-    if (!targetId && targetFolder.value !== '') {
-      ElMessage.warning('目标文件夹ID无效')
-      return
-    }
-    
+    const targetId = targetFolderId.value
     await moveFile(currentItem.value.id, targetId)
     moveDialogVisible.value = false
     ElMessage.success('移动成功')
