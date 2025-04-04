@@ -625,7 +625,7 @@ const moveItem = async () => {
 // 下载文件
 const downloadFile = (file) => {
   const link = document.createElement('a')
-  link.href = `/${routeMedia}/${file.path}`
+  link.href = `${file.path}`
   link.download = file.filename
   document.body.appendChild(link)
   link.click()
