@@ -535,12 +535,13 @@ app.post("/api/unzip", async (req, res) => {
   }
 });
 
-app.post("/api/readTextFile", (req, res) => {
-  const { filePath, start = 0, numLines = 50, encoding = "utf8" } = req.body;
+app.post("/api/readTextFile", async (req, res) => {
+  const { id, start = 0, numLines = 50, encoding = "utf8" } = req.body;
+  const { path: filePath } = await getFileById(id);
   const absoluteFilePath = path.join(MEDIA_FULL_PATH, filePath);
 
   if (!fs.existsSync(absoluteFilePath)) {
-    return res.status(400).json({ message: "File does not exist" });
+    return res.status(400).json({ message: `File does not exist: ${filePath}` });
   }
 
   let lineCount = 0;
@@ -573,8 +574,9 @@ app.post("/api/readTextFile", (req, res) => {
   });
 });
 
-app.post("/api/convertTxtEncoding", (req, res) => {
-  const { filePath } = req.body;
+app.post("/api/convertTxtEncoding", async (req, res) => {
+  const { id } = req.body;
+  const { path: filePath  } = await getFileById(id);
   const absoluteFilePath = path.join(MEDIA_FULL_PATH, filePath);
 
   if (!fs.existsSync(absoluteFilePath)) {

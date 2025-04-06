@@ -1,5 +1,6 @@
 import axios from 'axios'
 import { routeMedia, routeThumbnail} from '@/config'
+import { id } from 'element-plus/es/locale/index.mjs';
 
 const api = axios.create({
   baseURL: '/api',
@@ -97,14 +98,14 @@ export const unzipFile = async (zipFilePath) => {
 }
 
 // 读取文本文件
-export const readTextFile = async (filePath, start = 0, numLines = 50) => {
-  const response = await api.post('/readTextFile', { filePath, start, numLines })
+export const readTextFile = async (id, start = 0, numLines = 50) => {
+  const response = await api.post('/readTextFile', { id, start, numLines })
   return response.data
 }
 
 // 转换文本文件编码
-export const convertTextEncoding = async (filePath) => {
-  const response = await api.post('/convertTxtEncoding', { filePath })
+export const convertTextEncoding = async (id) => {
+  const response = await api.post('/convertTxtEncoding', { id })
   return response.data
 }
 

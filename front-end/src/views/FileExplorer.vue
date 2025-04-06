@@ -136,17 +136,11 @@
     </el-dialog>
     
     <!-- 文本文件查看对话框 -->
-    <el-dialog v-model="txtDialogVisible" :title="txtFileName" width="80%" class="txt-dialog">
-        <div class="txt-content-wrapper">
-            <pre class="txt-content">{{ txtContent }}</pre>
-        </div>
-        <div class="txt-dialog-footer">
-            <span>当前页: {{ txtCurrentPage }}</span>
-            <el-button v-if="!isLastPage" @click="loadNextPage" type="primary">下一页</el-button>
-            <el-button @click="jumpToPage" type="info">跳转</el-button>
-            <el-button @click="convertEncoding" type="warning">转换编码</el-button>
-        </div>
-    </el-dialog>
+    <text-viewer-dialog
+      v-model:visible="txtDialogVisible"
+      :file="currentItem"
+      :num-lines="30"
+    />
   </div>
 </template>
 
@@ -157,6 +151,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Loading } from '@element-plus/icons-vue'
 import FolderItem from '../components/FolderItem.vue'
 import FileItem from '../components/FileItem.vue'
+import TextViewerDialog from '../components/TextViewerDialog.vue'
 import { getFiles, updateCache, createNewFolder, renameFile, deleteFileOrFolder, uploadFileToServer, downloadFromText, moveFile, readTextFile, convertTextEncoding, convertFileToMp4, getFolderInfo } from '../services/api'
 
 const stateCache = {}
@@ -193,12 +188,6 @@ const availableFolders = ref([])
 
 // 文本查看对话框状态
 const txtDialogVisible = ref(false)
-const txtContent = ref('')
-const txtFileName = ref('')
-const txtCurrentPage = ref(1)
-const isLastPage = ref(false)
-const nextStart = ref(0)
-const numLines = ref(50)
 
 const imageList = computed(() => {
   return files.value.filter(file => {
@@ -610,100 +599,15 @@ const downloadFile = (file) => {
 // 查看文本文件
 const viewTextFile = async (file) => {
   try {
-    txtFileName.value = file.filename
-    const response = await readTextFile(file.path, 0, numLines.value)
-    
-    if (response.content) {
-      txtContent.value = response.content
-      nextStart.value = response.start
-      isLastPage.value = response.isLastPage
-      txtCurrentPage.value = 1
-      txtDialogVisible.value = true
-    } else {
-      ElMessageBox.alert('无法读取文件内容', '错误', { type: 'error' })
-    }
+    currentItem.value = file
+    txtDialogVisible.value = true
   } catch (error) {
-    console.error('Error reading text file:', error)
-    ElMessageBox.alert('读取文件失败', '错误', { type: 'error' })
+    console.error('Error opening text file:', error)
+    ElMessageBox.alert('打开文件失败', '错误', { type: 'error' })
   }
 }
 
-// 加载下一页文本
-const loadNextPage = async () => {
-  try {
-    const response = await readTextFile(currentItem.value.path, nextStart.value, numLines.value)
-    
-    if (response.content) {
-      txtContent.value = response.content
-      nextStart.value = response.start
-      isLastPage.value = response.isLastPage
-      txtCurrentPage.value += 1
-    } else {
-      ElMessageBox.alert('无法读取文件内容', '错误', { type: 'error' })
-    }
-  } catch (error) {
-    console.error('Error reading next page:', error)
-    ElMessageBox.alert('读取下一页失败', '错误', { type: 'error' })
-  }
-}
 
-// 跳转到指定页
-const jumpToPage = async () => {
-  try {
-    const targetPage = await ElMessageBox.prompt('请输入页码', '跳转', {
-      confirmButtonText: '确定',
-      cancelButtonText: '取消',
-      inputPattern: /^\d+$/,
-      inputErrorMessage: '页码必须为数字'
-    })
-    
-    if (targetPage.value) {
-      const page = parseInt(targetPage.value)
-      if (page <= 0) {
-        ElMessageBox.alert('页码必须大于0', '错误', { type: 'warning' })
-        return
-      }
-      
-      if (page === txtCurrentPage.value) {
-        ElMessageBox.alert(`当前已是第${page}页`, '提示', { type: 'info' })
-        return
-      }
-      
-      const start = (page - 1) * numLines.value
-      const response = await readTextFile(currentItem.value.path, start, numLines.value)
-      
-      if (response.content) {
-        txtContent.value = response.content
-        nextStart.value = response.start
-        isLastPage.value = response.isLastPage
-        txtCurrentPage.value = page
-      } else {
-        ElMessageBox.alert('无法读取文件内容', '错误', { type: 'error' })
-      }
-    }
-  } catch (error) {
-    if (error !== 'cancel') {
-      console.error('Error jumping to page:', error)
-      ElMessageBox.alert('跳转失败', '错误', { type: 'error' })
-    }
-  }
-}
-
-// 转换文本编码
-const convertEncoding = async () => {
-  try {
-    const response = await convertTextEncoding(currentItem.value.path)
-    if (response.success) {
-      ElMessageBox.alert('编码已转换为UTF-8', '成功', { type: 'success' })
-      viewTextFile(currentItem.value) // 重新加载文本
-    } else {
-      ElMessageBox.alert(response.message || '转换编码失败', '错误', { type: 'error' })
-    }
-  } catch (error) {
-    console.error('Error converting encoding:', error)
-    ElMessageBox.alert('转换编码失败', '错误', { type: 'error' })
-  }
-}
 
 const convertTsFile = async (file) => {
   convertFileToMp4(file.path, file.path.replace('.ts', '_ts.mp4')).then(() => {
@@ -862,33 +766,7 @@ onUnmounted(() => {
   margin-bottom: 20px;
 }
 
-/* 文本查看对话框样式 */
-.txt-dialog .el-dialog__body {
-  padding: 10px;
-}
 
-.txt-content-wrapper {
-  max-height: 60vh;
-  overflow-y: auto;
-  background-color: #f5f7fa;
-  border-radius: 4px;
-  padding: 10px;
-}
-
-.txt-content {
-  white-space: pre-wrap;
-  word-break: break-all;
-  font-family: monospace;
-  margin: 0;
-}
-
-.txt-dialog-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-top: 15px;
-  padding: 0 10px;
-}
 
 .loading-indicator {
   display: flex;
