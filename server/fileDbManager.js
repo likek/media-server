@@ -249,7 +249,7 @@ const updateFolderByPath = async (folderPath) => {
 };
 
 // 根据ID获取文件夹内容
-const getFolderContentsById = (folderId, searchQuery = null) => {
+const getFolderContentsById = (folderId, searchQuery, page, pageSize) => {
   return new Promise(async (resolve, reject) => {
     try {
       // 获取文件夹信息，用于后续自动刷新缓存
@@ -281,7 +281,12 @@ const getFolderContentsById = (folderId, searchQuery = null) => {
         }
       }
       query += ` ORDER BY type DESC, last_modified DESC`
-      
+      // 添加分页
+      if (typeof pageSize === 'number' && typeof page === 'number') {
+        query += ` LIMIT ? OFFSET ?`;
+        params.push(pageSize, page * pageSize);
+      }
+
       db.all(query, params, async (err, rows) => {
         if (err) {
           reject(err);

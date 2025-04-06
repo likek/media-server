@@ -334,13 +334,7 @@ app.post("/api/files", async (req, res) => {
     await initRootDirectory(req);
     
     // 通过ID获取文件列表
-    let result = await getFolderContentsById(folderId, searchQuery);
-    
-    // 分页处理
-    if (pageSize && pageSize !== -1) {
-      result = result.slice(page * pageSize, (page + 1) * pageSize);
-    }
-    
+    let result = await getFolderContentsById(folderId, searchQuery, page, pageSize);
     res.send(result);
   } catch (err) {
     console.error("Error fetching file list:", err);
@@ -351,7 +345,7 @@ app.post("/api/files", async (req, res) => {
 // 删除文件或文件夹
 app.post("/api/delete", async (req, res) => {
   try {
-    const { type, id } = req.body;
+    const { id } = req.body;
     
     if (!id) {
       return res.status(400).send({ message: "id must be provided" });

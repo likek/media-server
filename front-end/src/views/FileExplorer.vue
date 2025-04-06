@@ -276,7 +276,7 @@ const loadFolderPath = async (folderId) => {
 const updatePageByCache = (cacheData) => {
   files.value = cacheData.files || []
   currentPage.value = cacheData.currentPage || 0
-  hasMoreFiles.value = cacheData.hasMoreFiles ? cacheData.hasMoreFiles : true
+  hasMoreFiles.value = cacheData.hasMoreFiles || false
   nextTick(() => {
     // 检查首屏内容是否填满容器，如果不足且有更多文件，则自动加载更多
     checkContentHeight()
@@ -285,6 +285,7 @@ const updatePageByCache = (cacheData) => {
 }
 
 const setCache = (id, query, value) => {
+  id = id || ''
   query = query || ''
   stateCache[id] = stateCache[id] || {}
   stateCache[id][query] = stateCache[id][query] || {}
@@ -292,6 +293,7 @@ const setCache = (id, query, value) => {
 }
 
 const getCache = (id, query) => {
+  id = id || ''
   query = query || ''
   return stateCache[id]?.[query]
 }
