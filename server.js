@@ -18,7 +18,7 @@ import { limiter } from "./server/middleware/limiter.js";
 import { checkBlacklist } from "./server/middleware/blackList.js";
 import { checkPermissions } from "./server/middleware/apiPermission.js";
 import { writeRequestLog, writeFileAccessedLog } from "./server/logManager.js";
-import { updateFolderByPath, getFolderContentsById, getFileById, getFileByPath, searchFiles, deleteFileById, renameFileById, moveFileById, initRootDirectory } from "./server/fileDbManager.js";
+import { updateFolderByPath, getFolderContentsById, getFileById, getFileByPath, deleteFileById, renameFileById, moveFileById, initRootDirectory } from "./server/fileDbManager.js";
 import { MEDIA_FULL_PATH, THUMB_FULL_PATH, MEDIA_ROUTE, THUMB_ROUTE, ENTRY_ROUTE_REGEX } from "./serverConfig.js";
 import { pathNormalizer } from "./server/middleware/pathNormalizer.js";
 import { wsBroadcastMessage, wsInit } from "./server/websocketManager.js";
@@ -326,6 +326,7 @@ app.post("/api/upload", upload.single("file"), async (req, res) => {
 app.post("/api/files", async (req, res) => {
   try {
     const folderId = req.body.id;
+    const searchQuery = req.body.query;
     const page = parseInt(req.body.page) || 0;
     const pageSize = parseInt(req.body.pageSize); // 每页文件数
     
@@ -333,7 +334,7 @@ app.post("/api/files", async (req, res) => {
     await initRootDirectory(req);
     
     // 通过ID获取文件列表
-    let result = await getFolderContentsById(folderId);
+    let result = await getFolderContentsById(folderId, searchQuery);
     
     // 分页处理
     if (pageSize && pageSize !== -1) {
@@ -344,31 +345,6 @@ app.post("/api/files", async (req, res) => {
   } catch (err) {
     console.error("Error fetching file list:", err);
     res.status(500).send({ message: "Failed to fetch file list." });
-  }
-});
-
-app.post("/api/search", async (req, res) => {
-  try {
-    let { query, id: folderId } = req.body;
-
-    if (!query) {
-      return res.status(400).json({ message: "Query is required" });
-    }
-
-    // 获取文件夹路径
-    let searchPath = "";
-    if (folderId) {
-      const folderInfo = await getFileById(folderId);
-      if (folderInfo && folderInfo.type === 'folder') {
-        searchPath = folderInfo.path;
-      }
-    }
-    
-    const result = await searchFiles(query, searchPath);
-    res.send(result);
-  } catch (err) {
-    console.error("Error searching files:", err);
-    res.status(500).send({ message: "Failed to search files." });
   }
 });
 

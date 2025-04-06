@@ -273,11 +273,25 @@ const updateFolderByPath = async (folderPath) => {
 };
 
 // 根据ID获取文件夹内容
-const getFolderContentsById = (folderId) => {
+const getFolderContentsById = (folderId, searchQuery = null) => {
   return new Promise(async (resolve, reject) => {
     try {
-      const query = `SELECT * FROM files WHERE parent_id ${folderId === null ? 'IS NULL' : '= ?'} ORDER BY type DESC, last_modified DESC`;
-      const params = folderId !== null ? [folderId] : [];
+      const params = [];
+      let query = `SELECT * FROM files`;
+      if (searchQuery) {
+        // 搜索模式
+        query += ` WHERE name LIKE ?`
+        params.push(`%${searchQuery}%`);
+      } else {
+        // 浏览模式
+        if (folderId) {
+          query += ` WHERE parent_id = ?`
+          params.push(folderId);
+        } else {
+          query += ` WHERE parent_id IS NULL`
+        }
+      }
+      query += ` ORDER BY type DESC, last_modified DESC`
       
       // 获取文件夹信息，用于后续自动刷新缓存
       let folderPath = "";
@@ -306,6 +320,11 @@ const getFolderContentsById = (folderId) => {
           parent_id: row.parent_id
         }));
         
+        if (searchQuery) {
+          // 如果是搜索模式，则返回所有结果
+          resolve(fileInfos);
+          return;
+        }
         // 如果文件夹内容为空或者文件数量很少，自动刷新缓存
         if (fileInfos.length === 0 || fileInfos.length < 3) {
           try {
@@ -335,17 +354,6 @@ const getFolderContentsById = (folderId) => {
       reject(error);
     }
   });
-};
-
-// 根据路径获取文件夹内容
-const getFolderContentsByPath = async (folderPath) => {
-  try {
-    const folderId = await getFolderId(folderPath);
-    return await getFolderContentsById(folderId);
-  } catch (err) {
-    console.error("Error getting folder contents by path:", err);
-    throw err;
-  }
 };
 
 // 根据ID获取文件或文件夹信息
@@ -411,46 +419,6 @@ const getFileByPath = (filePath) => {
       };
       
       resolve(fileInfo);
-    });
-  });
-};
-
-// 搜索文件
-const searchFiles = (query, folderPath) => {
-  return new Promise((resolve, reject) => {
-    // 规范化路径
-    if (folderPath && folderPath.startsWith("/")) {
-      folderPath = folderPath.slice(1);
-    }
-    
-    let sql = `SELECT * FROM files WHERE name LIKE ?`;
-    const params = [`%${query}%`];
-    
-    if (folderPath) {
-      sql += ` AND (path = ? OR path LIKE ?)`;
-      params.push(folderPath, `${folderPath}/%`);
-    }
-    
-    db.all(sql, params, (err, rows) => {
-      if (err) {
-        reject(err);
-        return;
-      }
-      
-      // 转换数据库记录为前端期望的格式
-      const results = rows.map(row => ({
-        id: row.id,
-        type: row.type,
-        filename: row.name,
-        path: row.path,
-        thumbnail: row.thumbnail,
-        lastModified: row.last_modified,
-        size: row.size,
-        parent_id: row.parent_id,
-        folder: path.dirname(row.path)
-      }));
-      
-      resolve(results);
     });
   });
 };
@@ -689,10 +657,8 @@ const initRootDirectory = async () => {
 export {
   updateFolderByPath,
   getFolderContentsById,
-  getFolderContentsByPath,
   getFileById,
   getFileByPath,
-  searchFiles,
   deleteFileById,
   renameFileById,
   moveFileById,

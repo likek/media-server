@@ -7,8 +7,8 @@ const api = axios.create({
 })
 
 // 获取文件列表
-export const getFiles = async (id = null, page = 0, pageSize = -1) => {
-  const params = { id, page, pageSize };
+export const getFiles = async (id = null, query = null, page = 0, pageSize = -1) => {
+  const params = { id, query, page, pageSize };
   const response = await api.post('/files', params)
   return response.data.map((file) => {
     if(file.type === 'file' && file.path) {
@@ -27,21 +27,6 @@ export const getFolderInfo = async (id) => {
   const params = { id };
   const response = await api.post('/folderInfo', params)
   return response.data
-}
-
-// 搜索文件
-export const searchFiles = async (query, id = null) => {
-  const params = { query, id };
-  const response = await api.post('/search', params)
-  return response.data.map((file) => {
-    if(file.type === 'file' && file.path) {
-      file.path = `${routeMedia}${file.path}`
-    }
-    if(file.thumbnail) {
-      file.thumbnail = `${routeThumbnail}${file.thumbnail}`
-    }
-    return file
-  })
 }
 
 // 更新缓存
