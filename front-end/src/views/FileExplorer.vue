@@ -222,10 +222,13 @@ const loadFiles = async (resetPage = true) => {
     const query = route.query.q
     
     const response = await getFiles(folderId, query, currentPage.value, pageSize.value)
-    files.value = response
-    
-    // 判断是否还有更多文件
-    hasMoreFiles.value = response.length === pageSize.value
+    if (route.params.id === folderId && route.query.q === query) {
+      files.value = response
+      // 判断是否还有更多文件
+      hasMoreFiles.value = response.length === pageSize.value
+    } else {
+      console.warn(`路由已变更，不更新数据`)
+    }
   } catch (error) {
     ElMessage.error('加载文件失败')
     console.error('Error loading files:', error)
@@ -622,8 +625,6 @@ const convertTsFile = async (file) => {
 // 加载更多文件
 const loadMoreFiles = async () => {
   if (loading.value || !hasMoreFiles.value) return
-  
-  currentPage.value += 1
   loading.value = true
   
   try {
@@ -633,20 +634,28 @@ const loadMoreFiles = async () => {
     // 获取当前文件夹ID（如果有）
     const folderId = route.params.id
     const query = route.query.q
-    const response = await getFiles(folderId, query, currentPage.value, pageSize.value)
-    
-    if (response.length > 0) {
-      files.value = [...files.value, ...response]
-      setTimeout(() => {
-        if (mediaContainer.value) {
-          mediaContainer.value.scrollTop = currScrollTop
-          checkContentHeight()
-        }
-      })
-      // 判断是否还有更多文件
-      hasMoreFiles.value = response.length === pageSize.value
+    const nextPage = currentPage.value + 1
+    const response = await getFiles(folderId, query, nextPage, pageSize.value)
+
+    if (route.params.id === folderId && route.query.q === query) {
+      currentPage.value = nextPage
+
+      if (response.length > 0) {
+        files.value = [...files.value, ...response]
+          setTimeout(() => {
+            if (mediaContainer.value) {
+              mediaContainer.value.scrollTop = currScrollTop
+              checkContentHeight()
+            }
+          })
+          // 判断是否还有更多文件
+          hasMoreFiles.value = response.length === pageSize.value
+        
+      } else {
+        hasMoreFiles.value = false
+      }
     } else {
-      hasMoreFiles.value = false
+      console.warn('路由已变更，不更新数据')
     }
   } catch (error) {
     ElMessage.error('加载更多文件失败')
