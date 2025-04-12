@@ -45,6 +45,7 @@
           class="preview-content video-preview"
           :poster="file.thumbnail ? file.thumbnail : ''"
           :src="file.path"
+          preload="metadata"
         ></video>
         
         <!-- 图片预览 -->
