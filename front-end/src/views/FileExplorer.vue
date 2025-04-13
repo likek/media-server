@@ -241,7 +241,8 @@ const loadFiles = async (resetPage = true) => {
 }
 
 // 获取文件夹的完整路径信息（包括所有父文件夹）
-const loadFolderPath = async (folderId) => {
+const loadFolderPath = async (folderId, leafId) => {
+  leafId = leafId || folderId
   if (!folderId) {
     breadcrumbPath.value = []
     return
@@ -251,7 +252,12 @@ const loadFolderPath = async (folderId) => {
   let currentId = folderId
   
   while (currentId) {
-    const folderInfo = await getFolderInfo(currentId)
+    const folderInfo = await getFolderInfo(currentId, leafId)
+    if (leafId !== route.params.id) {
+      // 请求期间路由又一次发生变化
+      console.warn(`路由已变更，不更新数据, ${leafId}, ${route.params.id}`)
+      return
+    }
     if (!folderInfo) break
     
     path.unshift({
@@ -261,7 +267,7 @@ const loadFolderPath = async (folderId) => {
     
     currentId = folderInfo.parent_id
   }
-  
+
   breadcrumbPath.value = path
 }
 
