@@ -1,11 +1,12 @@
 import axios from 'axios'
 import { routeMedia, routeThumbnail} from '@/config'
-import { id } from 'element-plus/es/locale/index.mjs';
 
 const api = axios.create({
   baseURL: '/api',
   timeout: 5 * 60 * 1000
 })
+
+const folderInfoCache = {}
 
 // 获取文件列表
 export const getFiles = async (id = null, query = null, page = 0, pageSize = -1) => {
@@ -25,8 +26,12 @@ export const getFiles = async (id = null, query = null, page = 0, pageSize = -1)
 // 获取文件夹详细信息
 export const getFolderInfo = async (id) => {
   if (!id) return null;
+  if (folderInfoCache[id]) {
+    return folderInfoCache[id];
+  }
   const params = { id };
   const response = await api.post('/folderInfo', params)
+  folderInfoCache[id] = response.data
   return response.data
 }
 

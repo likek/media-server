@@ -255,7 +255,7 @@ const loadFolderPath = async (folderId, leafId) => {
     const folderInfo = await getFolderInfo(currentId, leafId)
     if (leafId !== route.params.id) {
       // 请求期间路由又一次发生变化
-      console.warn(`路由已变更，不更新数据, ${leafId}, ${route.params.id}`)
+      console.warn(`路由已变更，面包屑停止下一步请求, 当前请求的面包屑叶子节点${leafId}, 当前路由节点${route.params.id}`)
       return
     }
     if (!folderInfo) break
