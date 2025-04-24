@@ -167,7 +167,7 @@ app.post("/api/downloadFromText", async (req, res) => {
   let downloadRootAll = folderPath;
   let downloadSubAll = [];
   const folder = folderPath;
-  let text = req.body.text || "";
+  let text = (req.body.text || "").trim();
   const successItemCb = data => {
     // 单个文件下载成功，通知前端下载进度
     wsBroadcastMessage(
@@ -200,10 +200,15 @@ app.post("/api/downloadFromText", async (req, res) => {
       // const $ = cheerio.load(pageData)
       // const title = $('h1.post-title').text()
       // const inputText = $('img[data-xuid]').map((i, item) => item.attribs.src).toArray().join('\n') + '\n' + $('.dplayer[data-config]').map((i, item) => JSON.parse(item?.dataset?.config || "{}").video?.url).toArray().join('\n')
-      const pageInfo = await get51PageInfo(pageUrl);
+      let pageInfo;
+      try {
+        pageInfo = await get51PageInfo(pageUrl);
+      } catch(e) {
+        console.warn(chalk.red('获取页面信息出错:'), e)
+        continue
+      }
       const title = pageInfo.title
       const inputText = [...pageInfo.imgLinks, ...pageInfo.videoLinks].join('\n')
-      
       const targetFolder = `${folder}/${title}`;
       let result;
       try {

@@ -166,9 +166,9 @@ async function get51PageInfo(pageUrl) {
       imgLinks, 
       videoLinks
     };
-});
+  });
 
-return data
+  return data
 }
   
   export {
