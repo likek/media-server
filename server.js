@@ -107,6 +107,50 @@ app.use((req, res, next) => {
 
 app.use(`${MEDIA_ROUTE}`, express.static(MEDIA_FULL_PATH));
 app.use(`${THUMB_ROUTE}`, express.static(THUMB_FULL_PATH));
+
+// 基于ID的文件访问路由
+app.get('/media/:id', async (req, res) => {
+  try {
+    const fileId = req.params.id;
+    const fileInfo = await getFileById(fileId);
+    
+    if (!fileInfo || fileInfo.type !== 'file') {
+      return res.status(404).send('File not found');
+    }
+    
+    const filePath = path.join(MEDIA_FULL_PATH, fileInfo.path);
+    res.sendFile(filePath);
+  } catch (err) {
+    console.error('Error serving file by ID:', err);
+    res.status(500).send('Server error');
+  }
+});
+
+// 基于ID的缩略图访问路由
+app.get('/thumbnail/:id', async (req, res) => {
+  try {
+    const fileId = req.params.id;
+    const fileInfo = await getFileById(fileId);
+    
+    if (!fileInfo || fileInfo.type !== 'file') {
+      return res.status(404).send('File not found');
+    }
+    
+    // 对于视频文件，缩略图通常是文件名加.png
+    const thumbnailPath = path.join(THUMB_FULL_PATH, fileInfo.path + '.png');
+    
+    // 检查缩略图是否存在
+    if (fs.existsSync(thumbnailPath)) {
+      return res.sendFile(thumbnailPath);
+    }
+    
+    // 如果缩略图不存在，返回404
+    res.status(404).send('Thumbnail not found');
+  } catch (err) {
+    console.error('Error serving thumbnail by ID:', err);
+    res.status(500).send('Server error');
+  }
+});
 app.use(express.json({ limit: "3mb" }));
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, "static")));
@@ -429,7 +473,10 @@ app.post("/api/folderInfo", async (req, res) => {
       return res.status(404).send({ message: "Folder not found" });
     }
     
-    res.send(folderInfo);
+    res.send({
+      ...folderInfo,
+      path: undefined
+    });
   } catch (err) {
     console.error("Error getting folder info:", err);
     res.status(500).send({ message: "Failed to get folder info" });
@@ -474,8 +521,18 @@ app.post("/api/move", async (req, res) => {
   }
 });
 
-app.post("/api/convert", (req, res) => {
-  const { inputFilePath, outputFilePath } = req.body;
+app.post("/api/convert", async (req, res) => {
+  const inputFileId = req.body.inputFileId;
+  const outputFileSuffix = req.body.outputFileSuffix;
+  if (!inputFileId) {
+    return res.status(400).json({ message: "inputFileId is required" });
+  }
+  const inputFileInfo = await getFileById(inputFileId);
+  if (!inputFileInfo) {
+    return res.status(404).json({ message: "File not found" });
+  }
+  const inputFilePath = inputFileInfo.path;
+  const outputFilePath = `${inputFilePath}.${outputFileSuffix}`;
 
   const absoluteInputPath = path.join(MEDIA_FULL_PATH, inputFilePath);
   const absoluteOutputPath = path.join(MEDIA_FULL_PATH, outputFilePath);
@@ -512,7 +569,10 @@ app.post("/api/convert", (req, res) => {
 });
 
 app.post("/api/unzip", async (req, res) => {
-  const { zipFilePath } = req.body;
+  const { fileId } = req.body;
+  const fileInfo = await getFileById(fileId);
+  if(!fileInfo) { return res.status(404).json({ message: "文件不存在" }); }
+  const zipFilePath = fileInfo.path;
   const currentPath = path.dirname(zipFilePath);
   const absoluteZipPath = path.join(MEDIA_FULL_PATH, zipFilePath);
   const extractToPath = path.join(MEDIA_FULL_PATH, currentPath);

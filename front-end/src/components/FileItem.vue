@@ -43,8 +43,8 @@
           v-if="isVideo" 
           controls 
           class="preview-content video-preview"
-          :poster="file.thumbnail ? file.thumbnail : ''"
-          :src="file.path"
+          :poster="`/thumbnail/${file.id}`"
+          :src="`/media/${file.id}`"
           preload="metadata"
         ></video>
         
@@ -52,13 +52,13 @@
         <el-image
           v-else-if="isImage"
           class="preview-content image-preview"
-          :src="file.path"
+          :src="`/media/${file.id}`"
           :zoom-rate="1.02"
           :max-scale="7"
           :min-scale="0.2"
           show-progress
           fit="contain"
-          :preview-src-list="imageList"
+          :preview-src-list="imageList.map(item => `/media/${item.id}`)"
           :initial-index="imageIndex"
           :hide-on-click-modal="true"
           :preview-teleported="true"
@@ -69,7 +69,7 @@
         <!-- PDF链接 -->
         <a 
           v-else-if="isPdf" 
-          :href="file.path" 
+          :href="`/media/${file.id}`" 
           target="_blank"
           class="pdf-link"
         >
@@ -81,7 +81,7 @@
           v-else-if="isAudio" 
           controls 
           class="preview-content audio-preview"
-          :src="file.path"
+          :src="`/media/${file.id}`"
         ></audio>
       </div>
       
@@ -96,7 +96,7 @@
 
 <script setup>
 import { computed } from 'vue'
-import { Document, Edit, Delete, Position, Download, Folder } from '@element-plus/icons-vue'
+import { Document, Edit, Delete, Position, Download } from '@element-plus/icons-vue'
 import { ElMessageBox } from 'element-plus'
 import { unzipFile } from '../services/api'
 
@@ -179,7 +179,7 @@ const viewTextFile = () => {
 
 const unzipArchive = async () => {
   try {
-    const response = await unzipFile(props.file.path)
+    const response = await unzipFile(props.file.id)
     if (response.success) {
       ElMessageBox.alert('文件解压成功', '成功', { type: 'success' })
       emit('refresh') // 通知父组件刷新文件列表

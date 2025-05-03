@@ -44,7 +44,7 @@
             <template v-for="file in files">
                 <template v-if="file.type === 'folder'">
                     <folder-item
-                        :key="file.path"
+                        :key="file.id"
                         :folder="file"
                         @navigate="navigateToFolder"
                         @rename="showRenameDialog"
@@ -54,10 +54,10 @@
                 </template>
                 <template v-else>
                     <file-item
-                        :key="file.path"
+                        :key="file.id"
                         :file="file"
                         :imageList="imageList"
-                        :imageIndex="imageList.indexOf(file.path)"
+                        :imageIndex="imageList.findIndex(item => item.id === file.id)"
                         @rename="showRenameDialog"
                         @move="showMoveDialog"
                         @download="downloadFile"
@@ -193,7 +193,7 @@ const imageList = computed(() => {
   return files.value.filter(file => {
     const ext = file.filename.split('.').pop().toLowerCase()
     return ['jpg', 'jpeg', 'png', 'gif'].includes(ext)
-  }).map(file => file.path)
+  })
 })
 
 
@@ -542,26 +542,24 @@ const loadAvailableFolders = async () => {
     const folders = [{ path: '', displayPath: '根目录' }]
     
     // 递归函数，用于构建文件夹树
-    const buildFolderTree = (items, parentPath = '', level = 0) => {
+    const buildFolderTree = (items, level = 0) => {
       items.forEach(item => {
         if (item.type === 'folder') {
           // 排除当前项及其子文件夹
           if (currentItem.value && 
-              (item.id === currentItem.value.id || 
-               item.path.startsWith(currentItem.value.path + '/'))) {
+              (item.id === currentItem.value.id || item.id === currentItem.value.parentId)) {
             return
           }
           
           const displayPath = '　'.repeat(level) + item.filename
           folders.push({
             id: item.id,
-            path: item.path,
             displayPath
           })
           
           // 如果文件夹已经展开，递归添加子文件夹
           if (item.children && item.children.length > 0) {
-            buildFolderTree(item.children, item.path, level + 1)
+            buildFolderTree(item.children, level + 1)
           }
         }
       })
@@ -598,7 +596,7 @@ const moveItem = async () => {
 // 下载文件
 const downloadFile = (file) => {
   const link = document.createElement('a')
-  link.href = `${file.path}`
+  link.href = `/media/${file.id}`
   link.download = file.filename
   document.body.appendChild(link)
   link.click()
@@ -619,7 +617,7 @@ const viewTextFile = async (file) => {
 
 
 const convertTsFile = async (file) => {
-  convertFileToMp4(file.path, file.path.replace('.ts', '_ts.mp4')).then(() => {
+  convertFileToMp4(file.id).then(() => {
     ElMessage.success('转换成功')
     loadFiles()
   }).catch((error) => {

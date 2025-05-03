@@ -5,64 +5,13 @@
 </template>
 
 <script setup>
-import { onBeforeUnmount, ref } from 'vue'
-import { useRoute } from 'vue-router'
-import { ElMessage, ElMessageBox } from 'element-plus'
-
-// 获取当前路由信息
-const route = useRoute()
-const currentPath = ref('')
-
-// 更新当前路径
-const updateCurrentPath = () => {
-  if (route.params.path) {
-    currentPath.value = Array.isArray(route.params.path) 
-      ? route.params.path.join('/') 
-      : route.params.path
-  } else {
-    currentPath.value = ''
-  }
-}
-
-// 初始化时更新路径
-updateCurrentPath()
-
+import { onBeforeUnmount } from 'vue'
 /**
  * 处理WebSocket更新缓存事件
  * @param {CustomEvent} event 自定义事件对象
  */
 const handleWsUpdateCache = (event) => {
-  const { dirPath } = event.detail
   
-  if (currentPath.value === dirPath) {
-    // 当前文件夹更新
-    ElMessageBox.confirm('当前文件夹已更新，是否立即刷新?', '提示', {
-      confirmButtonText: '确定',
-      cancelButtonText: '取消',
-      type: 'warning'
-    }).then(() => {
-      // 这里应该调用loadFiles函数，但App.vue中没有此函数，可能需要从其他组件中引入或发出事件
-      // 暂时使用刷新页面的方式
-      location.reload()
-      ElMessage.success('当前文件夹更新成功')
-    }).catch(() => {
-      ElMessage.info('已取消刷新')
-    })
-  } else if (currentPath.value.startsWith(dirPath)) {
-    // 父级文件夹更新
-    ElMessageBox.confirm('检测到父级文件夹已更新，是否立即刷新?', '提示', {
-      confirmButtonText: '确定',
-      cancelButtonText: '取消',
-      type: 'warning'
-    }).then(() => {
-      location.reload()
-      ElMessage.success('刷新成功')
-    }).catch(() => {
-      ElMessage.info('已取消刷新')
-    })
-  } else {
-    console.log(`文件夹${dirPath}发生了更新`)
-  }
 }
 
 // 添加WebSocket更新缓存事件监听

@@ -1,5 +1,4 @@
 import axios from 'axios'
-import { routeMedia, routeThumbnail} from '@/config'
 
 const api = axios.create({
   baseURL: '/api',
@@ -12,15 +11,7 @@ const folderInfoCache = {}
 export const getFiles = async (id = null, query = null, page = 0, pageSize = -1) => {
   const params = { id, query, page, pageSize };
   const response = await api.post('/files', params)
-  return response.data.map((file) => {
-    if(file.type === 'file' && file.path) {
-      file.path = `${routeMedia}${file.path}`
-    }
-    if(file.thumbnail) {
-      file.thumbnail = `${routeThumbnail}${file.thumbnail}`
-    }
-    return file
-  })
+  return response.data
 }
 
 // 获取文件夹详细信息
@@ -97,8 +88,8 @@ export const moveFile = async (sourceId, targetId) => {
 }
 
 // 解压文件
-export const unzipFile = async (zipFilePath) => {
-  const response = await api.post('/unzip', { zipFilePath })
+export const unzipFile = async (fileId) => {
+  const response = await api.post('/unzip', { fileId })
   return response.data
 }
 
@@ -115,8 +106,8 @@ export const convertTextEncoding = async (id) => {
 }
 
 // 转换TS文件为MP4
-export const convertFileToMp4 = async (inputFilePath, outputFilePath) => {
-  const response = await api.post('/convert', { inputFilePath, outputFilePath })
+export const convertFileToMp4 = async (inputFileId, outputFileSuffix = 'mp4') => {
+  const response = await api.post('/convert', { inputFileId, outputFileSuffix })
   return response.data
 }
 

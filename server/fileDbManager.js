@@ -298,8 +298,8 @@ const getFolderContentsById = (folderId, searchQuery, page, pageSize) => {
           id: row.id,
           type: row.type,
           filename: row.name,
-          path: row.path,
-          thumbnail: row.thumbnail,
+          // path: row.path,
+          // thumbnail: row.thumbnail,
           lastModified: row.last_modified,
           size: row.size,
           parent_id: row.parent_id
