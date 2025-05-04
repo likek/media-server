@@ -119,7 +119,14 @@ const loadFavorites = async (resetPage = true) => {
 
 // 刷新收藏列表
 const refreshFavorites = (file, isFavorited) => {
-  files.value.find(item => item.id === file.id).favorited = isFavorited
+  if (isFavorited) {
+    files.value.find(item => item.id === file.id).favorited = isFavorited
+  } else {
+    const index = files.value.findIndex(item => item.id === file.id)
+    if (index !== -1) {
+      files.value.splice(index, 1)
+    }
+  }
 }
 
 // 检查内容高度是否填满容器，如果不足且有更多文件，则自动加载更多
