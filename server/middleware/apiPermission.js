@@ -28,7 +28,7 @@ const checkPermissions = (req, res, next) => {
   
     const userIp = normalizeIp(req.clientIp || req.ip);
     let userId = req.cookies.userId;
-    const requestUrl = req.originalUrl.split("?")[0];
+    const requestUrl = req.originalUrl.split("?")[0].replace('/api', '');
     const allowedUsers = permissions[requestUrl];
     if (!allowedUsers) {
       return next();
