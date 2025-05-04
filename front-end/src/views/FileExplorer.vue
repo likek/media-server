@@ -49,13 +49,13 @@
           <template v-for="file in files">
             <template v-if="file.type === 'folder'">
               <folder-item :key="file.id" :folder="file" :favorited="file.favorited" @navigate="navigateToFolder"
-                @rename="showRenameDialog" @move="showMoveDialog" @delete="confirmDelete" />
+                @rename="showRenameDialog" @move="showMoveDialog" @delete="confirmDelete" @favorite="refreshFavorites" />
             </template>
             <template v-else>
               <file-item :key="file.id" :file="file" :imageList="imageList"
                 :imageIndex="imageList.findIndex(item => item.id === file.id)" :favorited="file.favorited"
                 @rename="showRenameDialog" @move="showMoveDialog" @download="downloadFile" @delete="confirmDelete"
-                @unzip="refreshCache" @viewText="viewTextFile" @convertTs="convertTsFile" />
+                @unzip="refreshCache" @viewText="viewTextFile" @convertTs="convertTsFile" @favorite="refreshFavorites" />
             </template>
           </template>
         </div>
@@ -175,6 +175,10 @@ const imageList = computed(() => {
   })
 })
 
+// 刷新收藏列表
+const refreshFavorites = (file, isFavorited) => {
+  files.value.find(item => item.id === file.id).favorited = isFavorited
+}
 
 // 检查内容高度是否填满容器，如果不足且有更多文件，则自动加载更多
 const checkContentHeight = () => {

@@ -12,42 +12,43 @@
         </el-icon>
         <span class="file-name">{{ file.filename }}</span>
         <div class="file-actions">
-          <el-tooltip content="查看文本" placement="top">
+          <el-tooltip content="查看文本" placement="top" :auto-close="1000">
             <el-icon class="action-icon" @click.stop="viewTextFile" v-if="isText" >
               <View />
             </el-icon>
           </el-tooltip>
-          <el-tooltip content="解压缩" placement="top">
+          <el-tooltip content="解压缩" placement="top" :auto-close="1000">
             <el-icon class="action-icon" @click.stop="unzipArchive" v-if="isArchive" >
               <FolderOpened />
             </el-icon>
           </el-tooltip>
-          <el-tooltip content="转换为MP4" placement="top">
+          <el-tooltip content="转换为MP4" placement="top" :auto-close="1000">
             <el-icon class="action-icon" @click.stop="$emit('convertTs', file)" v-if="isTs && allowActions">
               <VideoPlay />
             </el-icon>
           </el-tooltip>
-          <el-tooltip :content="isFavorited ? '取消收藏' : '收藏'" placement="top">
+          <el-tooltip :content="isFavorited ? '取消收藏' : '收藏'" placement="top" :auto-close="1000">
             <el-icon class="action-icon favorite-icon" @click.stop="toggleFavorite" :class="{ 'is-favorited': isFavorited }">
-              <Star />
+              <Star v-if="!isFavorited" />
+              <StarFilled v-else />
             </el-icon>
           </el-tooltip>
-          <el-tooltip content="重命名" placement="top">
+          <el-tooltip content="重命名" placement="top" :auto-close="1000">
             <el-icon class="action-icon" @click.stop="$emit('rename', file)" v-if="allowActions">
               <Edit />
             </el-icon>
           </el-tooltip>
-          <el-tooltip content="移动" placement="top">
+          <el-tooltip content="移动" placement="top" :auto-close="1000">
             <el-icon class="action-icon" @click.stop="$emit('move', file)" v-if="allowActions">
               <Position />
             </el-icon>
           </el-tooltip>
-          <el-tooltip content="下载" placement="top">
+          <el-tooltip content="下载" placement="top" :auto-close="1000">
             <el-icon class="action-icon" @click.stop="$emit('download', file)">
               <Download />
             </el-icon>
           </el-tooltip>
-          <el-tooltip content="删除" placement="top">
+          <el-tooltip content="删除" placement="top" :auto-close="1000">
             <el-icon class="action-icon" @click.stop="$emit('delete', file)" v-if="allowActions">
               <Delete />
             </el-icon>
@@ -257,7 +258,7 @@ const toggleFavorite = async () => {
 }
 
 .favorite-icon.is-favorited {
-  color: #f7ba2a;
+  color: #409eff;
 }
 
 .file-content {

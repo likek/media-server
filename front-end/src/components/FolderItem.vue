@@ -4,22 +4,23 @@
       <div class="folder-header">
         <el-icon class="folder-icon"><Folder /></el-icon>
         <div class="folder-actions">
-          <el-tooltip :content="isFavorited ? '取消收藏' : '收藏'" placement="top">
+          <el-tooltip :content="isFavorited ? '取消收藏' : '收藏'" placement="top" :auto-close="1000">
             <el-icon class="action-icon favorite-icon" @click.stop="toggleFavorite" :class="{ 'is-favorited': isFavorited }">
-              <Star />
+              <Star v-if="!isFavorited" />
+              <StarFilled v-else />
             </el-icon>
           </el-tooltip>
-          <el-tooltip content="重命名" placement="top">
+          <el-tooltip content="重命名" placement="top" :auto-close="1000">
             <el-icon class="action-icon" @click.stop="$emit('rename', folder)" v-if="allowActions">
               <Edit />
             </el-icon>
           </el-tooltip>
-          <el-tooltip content="移动" placement="top">
+          <el-tooltip content="移动" placement="top" :auto-close="1000">
             <el-icon class="action-icon" @click.stop="$emit('move', folder)" v-if="allowActions">
               <Position />
             </el-icon>
           </el-tooltip>
-          <el-tooltip content="删除" placement="top">
+          <el-tooltip content="删除" placement="top" :auto-close="1000">
             <el-icon class="action-icon" @click.stop="$emit('delete', folder)" v-if="allowActions">
               <Delete />
             </el-icon>
@@ -35,7 +36,6 @@
 
 <script setup>
 import { ref } from 'vue'
-import { Folder, Edit, Delete, Position, Star } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { addToFavorites, removeFromFavorites } from '../services/api'
 
@@ -70,7 +70,7 @@ const toggleFavorite = async () => {
       isFavorited.value = true
       ElMessage.success('已添加到收藏')
     }
-    emit('favorite', props.file, isFavorited.value) // 通知父组件刷新收藏列表
+    emit('favorite', props.folder, isFavorited.value) // 通知父组件刷新收藏列表
   } catch (error) {
     console.error('切换收藏状态失败:', error)
     ElMessage.error('操作失败，请重试')
@@ -95,7 +95,7 @@ const toggleFavorite = async () => {
 }
 
 .favorite-icon.is-favorited {
-  color: #f7ba2a;
+  color: #409eff;
 }
 
 .folder-content {
