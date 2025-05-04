@@ -1,11 +1,18 @@
 <template>
-  <div class="app-container">
-    <router-view />
+  <div class="app-container" :class="{ 'sidebar-collapsed': isSidebarCollapsed }">
+    <side-menu v-show="!isMobile || !isSidebarCollapsed" :is-collapsed="isSidebarCollapsed || isMobile" />
+    <div class="main-content">
+      <el-button size="small" @click="toggleSidebar" class="sidebar-toggle-btn" :icon="isSidebarCollapsed ? Expand : Fold" circle />
+      <router-view />
+    </div>
   </div>
 </template>
 
 <script setup>
-import { onBeforeUnmount } from 'vue'
+import { ref, onMounted, onBeforeUnmount } from 'vue'
+import { ElButton } from 'element-plus'
+import { Fold, Expand } from '@element-plus/icons-vue'
+import SideMenu from './components/SideMenu.vue'
 /**
  * 处理WebSocket更新缓存事件
  * @param {CustomEvent} event 自定义事件对象
@@ -20,6 +27,37 @@ window.addEventListener('ws-update-cache', handleWsUpdateCache)
 onBeforeUnmount(() => {
   // 移除WebSocket更新缓存事件监听
   window.removeEventListener('ws-update-cache', handleWsUpdateCache)
+  if (mediaQueryList) {
+    mediaQueryList.removeEventListener('change', handleResize)
+  }
+})
+
+const isSidebarCollapsed = ref(false)
+const isMobile = ref(false)
+let mediaQueryList = null
+
+const checkScreenSize = () => {
+  if (window.matchMedia('(max-width: 768px)').matches) {
+    isMobile.value = true
+    isSidebarCollapsed.value = true // 移动端默认折叠
+  } else {
+    isMobile.value = false
+    isSidebarCollapsed.value = false // 非移动端默认展开
+  }
+}
+
+const handleResize = (event) => {
+  checkScreenSize()
+}
+
+const toggleSidebar = () => {
+  isSidebarCollapsed.value = !isSidebarCollapsed.value
+}
+
+onMounted(() => {
+  checkScreenSize()
+  mediaQueryList = window.matchMedia('(max-width: 768px)')
+  mediaQueryList.addEventListener('change', handleResize)
 })
 </script>
 
@@ -32,9 +70,47 @@ html, body {
   font-family: 'Helvetica Neue', Helvetica, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', Arial, sans-serif;
 }
 
-#app, .app-container {
+#app {
   height: 100vh;
   width: 100%;
+}
+
+.app-container {
+  display: flex;
+  height: 100vh;
+  width: 100%;
+}
+
+.main-content {
+  flex: 1;
+  height: 100%;
+  overflow-y: auto;
+  position: relative; /* For positioning the toggle button */
+  transition: margin-left 0.3s ease;
+}
+
+.app-container.sidebar-collapsed .main-content {
+  margin-left: 0;
+}
+
+.sidebar-toggle-btn {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  z-index: 1000;
+  padding: 5px 10px;
+  background-color: #409eff;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+/* Adjust main content margin when sidebar is visible on non-mobile */
+@media (min-width: 769px) {
+  .main-content {
+    /* margin-left: 200px; /* Adjust based on SideMenu width */
+  }
 }
 
 /* 滚动条样式 */

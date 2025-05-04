@@ -12,27 +12,46 @@
         </el-icon>
         <span class="file-name">{{ file.filename }}</span>
         <div class="file-actions">
-          <el-icon class="action-icon" @click.stop="viewTextFile" v-if="isText" >
-            <View />
-          </el-icon>
-          <el-icon class="action-icon" @click.stop="unzipArchive" v-if="isArchive" >
-            <FolderOpened />
-          </el-icon>
-          <el-icon class="action-icon" @click.stop="$emit('convertTs', file)" v-if="isTs">
-            <VideoPlay />
-          </el-icon>
-          <el-icon class="action-icon" @click.stop="$emit('rename', file)">
-            <Edit />
-          </el-icon>
-          <el-icon class="action-icon" @click.stop="$emit('move', file)">
-            <Position />
-          </el-icon>
-          <el-icon class="action-icon" @click.stop="$emit('download', file)">
-            <Download />
-          </el-icon>
-          <el-icon class="action-icon" @click.stop="$emit('delete', file)">
-            <Delete />
-          </el-icon>
+          <el-tooltip content="查看文本" placement="top">
+            <el-icon class="action-icon" @click.stop="viewTextFile" v-if="isText" >
+              <View />
+            </el-icon>
+          </el-tooltip>
+          <el-tooltip content="解压缩" placement="top">
+            <el-icon class="action-icon" @click.stop="unzipArchive" v-if="isArchive" >
+              <FolderOpened />
+            </el-icon>
+          </el-tooltip>
+          <el-tooltip content="转换为MP4" placement="top">
+            <el-icon class="action-icon" @click.stop="$emit('convertTs', file)" v-if="isTs && allowActions">
+              <VideoPlay />
+            </el-icon>
+          </el-tooltip>
+          <el-tooltip :content="isFavorited ? '取消收藏' : '收藏'" placement="top">
+            <el-icon class="action-icon favorite-icon" @click.stop="toggleFavorite" :class="{ 'is-favorited': isFavorited }">
+              <Star />
+            </el-icon>
+          </el-tooltip>
+          <el-tooltip content="重命名" placement="top">
+            <el-icon class="action-icon" @click.stop="$emit('rename', file)" v-if="allowActions">
+              <Edit />
+            </el-icon>
+          </el-tooltip>
+          <el-tooltip content="移动" placement="top">
+            <el-icon class="action-icon" @click.stop="$emit('move', file)" v-if="allowActions">
+              <Position />
+            </el-icon>
+          </el-tooltip>
+          <el-tooltip content="下载" placement="top">
+            <el-icon class="action-icon" @click.stop="$emit('download', file)">
+              <Download />
+            </el-icon>
+          </el-tooltip>
+          <el-tooltip content="删除" placement="top">
+            <el-icon class="action-icon" @click.stop="$emit('delete', file)" v-if="allowActions">
+              <Delete />
+            </el-icon>
+          </el-tooltip>
         </div>
       </div>
       
@@ -95,10 +114,10 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { Document, Edit, Delete, Position, Download } from '@element-plus/icons-vue'
-import { ElMessageBox } from 'element-plus'
-import { unzipFile } from '../services/api'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { addToFavorites, removeFromFavorites, unzipFile } from '../services/api'
 
 const props = defineProps({
   file: {
@@ -115,9 +134,19 @@ const props = defineProps({
     required: false,
     default: () => []
   },
+  favorited: {
+    type: Boolean,
+    default: false
+  },
+  allowActions: {
+    type: Boolean,
+    default: true
+  }
 })
 
-const emit = defineEmits(['rename', 'delete', 'move', 'download', 'refresh', 'viewText', 'convertTs'])
+const isFavorited = ref(props.favorited)
+
+const emit = defineEmits(['rename', 'delete', 'move', 'download', 'unzip', 'viewText', 'convertTs', 'favorite'])
 
 // 文件类型判断
 const fileExt = computed(() => {
@@ -182,13 +211,32 @@ const unzipArchive = async () => {
     const response = await unzipFile(props.file.id)
     if (response.success) {
       ElMessageBox.alert('文件解压成功', '成功', { type: 'success' })
-      emit('refresh') // 通知父组件刷新文件列表
+      emit('unzip') // 通知父组件刷新文件列表
     } else {
       ElMessageBox.alert(response.message || '解压失败', '错误', { type: 'error' })
     }
   } catch (error) {
     console.error('Error unzipping file:', error)
     ElMessageBox.alert('解压失败', '错误', { type: 'error' })
+  }
+}
+
+// 切换收藏状态
+const toggleFavorite = async () => {
+  try {
+    if (isFavorited.value) {
+      await removeFromFavorites(props.file.id)
+      isFavorited.value = false
+      ElMessage.success('已从收藏中移除')
+    } else {
+      await addToFavorites(props.file.id)
+      isFavorited.value = true
+      ElMessage.success('已添加到收藏')
+    }
+    emit('favorite', props.file, isFavorited.value) // 通知父组件刷新收藏列表
+  } catch (error) {
+    console.error('切换收藏状态失败:', error)
+    ElMessage.error('操作失败，请重试')
   }
 }
 </script>
@@ -206,6 +254,10 @@ const unzipArchive = async () => {
 .file-item:hover {
   transform: translateY(-2px);
   box-shadow: 0 4px 16px 0 rgba(0, 0, 0, 0.1);
+}
+
+.favorite-icon.is-favorited {
+  color: #f7ba2a;
 }
 
 .file-content {

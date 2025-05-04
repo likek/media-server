@@ -86,10 +86,22 @@ const initAll = () => {
       path TEXT,
       size INTEGER,
       last_modified TEXT,
+      mime_type TEXT,
       thumbnail TEXT,
       created_at TEXT DEFAULT CURRENT_TIMESTAMP,
       updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (parent_id) REFERENCES files(id) ON DELETE CASCADE
+    )
+  `);
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS favorites (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id TEXT NOT NULL,
+      file_id INTEGER NOT NULL,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (file_id) REFERENCES files(id) ON DELETE CASCADE,
+      UNIQUE(user_id, file_id)
     )
   `);
 

@@ -1,39 +1,80 @@
 <template>
-  <div class="folder-item" @click="navigate">
+  <div class="folder-item" @click="$emit('navigate', folder.id)">
     <div class="folder-content">
       <div class="folder-header">
         <el-icon class="folder-icon"><Folder /></el-icon>
-        <span class="folder-name">{{ folder.filename }}</span>
         <div class="folder-actions">
-          <el-icon class="action-icon" @click.stop="$emit('rename', folder)">
-            <Edit />
-          </el-icon>
-          <el-icon class="action-icon" @click.stop="$emit('move', folder)">
-            <Position />
-          </el-icon>
-          <el-icon class="action-icon" @click.stop="$emit('delete', folder)">
-            <Delete />
-          </el-icon>
+          <el-tooltip :content="isFavorited ? '取消收藏' : '收藏'" placement="top">
+            <el-icon class="action-icon favorite-icon" @click.stop="toggleFavorite" :class="{ 'is-favorited': isFavorited }">
+              <Star />
+            </el-icon>
+          </el-tooltip>
+          <el-tooltip content="重命名" placement="top">
+            <el-icon class="action-icon" @click.stop="$emit('rename', folder)" v-if="allowActions">
+              <Edit />
+            </el-icon>
+          </el-tooltip>
+          <el-tooltip content="移动" placement="top">
+            <el-icon class="action-icon" @click.stop="$emit('move', folder)" v-if="allowActions">
+              <Position />
+            </el-icon>
+          </el-tooltip>
+          <el-tooltip content="删除" placement="top">
+            <el-icon class="action-icon" @click.stop="$emit('delete', folder)" v-if="allowActions">
+              <Delete />
+            </el-icon>
+          </el-tooltip>
         </div>
+      </div>
+      <div>
+        <span class="folder-name">{{ folder.filename }}</span>
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { Folder, Edit, Position, Delete } from '@element-plus/icons-vue'
+import { ref } from 'vue'
+import { Folder, Edit, Delete, Position, Star } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
+import { addToFavorites, removeFromFavorites } from '../services/api'
 
 const props = defineProps({
   folder: {
     type: Object,
     required: true
+  },
+  favorited: {
+    type: Boolean,
+    default: false
+  },
+  allowActions: {
+    type: Boolean,
+    default: true
   }
 })
 
-const emit = defineEmits(['navigate', 'rename', 'move', 'delete'])
+const isFavorited = ref(props.favorited)
 
-const navigate = () => {
-  emit('navigate', props.folder.id)
+const emit = defineEmits(['navigate', 'rename', 'move', 'delete', 'favorite'])
+
+// 切换收藏状态
+const toggleFavorite = async () => {
+  try {
+    if (isFavorited.value) {
+      await removeFromFavorites(props.folder.id)
+      isFavorited.value = false
+      ElMessage.success('已从收藏中移除')
+    } else {
+      await addToFavorites(props.folder.id)
+      isFavorited.value = true
+      ElMessage.success('已添加到收藏')
+    }
+    emit('favorite', props.file, isFavorited.value) // 通知父组件刷新收藏列表
+  } catch (error) {
+    console.error('切换收藏状态失败:', error)
+    ElMessage.error('操作失败，请重试')
+  }
 }
 </script>
 
@@ -53,6 +94,10 @@ const navigate = () => {
   box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
 }
 
+.favorite-icon.is-favorited {
+  color: #f7ba2a;
+}
+
 .folder-content {
   display: flex;
   flex-direction: column;
@@ -60,7 +105,8 @@ const navigate = () => {
 
 .folder-header {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
+  justify-content: space-between;
   margin-bottom: 8px;
 }
 
@@ -68,6 +114,7 @@ const navigate = () => {
   color: #409eff;
   font-size: 20px;
   margin-right: 8px;
+  vertical-align: text-bottom;
 }
 
 .folder-name {

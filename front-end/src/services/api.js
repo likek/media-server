@@ -111,6 +111,24 @@ export const convertFileToMp4 = async (inputFileId, outputFileSuffix = 'mp4') =>
   return response.data
 }
 
+// 添加到收藏
+export const addToFavorites = async (fileId) => {
+  const response = await api.post('/favorites/add', { fileId })
+  return response.data
+}
+
+// 从收藏中移除
+export const removeFromFavorites = async (fileId) => {
+  const response = await api.post('/favorites/remove', { fileId })
+  return response.data
+}
+
+// 获取收藏列表
+export const getFavoritesList = async (page = 0, pageSize = 20) => {
+  const response = await api.post('/favorites/list', { page, pageSize })
+  return response.data
+}
+
 export const registerUser = async () => {
   const response = await api.get('/register')
   return response.data

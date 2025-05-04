@@ -25,6 +25,7 @@ import { wsBroadcastMessage, wsInit } from "./server/websocketManager.js";
 import { convertTxtEncoding } from "./server/tools/textFileTools.js";
 import { tryRegister } from "./server/userManager.js";
 import { downloadAllMediaByLinks } from "./server/downloadManager.js";
+import { addToFavorites, getFavoritesStatus, getUserFavorites, removeFromFavorites } from "./server/favoritesManager.js";
 
 serializeDb();
 
@@ -371,7 +372,66 @@ app.post("/api/upload", upload.single("file"), async (req, res) => {
   }
 });
 
-// 获取文件列表
+// 收藏相关API
+app.post("/api/favorites/add", express.json(), async (req, res) => {
+  try {
+    const { fileId } = req.body;
+    const userId = req.cookies?.userId;
+    
+    if (!userId) {
+      return res.status(401).json({ error: "未登录" });
+    }
+    
+    if (!fileId) {
+      return res.status(400).json({ error: "缺少文件ID" });
+    }
+    
+    const result = await addToFavorites(userId, fileId);
+    res.json(result);
+  } catch (error) {
+    console.error("添加收藏失败:", error);
+    res.status(500).json({ error: "添加收藏失败" });
+  }
+});
+
+app.post("/api/favorites/remove", express.json(), async (req, res) => {
+  try {
+    const { fileId } = req.body;
+    const userId = req.cookies?.userId;
+    
+    if (!userId) {
+      return res.status(401).json({ error: "未登录" });
+    }
+    
+    if (!fileId) {
+      return res.status(400).json({ error: "缺少文件ID" });
+    }
+    
+    const result = await removeFromFavorites(userId, fileId);
+    res.json(result);
+  } catch (error) {
+    console.error("移除收藏失败:", error);
+    res.status(500).json({ error: "移除收藏失败" });
+  }
+});
+
+app.post("/api/favorites/list", express.json(), async (req, res) => {
+  try {
+    const { page = 0, pageSize = 20 } = req.body;
+    const userId = req.cookies?.userId;
+    
+    if (!userId) {
+      return res.status(401).json({ error: "未登录" });
+    }
+    
+    const favorites = await getUserFavorites(userId, page, pageSize);
+    res.json(favorites);
+  } catch (error) {
+    console.error("获取收藏列表失败:", error);
+    res.status(500).json({ error: "获取收藏列表失败" });
+  }
+});
+
 app.post("/api/files", async (req, res) => {
   try {
     const folderId = req.body.id;
@@ -382,8 +442,8 @@ app.post("/api/files", async (req, res) => {
     // 初始化数据库中的文件系统（如果需要）
     await initRootDirectory(req);
     
-    // 通过ID获取文件列表
-    let result = await getFolderContentsById(folderId, searchQuery, page, pageSize);
+    // 通过ID获取文件列表，传递req对象以获取用户ID和收藏状态
+    let result = await getFolderContentsById(folderId, searchQuery, page, pageSize, req);
     res.send(result);
   } catch (err) {
     console.error("Error fetching file list:", err);

@@ -3,18 +3,21 @@
     <div class="top-container">
       <div class="top-form">
         <el-form @submit.prevent="handleSearch">
-            <el-input 
-            v-model="searchInput" 
-            placeholder="搜索文件" 
-            class="search-input"
-            clearable
-            />
+          <el-input v-model="searchInput" placeholder="搜索文件" class="search-input" clearable />
         </el-form>
-        <el-button @click="refreshCache"><el-icon><Refresh /></el-icon></el-button>
-        <el-button @click="showCreateFolderDialog"><el-icon><FolderAdd /></el-icon></el-button>
-        <el-button @click="triggerFileUpload"><el-icon><UploadFilled /></el-icon></el-button>
+        <el-button @click="refreshCache"><el-icon>
+            <Refresh />
+          </el-icon></el-button>
+        <el-button @click="showCreateFolderDialog"><el-icon>
+            <FolderAdd />
+          </el-icon></el-button>
+        <el-button @click="triggerFileUpload"><el-icon>
+            <UploadFilled />
+          </el-icon></el-button>
         <el-button @click="showTextLinkUploadDialog">
-            <el-icon><Link /></el-icon>
+          <el-icon>
+            <Link />
+          </el-icon>
         </el-button>
         <input ref="fileInput" type="file" style="display: none" @change="uploadFile" />
         <el-progress v-if="uploading" :percentage="uploadProgress" />
@@ -23,7 +26,9 @@
       <div class="path-navigation">
         <el-breadcrumb separator="/">
           <el-breadcrumb-item @click="navigateToRoot">
-            <el-icon><HomeFilled /></el-icon>
+            <el-icon>
+              <HomeFilled />
+            </el-icon>
           </el-breadcrumb-item>
           <template v-for="(folder, index) in breadcrumbPath" :key="folder.id">
             <el-breadcrumb-item @click="navigateToFolder(folder.id)">{{ folder.name }}</el-breadcrumb-item>
@@ -34,44 +39,31 @@
 
     <div class="media-container" ref="mediaContainer">
       <template v-if="loading">
-        <el-skeleton :rows="20" animated :throttle="300"/>
+        <el-skeleton :rows="20" animated :throttle="300" />
       </template>
       <template v-else-if="files.length === 0">
-        <el-empty description="没有文件" />
+        <el-empty :description="'没有文件'" />
       </template>
       <template v-else>
         <div class="media-grid">
-            <template v-for="file in files">
-                <template v-if="file.type === 'folder'">
-                    <folder-item
-                        :key="file.id"
-                        :folder="file"
-                        @navigate="navigateToFolder"
-                        @rename="showRenameDialog"
-                        @move="showMoveDialog"
-                        @delete="confirmDelete"
-                    />
-                </template>
-                <template v-else>
-                    <file-item
-                        :key="file.id"
-                        :file="file"
-                        :imageList="imageList"
-                        :imageIndex="imageList.findIndex(item => item.id === file.id)"
-                        @rename="showRenameDialog"
-                        @move="showMoveDialog"
-                        @download="downloadFile"
-                        @delete="confirmDelete"
-                        @refresh="refreshCache"
-                        @viewText="viewTextFile"
-                        @convertTs="convertTsFile"
-                    />
-                </template>
+          <template v-for="file in files">
+            <template v-if="file.type === 'folder'">
+              <folder-item :key="file.id" :folder="file" :favorited="file.favorited" @navigate="navigateToFolder"
+                @rename="showRenameDialog" @move="showMoveDialog" @delete="confirmDelete" />
             </template>
+            <template v-else>
+              <file-item :key="file.id" :file="file" :imageList="imageList"
+                :imageIndex="imageList.findIndex(item => item.id === file.id)" :favorited="file.favorited"
+                @rename="showRenameDialog" @move="showMoveDialog" @download="downloadFile" @delete="confirmDelete"
+                @unzip="refreshCache" @viewText="viewTextFile" @convertTs="convertTsFile" />
+            </template>
+          </template>
         </div>
         <!-- 加载中提示 -->
         <div class="loading-indicator" v-if="loading && currentPage > 0">
-          <el-icon class="is-loading"><Loading /></el-icon> 加载中...
+          <el-icon class="is-loading">
+            <Loading />
+          </el-icon> 加载中...
         </div>
       </template>
     </div>
@@ -100,12 +92,7 @@
 
     <!-- 文本链接上传对话框 -->
     <el-dialog v-model="textLinkDialogVisible" title="从链接上传" width="80%">
-      <el-input 
-        v-model="linkText" 
-        type="textarea" 
-        :rows="10" 
-        placeholder="请输入链接，每行一个" 
-      />
+      <el-input v-model="linkText" type="textarea" :rows="10" placeholder="请输入链接，每行一个" />
       <template #footer>
         <span class="dialog-footer">
           <el-button @click="textLinkDialogVisible = false">取消</el-button>
@@ -113,18 +100,14 @@
         </span>
       </template>
     </el-dialog>
-    
+
     <!-- 移动文件/文件夹对话框 -->
     <el-dialog v-model="moveDialogVisible" title="移动到" width="80%">
       <div class="move-dialog-content">
         <p>选择目标文件夹:</p>
         <el-select v-model="targetFolderId" placeholder="选择目标文件夹" style="width: 100%">
-          <el-option
-            v-for="folder in availableFolders"
-            :key="folder.id"
-            :label="folder.displayPath"
-            :value="folder.id"
-          />
+          <el-option v-for="folder in availableFolders" :key="folder.id" :label="folder.displayPath"
+            :value="folder.id" />
         </el-select>
       </div>
       <template #footer>
@@ -134,13 +117,9 @@
         </span>
       </template>
     </el-dialog>
-    
+
     <!-- 文本文件查看对话框 -->
-    <text-viewer-dialog
-      v-model:visible="txtDialogVisible"
-      :file="currentItem"
-      :num-lines="30"
-    />
+    <text-viewer-dialog v-model:visible="txtDialogVisible" :file="currentItem" :num-lines="30" />
   </div>
 </template>
 
@@ -148,11 +127,11 @@
 import { ref, watch, onMounted, onUnmounted, nextTick, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Loading } from '@element-plus/icons-vue'
+import { Loading, Star, HomeFilled } from '@element-plus/icons-vue'
 import FolderItem from '../components/FolderItem.vue'
 import FileItem from '../components/FileItem.vue'
 import TextViewerDialog from '../components/TextViewerDialog.vue'
-import { getFiles, updateCache, createNewFolder, renameFile, deleteFileOrFolder, uploadFileToServer, downloadFromText, moveFile, readTextFile, convertTextEncoding, convertFileToMp4, getFolderInfo } from '../services/api'
+import { getFiles, updateCache, createNewFolder, renameFile, deleteFileOrFolder, uploadFileToServer, downloadFromText, moveFile, convertFileToMp4, getFolderInfo } from '../services/api'
 
 const stateCache = {}
 
@@ -200,9 +179,9 @@ const imageList = computed(() => {
 // 检查内容高度是否填满容器，如果不足且有更多文件，则自动加载更多
 const checkContentHeight = () => {
   if (!mediaContainer.value || loading.value || !hasMoreFiles.value) return
-  
+
   const { scrollHeight, clientHeight } = mediaContainer.value
-  
+
   if (scrollHeight <= clientHeight && hasMoreFiles.value) {
     loadMoreFiles()
   }
@@ -216,25 +195,29 @@ const loadFiles = async (resetPage = true) => {
     if (resetPage) {
       currentPage.value = 0
     }
-    
+
+    let response = []
+
     // 获取当前文件夹ID（如果有）
     const folderId = route.params.id
     const query = route.query.q
-    
-    const response = await getFiles(folderId, query, currentPage.value, pageSize.value)
-    if (route.params.id === folderId && route.query.q === query) {
-      files.value = response
-      // 判断是否还有更多文件
-      hasMoreFiles.value = response.length === pageSize.value
-    } else {
+
+    response = await getFiles(folderId, query, currentPage.value, pageSize.value)
+    if (route.params.id !== folderId || route.query.q !== query) {
       console.warn(`路由已变更，不更新数据`)
+      loading.value = false
+      return
     }
+
+    files.value = response
+    // 判断是否还有更多文件
+    hasMoreFiles.value = response.length === pageSize.value
   } catch (error) {
     ElMessage.error('加载文件失败')
     console.error('Error loading files:', error)
   } finally {
     loading.value = false
-    
+
     // 检查首屏内容是否填满容器，如果不足且有更多文件，则自动加载更多
     checkContentHeight()
   }
@@ -247,10 +230,10 @@ const loadFolderPath = async (folderId, leafId) => {
     breadcrumbPath.value = []
     return
   }
-  
+
   const path = []
   let currentId = folderId
-  
+
   while (currentId) {
     const folderInfo = await getFolderInfo(currentId, leafId)
     if (leafId !== route.params.id) {
@@ -259,12 +242,12 @@ const loadFolderPath = async (folderId, leafId) => {
       return
     }
     if (!folderInfo) break
-    
+
     path.unshift({
       id: folderInfo.id,
       name: folderInfo.filename
     })
-    
+
     currentId = folderInfo.parent_id
   }
 
@@ -350,7 +333,7 @@ const refreshCache = async () => {
   try {
     // 获取当前文件夹ID（如果有）
     const folderId = route.params.id
-    
+
     await updateCache(folderId)
     await loadFiles()
     ElMessage.success('刷新数据成功')
@@ -379,18 +362,18 @@ const triggerFileUpload = () => {
 const uploadFile = async (event) => {
   const file = event.target.files[0]
   if (!file) return
-  
+
   uploading.value = true
   uploadProgress.value = 0
-  
+
   try {
     // 获取当前文件夹ID（如果有）
     const parentId = route.params.id || null
-    
+
     await uploadFileToServer(file, parentId, (progress) => {
       uploadProgress.value = Math.round(progress)
     })
-    
+
     ElMessage.success('上传成功')
     await loadFiles()
   } catch (error) {
@@ -415,11 +398,11 @@ const createFolder = async () => {
     ElMessage.warning('请输入文件夹名称')
     return
   }
-  
+
   try {
     // 获取当前文件夹ID（如果有）
     const parentId = route.params.id || null
-    
+
     await createNewFolder(newFolderName.value, parentId)
     createFolderDialogVisible.value = false
     ElMessage.success('创建文件夹成功')
@@ -443,7 +426,7 @@ const renameItem = async () => {
     ElMessage.warning('请输入新名称')
     return
   }
-  
+
   try {
     await renameFile(currentItem.value.id, newName.value, currentItem.value.type)
     renameDialogVisible.value = false
@@ -488,11 +471,11 @@ const showTextLinkUploadDialog = () => {
   linkText.value = ''
   if (clipboard) {
     clipboard.readText()
-    .then((clipboardText) => {
-      linkText.value = clipboardText
-    }).finally(() => {
-      textLinkDialogVisible.value = true
-    })
+      .then((clipboardText) => {
+        linkText.value = clipboardText
+      }).finally(() => {
+        textLinkDialogVisible.value = true
+      })
   } else {
     textLinkDialogVisible.value = true
   }
@@ -504,23 +487,23 @@ const uploadFromLinks = async () => {
     ElMessage.warning('请输入链接')
     return
   }
-  
+
   const text = linkText.value
   // 获取当前文件夹ID（如果有）
   const folderId = route.params.id || null
-  
+
   try {
     textLinkDialogVisible.value = false
     ElMessage.success('开始在后台提取资源，请稍后...')
     const response = await downloadFromText(text, folderId)
     ElMessage.success(`提取成功${response.successCount}条, 失败${response.failedLinks.length}条`)
-    
+
     // 下载完成后导航到目标文件夹
     if (response.downloadId) {
       router.push({ name: 'folder', params: { id: response.downloadId } })
       return // 导航会触发路由变化，会自动加载文件，不需要再调用loadFiles
     }
-    
+
     await loadFiles()
   } catch (error) {
     ElMessage.error('添加下载任务失败')
@@ -540,23 +523,23 @@ const loadAvailableFolders = async () => {
   try {
     const response = await getFiles('')  // 获取根目录下的所有文件夹
     const folders = [{ path: '', displayPath: '根目录' }]
-    
+
     // 递归函数，用于构建文件夹树
     const buildFolderTree = (items, level = 0) => {
       items.forEach(item => {
         if (item.type === 'folder') {
           // 排除当前项及其子文件夹
-          if (currentItem.value && 
-              (item.id === currentItem.value.id || item.id === currentItem.value.parentId)) {
+          if (currentItem.value &&
+            (item.id === currentItem.value.id || item.id === currentItem.value.parentId)) {
             return
           }
-          
+
           const displayPath = '　'.repeat(level) + item.filename
           folders.push({
             id: item.id,
             displayPath
           })
-          
+
           // 如果文件夹已经展开，递归添加子文件夹
           if (item.children && item.children.length > 0) {
             buildFolderTree(item.children, level + 1)
@@ -564,7 +547,7 @@ const loadAvailableFolders = async () => {
         }
       })
     }
-    
+
     buildFolderTree(response)
     availableFolders.value = folders
   } catch (error) {
@@ -579,7 +562,7 @@ const moveItem = async () => {
     ElMessage.warning('请选择目标文件夹')
     return
   }
-  
+
   try {
     // 获取目标文件夹的ID
     const targetId = targetFolderId.value
@@ -630,11 +613,11 @@ const convertTsFile = async (file) => {
 const loadMoreFiles = async () => {
   if (loading.value || !hasMoreFiles.value) return
   loading.value = true
-  
+
   try {
     const scrollContainer = mediaContainer.value
     const currScrollTop = scrollContainer ? scrollContainer.scrollTop : 0
-    
+
     // 获取当前文件夹ID（如果有）
     const folderId = route.params.id
     const query = route.query.q
@@ -646,15 +629,15 @@ const loadMoreFiles = async () => {
 
       if (response.length > 0) {
         files.value = [...files.value, ...response]
-          setTimeout(() => {
-            if (mediaContainer.value) {
-              mediaContainer.value.scrollTop = currScrollTop
-              checkContentHeight()
-            }
-          })
-          // 判断是否还有更多文件
-          hasMoreFiles.value = response.length === pageSize.value
-        
+        setTimeout(() => {
+          if (mediaContainer.value) {
+            mediaContainer.value.scrollTop = currScrollTop
+            checkContentHeight()
+          }
+        })
+        // 判断是否还有更多文件
+        hasMoreFiles.value = response.length === pageSize.value
+
       } else {
         hasMoreFiles.value = false
       }
@@ -674,7 +657,7 @@ const checkScrollPosition = () => {
   if (!mediaContainer.value || loading.value || !hasMoreFiles.value) {
     return
   }
-  
+
   const { scrollTop, scrollHeight, clientHeight } = mediaContainer.value
   // 当滚动到距离底部100px以内时加载更多
   if (scrollHeight - scrollTop - clientHeight < 100) {
@@ -718,6 +701,7 @@ onUnmounted(() => {
 
 .top-container {
   margin-bottom: 20px;
+  margin-top: 10px;
 }
 
 .top-form {

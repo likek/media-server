@@ -1,8 +1,10 @@
 import fs from "fs";
 import path from "path";
+import mime from 'mime-types';
 import { MEDIA_FULL_PATH, THUMB_FULL_PATH } from "../serverConfig.js";
 import { isVideoByName, generateThumbnail } from "./utils/index.js";
 import db from "./dbserialize.js";
+import { getFavoritesStatus } from "./favoritesManager.js";
 
 // 获取文件夹的ID
 const getFolderId = (folderPath) => {
@@ -133,6 +135,7 @@ const updateFolderContents = async (folderId, folderPath) => {
           // 处理文件夹
           const folderInfo = {
             type: "folder",
+            mime_type: "folder", // Add mime_type for folder
             filename: fileName,
             path: path.join(folderPath, fileName).replace(/\\/g, "/"),
             lastModified: stats.mtime,
@@ -142,8 +145,9 @@ const updateFolderContents = async (folderId, folderPath) => {
           if (existingId) {
             // 更新现有文件夹
             await new Promise((resolve, reject) => {
-              db.run(`UPDATE files SET size = ?, last_modified = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
-                [stats.size, stats.mtime.toISOString(), existingId],
+              // Update mime_type as well, though it should always be 'folder'
+              db.run(`UPDATE files SET size = ?, last_modified = ?, mime_type = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+                [stats.size, stats.mtime.toISOString(), 'folder', existingId],
                 err => {
                   if (err) reject(err);
                   else resolve();
@@ -153,8 +157,8 @@ const updateFolderContents = async (folderId, folderPath) => {
           } else {
             // 创建新文件夹记录
             const id = await new Promise((resolve, reject) => {
-              db.run(`INSERT INTO files (name, type, parent_id, path, size, last_modified) VALUES (?, 'folder', ?, ?, ?, ?)`,
-                [fileName, folderId, folderInfo.path, stats.size, stats.mtime.toISOString()],
+              db.run(`INSERT INTO files (name, type, mime_type, parent_id, path, size, last_modified) VALUES (?, 'folder', ?, ?, ?, ?, ?)`, // Add mime_type
+                [fileName, 'folder', folderId, folderInfo.path, stats.size, stats.mtime.toISOString()],
                 function(err) {
                   if (err) reject(err);
                   else resolve(this.lastID);
@@ -168,6 +172,7 @@ const updateFolderContents = async (folderId, folderPath) => {
           // 处理文件
           const thumbnailPath = path.join(THUMB_FULL_PATH, folderPath, fileName + ".png");
           const isVideo = isVideoByName(fileName);
+          const mimeType = mime.lookup(fileName) || 'application/octet-stream'; // Determine mime type
           if (isVideo && !fs.existsSync(thumbnailPath)) {
             await generateThumbnail(filePath, thumbnailPath);
           }
@@ -175,6 +180,7 @@ const updateFolderContents = async (folderId, folderPath) => {
           
           const fileInfo = {
             type: "file",
+            mime_type: mimeType, // Add mime_type for file
             filename: fileName,
             path: path.join(folderPath, fileName).replace(/\\/g, "/"),
             thumbnail: isVideo ? thumbnail : undefined,
@@ -185,8 +191,8 @@ const updateFolderContents = async (folderId, folderPath) => {
           if (existingId) {
             // 更新现有文件
             await new Promise((resolve, reject) => {
-              db.run(`UPDATE files SET size = ?, last_modified = ?, thumbnail = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
-                [stats.size, stats.mtime.toISOString(), thumbnail, existingId],
+              db.run(`UPDATE files SET size = ?, last_modified = ?, thumbnail = ?, mime_type = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, // Add mime_type
+                [stats.size, stats.mtime.toISOString(), thumbnail, mimeType, existingId],
                 err => {
                   if (err) reject(err);
                   else resolve();
@@ -196,8 +202,8 @@ const updateFolderContents = async (folderId, folderPath) => {
           } else {
             // 创建新文件记录
             const id = await new Promise((resolve, reject) => {
-              db.run(`INSERT INTO files (name, type, parent_id, path, size, last_modified, thumbnail) VALUES (?, 'file', ?, ?, ?, ?, ?)`,
-                [fileName, folderId, fileInfo.path, stats.size, stats.mtime.toISOString(), thumbnail],
+              db.run(`INSERT INTO files (name, type, mime_type, parent_id, path, size, last_modified, thumbnail) VALUES (?, 'file', ?, ?, ?, ?, ?, ?, ?)`, // Add mime_type
+                [fileName, mimeType, folderId, fileInfo.path, stats.size, stats.mtime.toISOString(), thumbnail],
                 function(err) {
                   if (err) reject(err);
                   else resolve(this.lastID);
@@ -249,7 +255,7 @@ const updateFolderByPath = async (folderPath) => {
 };
 
 // 根据ID获取文件夹内容
-const getFolderContentsById = (folderId, searchQuery, page, pageSize) => {
+const getFolderContentsById = (folderId, searchQuery, page, pageSize, req) => {
   return new Promise(async (resolve, reject) => {
     try {
       // 获取文件夹信息，用于后续自动刷新缓存
@@ -280,7 +286,16 @@ const getFolderContentsById = (folderId, searchQuery, page, pageSize) => {
           query += ` WHERE parent_id IS NULL`
         }
       }
-      query += ` ORDER BY type DESC, last_modified DESC`
+      // New sorting logic: Folder > Video > Image > Others, then by updated_at DESC
+      query += ` ORDER BY 
+                  CASE 
+                    WHEN type = 'folder' THEN 1 
+                    WHEN mime_type LIKE 'video/%' THEN 2 
+                    WHEN mime_type LIKE 'image/%' THEN 3 
+                    ELSE 4 
+                  END, 
+                  updated_at DESC, 
+                  created_at DESC`
       // 添加分页
       if (typeof pageSize === 'number' && typeof page === 'number') {
         query += ` LIMIT ? OFFSET ?`;
@@ -302,16 +317,36 @@ const getFolderContentsById = (folderId, searchQuery, page, pageSize) => {
           // thumbnail: row.thumbnail,
           lastModified: row.last_modified,
           size: row.size,
-          parent_id: row.parent_id
+          parent_id: row.parent_id,
+          favorited: false // 默认为未收藏状态，后续会更新
         }));
+        
+        // 获取用户ID
+        const userId = req?.cookies?.userId;
+        
+        // 如果用户已登录，获取收藏状态
+        if (userId && fileInfos.length > 0) {
+          try {
+            const fileIds = fileInfos.map(file => file.id);
+            const favoritesStatus = await getFavoritesStatus(userId, fileIds);
+            
+            // 更新文件的收藏状态
+            fileInfos.forEach(file => {
+              file.favorited = favoritesStatus[file.id] || false;
+            });
+          } catch (error) {
+            console.error('获取收藏状态失败:', error);
+            // 出错时继续使用默认的收藏状态
+          }
+        }
         
         if (searchQuery) {
           // 如果是搜索模式，则返回所有结果
           resolve(fileInfos);
           return;
         }
-        // 如果文件夹内容为空或者文件数量很少，自动刷新缓存
-        if (fileInfos.length === 0 || fileInfos.length < 3) {
+        // 如果文件夹内容为空，自动刷新缓存
+        if (fileInfos.length === 0 && page === 0) {
           try {
             // 检查物理文件夹中是否有文件但数据库中没有记录
             const fullPath = path.join(MEDIA_FULL_PATH, folderPath);
@@ -643,8 +678,9 @@ const initRootDirectory = async () => {
           if (stats.isDirectory()) {
             // 插入文件夹记录
             const folderId = await new Promise((resolve, reject) => {
+              // Add mime_type = 'folder'
               db.run(
-                `INSERT INTO files (name, type, parent_id, path, size, last_modified) VALUES (?, 'folder', ?, ?, ?, ?)`,
+                `INSERT INTO files (name, type, mime_type, parent_id, path, size, last_modified) VALUES (?, 'folder', 'folder', ?, ?, ?, ?)`, // Add mime_type
                 [fileName, parentId, relativePath, stats.size, stats.mtime.toISOString()],
                 function(err) {
                   if (err) reject(err);
@@ -657,6 +693,7 @@ const initRootDirectory = async () => {
           } else {
             // 处理文件
             const isVideo = isVideoByName(fileName);
+            const mimeType = mime.lookup(fileName) || 'application/octet-stream'; // Determine mime type
             const thumbnailPath = path.join(THUMB_FULL_PATH, currentPath, fileName + ".png");
             if (isVideo && !fs.existsSync(thumbnailPath)) {
               await generateThumbnail(filePath, thumbnailPath);
@@ -666,8 +703,8 @@ const initRootDirectory = async () => {
             // 插入文件记录
             await new Promise((resolve, reject) => {
               db.run(
-                `INSERT INTO files (name, type, parent_id, path, size, last_modified, thumbnail) VALUES (?, 'file', ?, ?, ?, ?, ?)`,
-                [fileName, parentId, relativePath, stats.size, stats.mtime.toISOString(), thumbnail],
+                `INSERT INTO files (name, type, mime_type, parent_id, path, size, last_modified, thumbnail) VALUES (?, 'file', ?, ?, ?, ?, ?, ?)`,
+                [fileName, mimeType, parentId, relativePath, stats.size, stats.mtime.toISOString(), thumbnail],
                 err => {
                   if (err) reject(err);
                   else resolve();
