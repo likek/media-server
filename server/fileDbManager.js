@@ -202,7 +202,7 @@ const updateFolderContents = async (folderId, folderPath) => {
           } else {
             // 创建新文件记录
             const id = await new Promise((resolve, reject) => {
-              db.run(`INSERT INTO files (name, type, mime_type, parent_id, path, size, last_modified, thumbnail) VALUES (?, 'file', ?, ?, ?, ?, ?, ?, ?)`, // Add mime_type
+              db.run(`INSERT INTO files (name, type, mime_type, parent_id, path, size, last_modified, thumbnail) VALUES (?, 'file', ?, ?, ?, ?, ?, ?)`, // Add mime_type
                 [fileName, mimeType, folderId, fileInfo.path, stats.size, stats.mtime.toISOString(), thumbnail],
                 function(err) {
                   if (err) reject(err);

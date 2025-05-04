@@ -3,7 +3,7 @@ import { ElMessage } from 'element-plus';
 
 const api = axios.create({
   baseURL: '/api',
-  timeout: 5 * 60 * 1000
+  timeout: 1 * 60 * 1000
 })
 
 api.interceptors.response.use(
@@ -80,6 +80,7 @@ export const uploadFileToServer = async (file, parentId, onProgress) => {
     headers: {
       'Content-Type': 'multipart/form-data'
     },
+    timeout: 3 * 60 * 60 * 1000,
     onUploadProgress: (progressEvent) => {
       const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total)
       if (onProgress) onProgress(percentCompleted)
@@ -91,7 +92,9 @@ export const uploadFileToServer = async (file, parentId, onProgress) => {
 
 // 从文本链接下载
 export const downloadFromText = async (text, folderId) => {
-  const response = await api.post('/downloadFromText', { text, folderId })
+  const response = await api.post('/downloadFromText', { text, folderId }, {
+    timeout: 3 * 60 * 60 * 1000
+  })
   return response
 }
 
