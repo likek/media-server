@@ -294,6 +294,7 @@ const getFolderContentsById = (folderId, searchQuery, page, pageSize, req) => {
                     WHEN mime_type LIKE 'image/%' THEN 3 
                     ELSE 4 
                   END, 
+                  last_modified DESC,
                   updated_at DESC, 
                   created_at DESC`
       // 添加分页

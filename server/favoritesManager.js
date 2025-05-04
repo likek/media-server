@@ -54,6 +54,7 @@ export const getUserFavorites = (userId, page = 0, pageSize = 20) => {
           WHEN f.mime_type LIKE 'image/%' THEN 2
           ELSE 3
         END,
+        f.last_modified DESC,
         f.updated_at DESC,
         f.created_at DESC
       ${pageSize > 0 ? `LIMIT ? OFFSET ?` : ''}
