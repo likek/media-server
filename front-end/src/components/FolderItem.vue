@@ -10,18 +10,18 @@
               <StarFilled v-else />
             </el-icon>
           </el-tooltip>
-          <el-tooltip content="重命名" placement="top" :auto-close="1000">
-            <el-icon class="action-icon" @click.stop="$emit('rename', folder)" v-if="allowActions">
+          <el-tooltip content="重命名" placement="top" :auto-close="1000" v-if="allowActions">
+            <el-icon class="action-icon" @click.stop="$emit('rename', folder)" >
               <Edit />
             </el-icon>
           </el-tooltip>
-          <el-tooltip content="移动" placement="top" :auto-close="1000">
-            <el-icon class="action-icon" @click.stop="$emit('move', folder)" v-if="allowActions">
+          <el-tooltip content="移动" placement="top" :auto-close="1000" v-if="allowActions">
+            <el-icon class="action-icon" @click.stop="$emit('move', folder)">
               <Position />
             </el-icon>
           </el-tooltip>
-          <el-tooltip content="删除" placement="top" :auto-close="1000">
-            <el-icon class="action-icon" @click.stop="$emit('delete', folder)" v-if="allowActions">
+          <el-tooltip content="删除" placement="top" :auto-close="1000" v-if="allowActions">
+            <el-icon class="action-icon" @click.stop="$emit('delete', folder)">
               <Delete />
             </el-icon>
           </el-tooltip>

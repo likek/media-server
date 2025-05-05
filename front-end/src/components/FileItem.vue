@@ -22,8 +22,8 @@
               <FolderOpened />
             </el-icon>
           </el-tooltip>
-          <el-tooltip content="转换为MP4" placement="top" :auto-close="1000">
-            <el-icon class="action-icon" @click.stop="$emit('convertTs', file)" v-if="isTs && allowActions">
+          <el-tooltip content="转换为MP4" placement="top" :auto-close="1000" v-if="isTs && allowActions">
+            <el-icon class="action-icon" @click.stop="$emit('convertTs', file)">
               <VideoPlay />
             </el-icon>
           </el-tooltip>
@@ -33,13 +33,13 @@
               <StarFilled v-else />
             </el-icon>
           </el-tooltip>
-          <el-tooltip content="重命名" placement="top" :auto-close="1000">
-            <el-icon class="action-icon" @click.stop="$emit('rename', file)" v-if="allowActions">
+          <el-tooltip content="重命名" placement="top" :auto-close="1000" v-if="allowActions">
+            <el-icon class="action-icon" @click.stop="$emit('rename', file)">
               <Edit />
             </el-icon>
           </el-tooltip>
-          <el-tooltip content="移动" placement="top" :auto-close="1000">
-            <el-icon class="action-icon" @click.stop="$emit('move', file)" v-if="allowActions">
+          <el-tooltip content="移动" placement="top" :auto-close="1000" v-if="allowActions">
+            <el-icon class="action-icon" @click.stop="$emit('move', file)">
               <Position />
             </el-icon>
           </el-tooltip>
@@ -48,8 +48,8 @@
               <Download />
             </el-icon>
           </el-tooltip>
-          <el-tooltip content="删除" placement="top" :auto-close="1000">
-            <el-icon class="action-icon" @click.stop="$emit('delete', file)" v-if="allowActions">
+          <el-tooltip content="删除" placement="top" :auto-close="1000" v-if="allowActions">
+            <el-icon class="action-icon" @click.stop="$emit('delete', file)">
               <Delete />
             </el-icon>
           </el-tooltip>
