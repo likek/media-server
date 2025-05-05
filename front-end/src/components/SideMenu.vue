@@ -1,7 +1,7 @@
 <template>
     <div class="side-menu" :class="{ 'is-collapsed': isCollapsed }">
         <div class="menu-items">
-            <div class="menu-item" :class="{ active: activeMenu === 'files' }" @click="navigateTo('files')"
+            <div class="menu-item" :class="{ active: activeMenu === 'files' }" @click="navigateTo('home')"
                 :title="isCollapsed ? '全部文件' : ''">
                 <el-icon>
                     <Folder />
@@ -22,6 +22,14 @@
                 </el-icon>
                 <span v-if="!isCollapsed">用户管理</span>
             </div>
+            <div
+                class="menu-item" :class="{ active: activeMenu === 'log-manager' }" @click="navigateTo('log-manager')"
+                :title="isCollapsed ? '日志管理' : ''">
+                <el-icon>
+                    <Tickets />
+                </el-icon>
+                <span v-if="!isCollapsed">日志管理</span>
+            </div>
         </div>
     </div>
 </template>
@@ -29,7 +37,6 @@
 <script setup>
 import { ref, watch, defineProps } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { Folder, Star, User } from '@element-plus/icons-vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -45,24 +52,12 @@ const activeMenu = ref('files')
 
 // 监听路由变化，更新当前激活的菜单项
 watch(() => route.name, (newRouteName) => {
-    if (newRouteName === 'favorites') {
-        activeMenu.value = 'favorites'
-    } else if (newRouteName === 'admin') {
-        activeMenu.value = 'admin'
-    } else {
-        activeMenu.value = 'files'
-    }
+    activeMenu.value = newRouteName
 }, { immediate: true })
 
 // 导航到指定路由
 const navigateTo = (menuType) => {
-    if (menuType === 'files') {
-        router.push({ name: 'home' })
-    } else if (menuType === 'favorites') {
-        router.push({ name: 'favorites' })
-    } else if (menuType === 'admin') {
-        router.push({ name: 'admin' })
-    }
+    router.push({ name: menuType })
 }
 </script>
 

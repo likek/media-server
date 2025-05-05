@@ -8,7 +8,6 @@ const request = axios.create({
 
 request.interceptors.response.use(
   response => {
-    console.log(response.data)
     return response.data
   },
   error => {

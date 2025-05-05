@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import FileExplorer from '../views/FileExplorer.vue'
 import FavoritesView from '../views/FavoritesView.vue'
 import AdminView from '../views/AdminView.vue'
+import LogManagerView from '../views/LogManagerView.vue'
 
 const routes = [
   {
@@ -23,6 +24,11 @@ const routes = [
     path: '/admin',
     name: 'admin',
     component: AdminView
+  },
+  {
+    path: '/log-manager',
+    name: 'log-manager',
+    component: LogManagerView
   }
 ]
 

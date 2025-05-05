@@ -27,6 +27,7 @@ import { tryRegister } from "./server/userManager.js";
 import { downloadAllMediaByLinks } from "./server/downloadManager.js";
 import { addToFavorites, getUserFavorites, removeFromFavorites } from "./server/favoritesManager.js";
 import adminRoutes from "./server/routes/adminRoutes.js";
+import logRoutes from "./server/routes/logRoutes.js";
 
 serializeDb();
 
@@ -168,6 +169,7 @@ app.get("/api/register", async (req, res) => {
 
 // 使用管理路由
 app.use("/api/admin", adminRoutes);
+app.use("/api/logs", logRoutes);
 
 app.post("/api/downloadFromText", async (req, res) => { 
   const folderId = req.body.folderId;

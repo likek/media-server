@@ -5,7 +5,7 @@ const initAll = () => {
   db.run(`
     CREATE TABLE IF NOT EXISTS logs_request (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      requestTime TEXT,
+      time TEXT,
       userIp TEXT,
       userId TEXT,
       requestMethod TEXT,
