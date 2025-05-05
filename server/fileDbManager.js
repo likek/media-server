@@ -255,17 +255,24 @@ const updateFolderByPath = async (folderPath) => {
 };
 
 // 根据ID获取文件夹内容
-const getFolderContentsById = (folderId, searchQuery, page, pageSize, req) => {
+const getFolderContentsById = (folderId, searchQuery, filters, page, pageSize, req) => {
+  if (!folderId) {
+    folderId = null;
+  }
   return new Promise(async (resolve, reject) => {
     try {
       // 获取文件夹信息，用于后续自动刷新缓存
       let folderPath = "";
       if (folderId !== null) {
         const folderInfo = await getFileById(folderId);
-        if (folderInfo) {
-          folderPath = folderInfo.path;
+        if (!folderInfo) {
+          return resolve([]);
         }
+        folderPath = folderInfo.path;
       }
+
+      const filter_type = filters?.type
+      const filter_mime_type = filters?.mime_type
 
       const params = [];
       let query = `SELECT * FROM files`;
@@ -286,6 +293,16 @@ const getFolderContentsById = (folderId, searchQuery, page, pageSize, req) => {
           query += ` WHERE parent_id IS NULL`
         }
       }
+      // 添加类型过滤
+      if (filter_type) {
+        query += ` AND type =?`
+        params.push(filter_type);
+      }
+      // 添加mime_type过滤
+      if (filter_mime_type) {
+        query += ` AND mime_type LIKE?`
+        params.push(`${filter_mime_type}%`);
+      }
       // New sorting logic: Folder > Video > Image > Others, then by updated_at DESC
       query += ` ORDER BY 
                   CASE 
@@ -302,7 +319,6 @@ const getFolderContentsById = (folderId, searchQuery, page, pageSize, req) => {
         query += ` LIMIT ? OFFSET ?`;
         params.push(pageSize, page * pageSize);
       }
-
       db.all(query, params, async (err, rows) => {
         if (err) {
           reject(err);
@@ -358,7 +374,7 @@ const getFolderContentsById = (folderId, searchQuery, page, pageSize, req) => {
                 console.log(`自动刷新文件夹缓存: ${folderPath}`);
                 const updatedContents = await updateFolderContents(folderId, folderPath);
                 if (updatedContents && updatedContents.fileInfos) {
-                  resolve(updatedContents.fileInfos);
+                  resolve([]);
                   return;
                 }
               }
@@ -663,62 +679,64 @@ const initRootDirectory = async () => {
         resolve(row.count === 0);
       });
     });
+
+    if (!isEmpty) {
+      return;
+    }
     
-    if (isEmpty) {
-      console.log("数据库为空，开始递归扫描目录...");
-      // 递归扫描整个目录结构
-      async function scanDirectory(currentPath = "", parentId = null) {
-        const fullPath = path.join(MEDIA_FULL_PATH, currentPath);
-        const files = await fs.promises.readdir(fullPath);
+    console.log("数据库为空，开始递归扫描目录...");
+    // 递归扫描整个目录结构
+    async function scanDirectory(currentPath = "", parentId = null) {
+      const fullPath = path.join(MEDIA_FULL_PATH, currentPath);
+      const files = await fs.promises.readdir(fullPath);
+      
+      for (const fileName of files) {
+        const filePath = path.join(fullPath, fileName);
+        const stats = await fs.promises.stat(filePath);
+        const relativePath = path.join(currentPath, fileName).replace(/\\/g, "/");
         
-        for (const fileName of files) {
-          const filePath = path.join(fullPath, fileName);
-          const stats = await fs.promises.stat(filePath);
-          const relativePath = path.join(currentPath, fileName).replace(/\\/g, "/");
-          
-          if (stats.isDirectory()) {
-            // 插入文件夹记录
-            const folderId = await new Promise((resolve, reject) => {
-              // Add mime_type = 'folder'
-              db.run(
-                `INSERT INTO files (name, type, mime_type, parent_id, path, size, last_modified) VALUES (?, 'folder', 'folder', ?, ?, ?, ?)`, // Add mime_type
-                [fileName, parentId, relativePath, stats.size, stats.mtime.toISOString()],
-                function(err) {
-                  if (err) reject(err);
-                  else resolve(this.lastID);
-                }
-              );
-            });
-            // 递归处理子目录
-            await scanDirectory(relativePath, folderId);
-          } else {
-            // 处理文件
-            const isVideo = isVideoByName(fileName);
-            const mimeType = mime.lookup(fileName) || 'application/octet-stream'; // Determine mime type
-            const thumbnailPath = path.join(THUMB_FULL_PATH, currentPath, fileName + ".png");
-            if (isVideo && !fs.existsSync(thumbnailPath)) {
-              await generateThumbnail(filePath, thumbnailPath);
-            }
-            const thumbnail = isVideo ? path.join(currentPath, fileName + ".png") : undefined;
-            
-            // 插入文件记录
-            await new Promise((resolve, reject) => {
-              db.run(
-                `INSERT INTO files (name, type, mime_type, parent_id, path, size, last_modified, thumbnail) VALUES (?, 'file', ?, ?, ?, ?, ?, ?)`,
-                [fileName, mimeType, parentId, relativePath, stats.size, stats.mtime.toISOString(), thumbnail],
-                err => {
-                  if (err) reject(err);
-                  else resolve();
-                }
-              );
-            });
+        if (stats.isDirectory()) {
+          // 插入文件夹记录
+          const folderId = await new Promise((resolve, reject) => {
+            // Add mime_type = 'folder'
+            db.run(
+              `INSERT INTO files (name, type, mime_type, parent_id, path, size, last_modified) VALUES (?, 'folder', 'folder', ?, ?, ?, ?)`, // Add mime_type
+              [fileName, parentId, relativePath, stats.size, stats.mtime.toISOString()],
+              function(err) {
+                if (err) reject(err);
+                else resolve(this.lastID);
+              }
+            );
+          });
+          // 递归处理子目录
+          await scanDirectory(relativePath, folderId);
+        } else {
+          // 处理文件
+          const isVideo = isVideoByName(fileName);
+          const mimeType = mime.lookup(fileName) || 'application/octet-stream'; // Determine mime type
+          const thumbnailPath = path.join(THUMB_FULL_PATH, currentPath, fileName + ".png");
+          if (isVideo && !fs.existsSync(thumbnailPath)) {
+            await generateThumbnail(filePath, thumbnailPath);
           }
+          const thumbnail = isVideo ? path.join(currentPath, fileName + ".png") : undefined;
+          
+          // 插入文件记录
+          await new Promise((resolve, reject) => {
+            db.run(
+              `INSERT INTO files (name, type, mime_type, parent_id, path, size, last_modified, thumbnail) VALUES (?, 'file', ?, ?, ?, ?, ?, ?)`,
+              [fileName, mimeType, parentId, relativePath, stats.size, stats.mtime.toISOString(), thumbnail],
+              err => {
+                if (err) reject(err);
+                else resolve();
+              }
+            );
+          });
         }
       }
-      
-      await scanDirectory();
-      console.log("目录扫描完成，数据库初始化成功");
     }
+    
+    await scanDirectory();
+    console.log("目录扫描完成，数据库初始化成功");
   } catch (err) {
     console.error("Error initializing root directory:", err);
     throw err;

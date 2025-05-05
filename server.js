@@ -438,12 +438,14 @@ app.post("/api/files", async (req, res) => {
     const searchQuery = req.body.query;
     const page = parseInt(req.body.page) || 0;
     const pageSize = parseInt(req.body.pageSize); // 每页文件数
+    const type = req.body.type;
+    const mime_type = req.body.mime_type;
     
     // 初始化数据库中的文件系统（如果需要）
     await initRootDirectory(req);
     
     // 通过ID获取文件列表，传递req对象以获取用户ID和收藏状态
-    let result = await getFolderContentsById(folderId, searchQuery, page, pageSize, req);
+    let result = await getFolderContentsById(folderId, searchQuery, { type, mime_type }, page, pageSize, req);
     res.send(result);
   } catch (err) {
     console.error("Error fetching file list:", err);

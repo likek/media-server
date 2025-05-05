@@ -105,10 +105,25 @@
     <el-dialog v-model="moveDialogVisible" title="移动到" width="80%">
       <div class="move-dialog-content">
         <p>选择目标文件夹:</p>
-        <el-select v-model="targetFolderId" placeholder="选择目标文件夹" style="width: 100%">
-          <el-option v-for="folder in availableFolders" :key="folder.id" :label="folder.displayPath"
-            :value="folder.id" />
-        </el-select>
+        <el-tree
+          ref="folderTree"
+          :props="{
+            children: 'children',
+            label: 'filename'
+          }"
+          :load="loadNode"
+          lazy
+          check-strictly
+          :accordion="true"
+          node-key="id"
+        >
+          <template #default="{ node, data }">
+            <span class="folder-tree-node">
+              <el-icon><Folder /></el-icon>
+              <span class="folder-tree-node_lavel">{{ node.label }}</span>
+            </span>
+          </template>
+        </el-tree>
       </div>
       <template #footer>
         <span class="dialog-footer">
@@ -127,7 +142,6 @@
 import { ref, watch, onMounted, onUnmounted, nextTick, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Loading, Star, HomeFilled } from '@element-plus/icons-vue'
 import FolderItem from '../components/FolderItem.vue'
 import FileItem from '../components/FileItem.vue'
 import TextViewerDialog from '../components/TextViewerDialog.vue'
@@ -162,8 +176,7 @@ const currentItem = ref(null)
 const textLinkDialogVisible = ref(false)
 const linkText = ref('')
 const moveDialogVisible = ref(false)
-const targetFolderId = ref('')
-const availableFolders = ref([])
+const folderTree = ref(null) // Ref for the tree component
 
 // 文本查看对话框状态
 const txtDialogVisible = ref(false)
@@ -515,61 +528,22 @@ const uploadFromLinks = async () => {
   }
 }
 
-// 显示移动对话框
-const showMoveDialog = (item) => {
-  currentItem.value = item
-  moveDialogVisible.value = true
-  loadAvailableFolders()
-}
-
-// 加载可用的目标文件夹
-const loadAvailableFolders = async () => {
-  try {
-    const response = await getFiles('')  // 获取根目录下的所有文件夹
-    const folders = [{ path: '', displayPath: '根目录' }]
-
-    // 递归函数，用于构建文件夹树
-    const buildFolderTree = (items, level = 0) => {
-      items.forEach(item => {
-        if (item.type === 'folder') {
-          // 排除当前项及其子文件夹
-          if (currentItem.value &&
-            (item.id === currentItem.value.id || item.id === currentItem.value.parentId)) {
-            return
-          }
-
-          const displayPath = '　'.repeat(level) + item.filename
-          folders.push({
-            id: item.id,
-            displayPath
-          })
-
-          // 如果文件夹已经展开，递归添加子文件夹
-          if (item.children && item.children.length > 0) {
-            buildFolderTree(item.children, level + 1)
-          }
-        }
-      })
-    }
-
-    buildFolderTree(response)
-    availableFolders.value = folders
-  } catch (error) {
-    ElMessage.error('加载文件夹失败')
-    console.error('Error loading folders:', error)
-  }
-}
-
 // 移动文件或文件夹
 const moveItem = async () => {
-  if (!targetFolderId.value && targetFolderId.value !== null) {
+  const targetFolderNode = folderTree.value.getCurrentNode()
+  if (!targetFolderNode) {
     ElMessage.warning('请选择目标文件夹')
+    return
+  }
+
+  if (currentItem.value.id === targetFolderNode.id) {
+    ElMessage.warning('目标文件夹不能是当前文件夹')
     return
   }
 
   try {
     // 获取目标文件夹的ID
-    const targetId = targetFolderId.value
+    const targetId = targetFolderNode.id
     await moveFile(currentItem.value.id, targetId)
     moveDialogVisible.value = false
     ElMessage.success('移动成功')
@@ -577,6 +551,50 @@ const moveItem = async () => {
   } catch (error) {
     ElMessage.error('移动失败')
     console.error('Error moving item:', error)
+  }
+}
+
+// 显示移动对话框
+const showMoveDialog = (item) => {
+  currentItem.value = item
+  moveDialogVisible.value = true
+  nextTick(() => {
+    if (folderTree.value) {
+        const rootNode = folderTree.value.getNode(null);
+        if (rootNode) {
+            rootNode.loaded = false;
+        }
+    }
+  })
+}
+
+const loadNode = async (node, resolve) => {
+  if (node.level === 0) {
+    try {
+      const response = await getFiles(null, null, 0, 1000, { type: 'folder' }) // Fetch root level items
+      const folders = response
+        .filter(item => item.type === 'folder')
+        .map(folder => ({ ...folder, isLeaf: false }))
+      return resolve([{ id: 0, filename: '根目录', isLeaf: false, children: folders }])
+    } catch (error) {
+      ElMessage.error('加载根文件夹列表失败')
+      console.error('Error loading root folders for tree:', error)
+      return resolve([{ id: 0, filename: '根目录', isLeaf: false }])
+    }
+  }
+
+  const parentId = node.data.id
+  try {
+    const response = await getFiles(parentId, null, 0, 1000, { type: 'folder' })
+    const folders = response
+      .filter(item => item.type === 'folder')
+      .map(folder => ({ ...folder, isLeaf: false }))
+
+    resolve(folders)
+  } catch (error) {
+    ElMessage.error(`加载文件夹 ${node.data.filename} 的子列表失败`)
+    console.error('Error loading subfolders for tree:', error)
+    resolve([])
   }
 }
 
@@ -781,5 +799,9 @@ onUnmounted(() => {
 
 .loading-indicator .el-icon {
   margin-right: 5px;
+}
+
+.folder-tree-node_lavel {
+  vertical-align: text-bottom;
 }
 </style>

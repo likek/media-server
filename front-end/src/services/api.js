@@ -23,8 +23,8 @@ api.interceptors.response.use(
 const folderInfoCache = {}
 
 // 获取文件列表
-export const getFiles = async (id = null, query = null, page = 0, pageSize = -1) => {
-  const params = { id, query, page, pageSize };
+export const getFiles = async (id = null, query = null, page = 0, pageSize = -1, filters = {}) => {
+  const params = { id, query, page, pageSize, ...filters };
   const response = await api.post('/files', params)
   return response
 }
