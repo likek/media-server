@@ -137,7 +137,7 @@ const updateFolderContents = async (folderId, folderPath) => {
             type: "folder",
             mime_type: "folder", // Add mime_type for folder
             filename: fileName,
-            path: path.join(folderPath, fileName).replace(/\\/g, "/"),
+            path: path.join(folderPath, fileName).replace(/\\/g, "/").replace(/^\//, ''),
             lastModified: stats.mtime,
             size: stats.size,
           };
@@ -176,13 +176,13 @@ const updateFolderContents = async (folderId, folderPath) => {
           if (isVideo && !fs.existsSync(thumbnailPath)) {
             await generateThumbnail(filePath, thumbnailPath);
           }
-          const thumbnail = isVideo ? path.join(folderPath, fileName + ".png") : undefined;
+          const thumbnail = isVideo ? path.join(folderPath, fileName + ".png").replace(/^\//, '') : undefined;
           
           const fileInfo = {
             type: "file",
             mime_type: mimeType, // Add mime_type for file
             filename: fileName,
-            path: path.join(folderPath, fileName).replace(/\\/g, "/"),
+            path: path.join(folderPath, fileName).replace(/\\/g, "/").replace(/^\//, ''),
             thumbnail: isVideo ? thumbnail : undefined,
             lastModified: stats.mtime,
             size: stats.size,
@@ -586,7 +586,7 @@ const moveFileById = (fileId, targetFolderId) => {
     // 获取文件信息和目标文件夹信息
     Promise.all([
       getFileById(fileId),
-      getFileById(targetFolderId)
+      targetFolderId ? getFileById(targetFolderId) : Promise.resolve({ type: 'folder', path: '' })
     ]).then(([fileInfo, targetFolderInfo]) => {
       if (!fileInfo) {
         reject(new Error("Source file not found"));

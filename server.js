@@ -568,10 +568,13 @@ app.post("/api/updateCache", async (req, res) => {
 
 app.post("/api/move", async (req, res) => {
   try {
-    const { sourceId, targetId } = req.body;
+    let { sourceId, targetId } = req.body;
+    if (!targetId) {
+      targetId = null;
+    }
     
-    if (!sourceId || !targetId) {
-      return res.status(400).json({ message: "sourceId and targetId must be provided" });
+    if (!sourceId) {
+      return res.status(400).json({ message: "sourceId must be provided" });
     }
     
     // 通过ID移动文件或文件夹
