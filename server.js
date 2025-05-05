@@ -21,6 +21,7 @@ import adminRoutes from "./server/routes/adminRoutes.js";
 import logRoutes from "./server/routes/logRoutes.js";
 import userRoutes from "./server/routes/userRoutes.js";
 import staticRoutes from "./server/routes/staticRoutes.js";
+import encryptResponse from "./server/middleware/encryptResponse.js";
 
 serializeDb();
 
@@ -34,6 +35,8 @@ const PORT = 7777;
 const httpServer = createServer(app);
 
 app.set("trust proxy", 1);
+
+app.use("", staticRoutes);
 
 // 创建上传和缩略图目录
 if (!fs.existsSync(MEDIA_FULL_PATH)) {
@@ -84,6 +87,7 @@ app.use(express.json({ limit: "3mb" }));
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, "static")));
 app.use(pathNormalizer);
+app.use(encryptResponse);
 app.use(writeRequestLog);
 
 wsInit(httpServer);
@@ -91,7 +95,6 @@ wsInit(httpServer);
 app.use("/api/admin", adminRoutes);
 app.use("/api/logs", logRoutes);
 app.use("/api/user", userRoutes);
-app.use("", staticRoutes);
 
 // 处理所有非API路由，返回index.html，支持前端路由
 app.get(ENTRY_ROUTE_REGEX, (req, res) => {

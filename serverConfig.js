@@ -30,8 +30,8 @@ const TEMP_FULL_PATH = path.join(__dirname, "./.temp");
 
 // 路由名称配置
 const MEDIA_ROUTE = "/media";
-const THUMB_ROUTE = "/thumbnails";
-const ENTRY_ROUTE_REGEX = /^\/(?!api|media|thumbnails).*/;
+const THUMB_ROUTE = "/thumbnail";
+const ENTRY_ROUTE_REGEX = /^\/(?!api|media|thumbnail).*/;
 
 if (!cmdArgs.path) {
     console.error("请提供文件夹路径参数 --path");

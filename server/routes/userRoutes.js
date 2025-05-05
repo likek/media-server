@@ -7,12 +7,13 @@ import extract from "extract-zip";
 import readline from "readline";
 import multer from "multer";
 import { updateFolderByPath, getFolderContentsById, getFileById, getFileByPath, deleteFileById, renameFileById, moveFileById, initRootDirectory } from "../fileDbManager.js";
-import { MEDIA_FULL_PATH, THUMB_FULL_PATH, MEDIA_ROUTE, THUMB_ROUTE } from "../../serverConfig.js";
+import { MEDIA_FULL_PATH, THUMB_FULL_PATH } from "../../serverConfig.js";
 import { wsBroadcastMessage } from "../websocketManager.js";
 import { convertTxtEncoding } from "../tools/textFileTools.js";
 import { tryRegister } from "../userManager.js";
 import { downloadAllMediaByLinks } from "../downloadManager.js";
 import { addToFavorites, getUserFavorites, removeFromFavorites } from "../favoritesManager.js";
+import { get51PageInfo } from "../utils/index.js";
 
 const router = express.Router();
 // 配置 multer
@@ -226,12 +227,12 @@ router.post("/upload", upload.single("file"), async (req, res) => {
         
         res.send({
           id: fileInfo ? fileInfo.id : null,
-          filename: `${MEDIA_ROUTE}/` + folderPath + "/" + filename,
-          thumbnail: `${THUMB_ROUTE}/` + folderPath + "/" + filename + ".png",
+          filename: filename,
+          thumbnail: folderPath + "/" + filename + ".png",
         });
       } catch (err) {
         console.error("Error generating thumbnail:", err);
-        res.send({ filename: `${MEDIA_ROUTE}/` + folderPath + "/" + filename });
+        res.send({ filename: filename });
       }
     } else {
       await updateFolderByPath(folderPath); // 更新数据库
@@ -241,7 +242,7 @@ router.post("/upload", upload.single("file"), async (req, res) => {
       
       res.send({
         id: fileInfo ? fileInfo.id : null,
-        filename: `${MEDIA_ROUTE}/` + folderPath + "/" + filename
+        filename: folderPath + "/" + filename
       });
     }
   } catch (err) {

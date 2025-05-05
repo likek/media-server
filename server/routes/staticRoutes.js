@@ -2,12 +2,9 @@ import express from "express";
 import { getFileById } from "../fileDbManager.js";
 import path from "path";
 import fs from "fs";
-import { MEDIA_FULL_PATH, MEDIA_ROUTE, THUMB_FULL_PATH, THUMB_ROUTE } from "../../serverConfig.js";
+import { MEDIA_FULL_PATH, THUMB_FULL_PATH } from "../../serverConfig.js";
 
 const router = express.Router();
-
-router.use(`${MEDIA_ROUTE}`, express.static(MEDIA_FULL_PATH));
-router.use(`${THUMB_ROUTE}`, express.static(THUMB_FULL_PATH));
 
 // 基于ID的文件访问路由
 router.get('/media/:id', async (req, res) => {

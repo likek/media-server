@@ -35,7 +35,7 @@ export default defineConfig({
         target: 'http://localhost:7777',
         changeOrigin: true
       },
-      '/thumbnails': {
+      '/thumbnail': {
         target: 'http://localhost:7777',
         changeOrigin: true
       }
