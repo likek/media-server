@@ -36,8 +36,6 @@ const httpServer = createServer(app);
 
 app.set("trust proxy", 1);
 
-app.use("", staticRoutes);
-
 // 创建上传和缩略图目录
 if (!fs.existsSync(MEDIA_FULL_PATH)) {
   fs.mkdirSync(MEDIA_FULL_PATH);
@@ -82,6 +80,8 @@ app.use((req, res, next) => {
   }
   next();
 });
+
+app.use("", staticRoutes);
 
 app.use(express.json({ limit: "3mb" }));
 app.use(express.urlencoded({ extended: true }));
