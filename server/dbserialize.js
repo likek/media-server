@@ -7,6 +7,7 @@ const initAll = () => {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       requestTime TEXT,
       userIp TEXT,
+      userId TEXT,
       requestMethod TEXT,
       requestUrl TEXT,
       requestBody TEXT,

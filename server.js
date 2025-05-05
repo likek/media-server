@@ -11,7 +11,7 @@ import { fileURLToPath } from "url";
 import requestIp from "request-ip";
 import cookieParser from "cookie-parser";
 import { createServer } from "http";
-import db, { serializeDb } from "./server/dbserialize.js";
+import { serializeDb } from "./server/dbserialize.js";
 import compression from "compression";
 import { normalizeIp, generateThumbnail, get51PageInfo } from "./server/utils/index.js";
 import { limiter } from "./server/middleware/limiter.js";

@@ -6,12 +6,13 @@ const writeRequestLogToDB = (logData) => {
     // 插入日志到数据库
     const query = `
           INSERT INTO logs_request (
-            requestTime, userIp, requestMethod, requestUrl, requestBody, status, userAgent, region, device, os, browser, timestamp
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            requestTime, userIp, userId, requestMethod, requestUrl, requestBody, status, userAgent, region, device, os, browser, timestamp
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `;
     const values = [
       logData.requestTime,
       logData.userIp,
+      logData.cookies?.userId || "",
       logData.requestMethod,
       logData.requestUrl,
       logData.requestBody,
