@@ -37,7 +37,7 @@
 <script setup>
 import { ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { addToFavorites, removeFromFavorites } from '../services/api'
+import { addToFavorites, removeFromFavorites } from '../services/userApi'
 
 const props = defineProps({
   folder: {

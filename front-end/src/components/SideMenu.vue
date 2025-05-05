@@ -15,6 +15,13 @@
                 </el-icon>
                 <span v-if="!isCollapsed">我的收藏</span>
             </div>
+            <div class="menu-item" :class="{ active: activeMenu === 'admin' }" @click="navigateTo('admin')"
+                :title="isCollapsed ? '用户管理' : ''">
+                <el-icon>
+                    <User />
+                </el-icon>
+                <span v-if="!isCollapsed">用户管理</span>
+            </div>
         </div>
     </div>
 </template>
@@ -22,7 +29,7 @@
 <script setup>
 import { ref, watch, defineProps } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { Folder, Star } from '@element-plus/icons-vue'
+import { Folder, Star, User } from '@element-plus/icons-vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -40,6 +47,8 @@ const activeMenu = ref('files')
 watch(() => route.name, (newRouteName) => {
     if (newRouteName === 'favorites') {
         activeMenu.value = 'favorites'
+    } else if (newRouteName === 'admin') {
+        activeMenu.value = 'admin'
     } else {
         activeMenu.value = 'files'
     }
@@ -51,6 +60,8 @@ const navigateTo = (menuType) => {
         router.push({ name: 'home' })
     } else if (menuType === 'favorites') {
         router.push({ name: 'favorites' })
+    } else if (menuType === 'admin') {
+        router.push({ name: 'admin' })
     }
 }
 </script>

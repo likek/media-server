@@ -145,7 +145,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import FolderItem from '../components/FolderItem.vue'
 import FileItem from '../components/FileItem.vue'
 import TextViewerDialog from '../components/TextViewerDialog.vue'
-import { getFiles, updateCache, createNewFolder, renameFile, deleteFileOrFolder, uploadFileToServer, downloadFromText, moveFile, convertFileToMp4, getFolderInfo } from '../services/api'
+import { getFiles, updateCache, createNewFolder, renameFile, deleteFileOrFolder, uploadFileToServer, downloadFromText, moveFile, convertFileToMp4, getFolderInfo } from '../services/userApi'
 
 const stateCache = {}
 

@@ -59,7 +59,7 @@ import { Loading } from '@element-plus/icons-vue'
 import FolderItem from '../components/FolderItem.vue'
 import FileItem from '../components/FileItem.vue'
 import TextViewerDialog from '../components/TextViewerDialog.vue'
-import { getFavoritesList } from '../services/api'
+import { getFavoritesList } from '../services/userApi'
 
 const router = useRouter()
 

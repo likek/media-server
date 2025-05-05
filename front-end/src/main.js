@@ -6,7 +6,7 @@ import 'element-plus/dist/index.css'
 import * as ElementPlusIconsVue from '@element-plus/icons-vue'
 // 导入WebSocket服务
 import { connectWebSocket } from './services/websocket'
-import { registerUser } from './services/api'
+import { registerUser } from './services/userApi'
 const app = createApp(App)
 
 // 注册所有Element Plus图标

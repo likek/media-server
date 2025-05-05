@@ -15,7 +15,7 @@
 <script setup>
 import { ref, defineProps, defineEmits, watch } from 'vue'
 import { ElMessageBox } from 'element-plus'
-import { readTextFile, convertTextEncoding } from '../services/api'
+import { readTextFile, convertTextEncoding } from '../services/userApi'
 
 const props = defineProps({
   visible: {

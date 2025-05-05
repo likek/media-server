@@ -118,7 +118,7 @@
 import { computed, ref } from 'vue'
 import { Document, Edit, Delete, Position, Download } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { addToFavorites, removeFromFavorites, unzipFile } from '../services/api'
+import { addToFavorites, removeFromFavorites, unzipFile } from '../services/userApi'
 
 const props = defineProps({
   file: {
