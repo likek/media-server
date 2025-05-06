@@ -18,7 +18,6 @@ export function connectWebSocket() {
   ws = new WebSocket(`${protocol}://${location.host}`)
 
   ws.onopen = function() {
-    console.log('WebSocket连接已建立')
     clearInterval(reconnectTimer)
     
     // 尝试获取地理位置并发送到服务器
