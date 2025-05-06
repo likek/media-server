@@ -21,7 +21,7 @@ import adminRoutes from "./server/routes/adminRoutes.js";
 import logRoutes from "./server/routes/logRoutes.js";
 import userRoutes from "./server/routes/userRoutes.js";
 import staticRoutes from "./server/routes/staticRoutes.js";
-import encryptResponse from "./server/middleware/encryptResponse.js";
+import {  encryptResponseMiddleware as encryptResponse, decryptRequestMiddleware as decryptRequest  } from "./server/middleware/encryptResponse.js";
 
 serializeDb();
 
@@ -44,6 +44,9 @@ if (!fs.existsSync(MEDIA_FULL_PATH)) {
 if (!fs.existsSync(THUMB_FULL_PATH)) {
   fs.mkdirSync(THUMB_FULL_PATH);
 }
+
+app.use(express.json({ limit: "3mb" }));
+app.use(decryptRequest);
 
 app.use(compression({
   filter: (req, res) => {
@@ -83,7 +86,6 @@ app.use((req, res, next) => {
 
 app.use("", staticRoutes);
 
-app.use(express.json({ limit: "3mb" }));
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, "static")));
 app.use(pathNormalizer);
