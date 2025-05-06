@@ -65,7 +65,7 @@
           class="preview-content video-preview"
           :poster="`/thumbnail/${file.id}`"
           :src="`/media/${file.id}`"
-          preload="none"
+          preload="metadata"
         ></video>
         
         <!-- 图片预览 -->
