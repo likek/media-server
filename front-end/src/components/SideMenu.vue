@@ -1,7 +1,7 @@
 <template>
     <div class="side-menu" :class="{ 'is-collapsed': isCollapsed }">
         <div class="menu-items">
-            <div class="menu-item" :class="{ active: activeMenu === 'files' }" @click="navigateTo('home')"
+            <div class="menu-item" :class="{ active: ['home', 'folder'].includes(activeMenu) }" @click="navigateTo('home')"
                 :title="isCollapsed ? '全部文件' : ''">
                 <el-icon>
                     <Folder />

@@ -20,8 +20,9 @@ function getIv(key = cryptKey) {
   return hash.subarray(0, 16); // 128位IV
 }
 
-export function aesEncrypt(data, key = cryptKey) {
+export function aesEncrypt(data, keySalt = '', key = cryptKey) {
   if (!data) return data;
+  key = `${keySalt}${key}`.slice(0, 32);
   key = key || process.env.CRYPT_KEY || 'default_crypt_key';
   const cipherKey = getKey(key);
   const iv = getIv(key);
@@ -31,8 +32,9 @@ export function aesEncrypt(data, key = cryptKey) {
   return encrypted;
 }
 
-export function aesDecrypt(data, key = cryptKey) {
+export function aesDecrypt(data, keySalt = '', key = cryptKey) {
   if (!data) return data;
+  key = `${keySalt}${key}`.slice(0, 32);
   key = key || process.env.CRYPT_KEY || 'default_crypt_key';
   const cipherKey = getKey(key);
   const iv = getIv(key);

@@ -2,9 +2,10 @@ import axios from 'axios'
 import { ElMessage } from 'element-plus';
 import { aesDecrypt, aesEncrypt } from '../utils/encrypt';
 
-const ENCRYPTED_PATHS = ['/user/files'];
-function shouldEncryptRequest(path) {
-  return ENCRYPTED_PATHS.some(apiPath => path.startsWith(apiPath));
+const ENCRYPTED_PATHS = ['/']; // "/"代表全部加密
+const urlEncryptMark = '_';
+function shouldEncryptRequest(config) {
+  return ENCRYPTED_PATHS.some(apiPath => config.url.startsWith(apiPath));
 }
 
 function shouldDecryptResponse(response) {
@@ -16,20 +17,24 @@ const request = axios.create({
   timeout: 1 * 60 * 1000
 })
 
+// 请求时加密，并撒一把盐,盐巴加密传给后端
 request.interceptors.request.use(
   config => {
-    const url = config.url || '';
-    const matched = shouldEncryptRequest(url);
+    let url = config.url || '';
+    const matched = shouldEncryptRequest(config);
     config.headers = config.headers || {};
     config.headers['X-Encrypt'] = matched ? 'true' : 'false';
     if (matched) {
+      const salt = Date.now().toString();
+      url = url.replace(/^\//, '')
       try {
         const urlRoutes = url.split('/');
-        const encryptedUrl = aesEncrypt(urlRoutes.slice(2).join('/'));
-        const encryptedData = aesEncrypt(JSON.stringify(config.data));
-        config.url = `${urlRoutes.slice(0,2).join('/')}/${encryptedUrl}`;
+        const encryptedUrl = aesEncrypt(urlRoutes.slice(1).join('/'), salt);
+        const encryptedData = aesEncrypt(JSON.stringify(config.data), salt);
+        config.url = `/${urlRoutes.slice(0, 1).join('/')}/${urlEncryptMark}${encryptedUrl}`;
         config.data = {
-          data: encryptedData
+          data: encryptedData,
+          s: aesEncrypt(salt)
         };
       } catch (e) {
         ElMessage.error('请求加密失败');
@@ -42,15 +47,18 @@ request.interceptors.request.use(
     return Promise.reject(error);
   }
 );
+
+// 响应时解密，并且key是否有盐巴
 request.interceptors.response.use(
   response => {
     const matched = shouldDecryptResponse(response);
     if (matched && response.data && typeof response.data.data === 'string') {
       try {
-        const decrypted = aesDecrypt(response.data.data);
+        const salt = response.data.s ? aesDecrypt(response.data.s) : '';
+        const decrypted = response.data.data && aesDecrypt(response.data.data, salt);
         // 尝试将解密后的字符串转为对象
         try {
-          return JSON.parse(decrypted);
+          return decrypted && JSON.parse(decrypted);
         } catch {
           return decrypted;
         }

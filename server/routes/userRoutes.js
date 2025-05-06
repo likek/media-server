@@ -75,14 +75,14 @@ router.post("/favorites/list", async (req, res) => {
     return res.status(401).json({ message: "未登录，无法获取收藏列表" });
   }
   try {
-    const favorites = await getUserFavorites(userId, page, pageSize);
-    res.json(favorites);
+    const result = await getUserFavorites(userId, page, pageSize);
+    res.json(result); // 返回包含files和total的结果
   } catch (err) {
     res.status(500).json({ message: "获取收藏列表失败", error: err.message });
   }
 });
 
-router.get("/register", async (req, res) => {
+router.post("/register", async (req, res) => {
   await tryRegister(req, res);
   res.send({ success: true });
 });
@@ -265,7 +265,7 @@ router.post("/files", async (req, res) => {
     
     // 通过ID获取文件列表，传递req对象以获取用户ID和收藏状态
     let result = await getFolderContentsById(folderId, searchQuery, { type, mime_type }, page, pageSize, req);
-    res.send(result);
+    res.send(result); // 返回包含files和total的结果
   } catch (err) {
     console.error("Error fetching file list:", err);
     res.status(500).send({ message: "Failed to fetch file list." });

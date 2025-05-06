@@ -97,13 +97,14 @@ const loadFavorites = async (resetPage = true) => {
     const response = await getFavoritesList(currentPage.value, pageSize.value)
     
     if (resetPage) {
-      files.value = response
+      files.value = response.files || []
     } else {
-      files.value = [...files.value, ...response]
+      files.value = [...files.value, ...(response.files || [])]
     }
     
-    // 判断是否还有更多文件
-    hasMoreFiles.value = response.length === pageSize.value
+    // 判断是否还有更多文件 - 使用total字段
+    const totalLoaded = resetPage ? response.files?.length || 0 : files.value.length
+    hasMoreFiles.value = totalLoaded < response.total
   } catch (error) {
     ElMessage.error('加载收藏失败')
     console.error('Error loading favorites:', error)

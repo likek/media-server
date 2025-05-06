@@ -11,8 +11,9 @@ function getIv(key = cryptKey) {
     return enc.Hex.parse(ivHex)  // 用Hex解析
 }
 
-export function aesEncrypt(data, key = cryptKey) {
+export function aesEncrypt(data, keySalt = '', key = cryptKey) {
     if (!data) return data
+    key = `${keySalt}${key}`.slice(0, 32)
     const cipherKey = getKey(key)
     const iv = getIv(key)
     return AES.encrypt(data, cipherKey, {
@@ -22,8 +23,9 @@ export function aesEncrypt(data, key = cryptKey) {
     }).toString()
 }
 
-export function aesDecrypt(data, key = cryptKey) {
+export function aesDecrypt(data, keySalt = '', key = cryptKey) {
     if (!data) return data
+    key = `${keySalt}${key}`.slice(0, 32)
     const cipherKey = getKey(key)
     const iv = getIv(key)
     const decrypted = AES.decrypt(data, cipherKey, {

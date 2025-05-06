@@ -266,7 +266,7 @@ const getFolderContentsById = (folderId, searchQuery, filters, page, pageSize, r
       if (folderId !== null) {
         const folderInfo = await getFileById(folderId);
         if (!folderInfo) {
-          return resolve([]);
+          return resolve({ files: [], total: 0 });
         }
         folderPath = folderInfo.path;
       }
@@ -274,51 +274,72 @@ const getFolderContentsById = (folderId, searchQuery, filters, page, pageSize, r
       const filter_type = filters?.type
       const filter_mime_type = filters?.mime_type
 
+      // 构建基础查询条件
+      let whereClause = '';
       const params = [];
-      let query = `SELECT * FROM files`;
+      
       if (searchQuery) {
         // 搜索模式
-        query += ` WHERE name LIKE ?`
+        whereClause += ` name LIKE ?`
         params.push(`%${searchQuery}%`);
         if (folderPath) {
-          query += ` AND (path = ? OR path LIKE ?)`;
+          whereClause += ` AND (path = ? OR path LIKE ?)`;
           params.push(folderPath, `${folderPath}/%`);
         }
       } else {
         // 浏览模式
         if (folderId) {
-          query += ` WHERE parent_id = ?`
+          whereClause += ` parent_id = ?`
           params.push(folderId);
         } else {
-          query += ` WHERE parent_id IS NULL`
+          whereClause += ` parent_id IS NULL`
         }
       }
+      
       // 添加类型过滤
       if (filter_type) {
-        query += ` AND type =?`
+        whereClause += ` AND type = ?`
         params.push(filter_type);
       }
+      
       // 添加mime_type过滤
       if (filter_mime_type) {
-        query += ` AND mime_type LIKE?`
+        whereClause += ` AND mime_type LIKE ?`
         params.push(`${filter_mime_type}%`);
       }
-      // New sorting logic: Folder > Video > Image > Others, then by updated_at DESC
-      query += ` ORDER BY 
-                  CASE 
-                    WHEN type = 'folder' THEN 1 
-                    WHEN mime_type LIKE 'video/%' THEN 2 
-                    WHEN mime_type LIKE 'image/%' THEN 3 
-                    ELSE 4 
-                  END, 
-                  last_modified DESC,
-                  updated_at DESC, 
-                  created_at DESC`
+      
+      // 先获取总数
+      const countQuery = `SELECT COUNT(*) as total FROM files WHERE ${whereClause}`;
+      const totalCount = await new Promise((resolve, reject) => {
+        db.get(countQuery, params, (err, row) => {
+          if (err) {
+            reject(err);
+            return;
+          }
+          resolve(row?.total || 0);
+        });
+      });
+      
+      // 获取分页数据
+      const orderClause = ` ORDER BY 
+        CASE 
+          WHEN type = 'folder' THEN 1 
+          WHEN mime_type LIKE 'video/%' THEN 2 
+          WHEN mime_type LIKE 'image/%' THEN 3 
+          ELSE 4 
+        END, 
+        last_modified DESC,
+        updated_at DESC, 
+        created_at DESC`;
+      
+      let query = `SELECT * FROM files WHERE ${whereClause} ${orderClause}`;
+      
       // 添加分页
       if (typeof pageSize === 'number' && typeof page === 'number') {
         query += ` LIMIT ? OFFSET ?`;
         params.push(pageSize, page * pageSize);
       }
+      
       db.all(query, params, async (err, rows) => {
         if (err) {
           reject(err);
@@ -357,13 +378,8 @@ const getFolderContentsById = (folderId, searchQuery, filters, page, pageSize, r
           }
         }
         
-        if (searchQuery) {
-          // 如果是搜索模式，则返回所有结果
-          resolve(fileInfos);
-          return;
-        }
         // 如果文件夹内容为空，自动刷新缓存
-        if (fileInfos.length === 0 && page === 0) {
+        if (fileInfos.length === 0 && page === 0 && !searchQuery) {
           try {
             // 检查物理文件夹中是否有文件但数据库中没有记录
             const fullPath = path.join(MEDIA_FULL_PATH, folderPath);
@@ -374,7 +390,7 @@ const getFolderContentsById = (folderId, searchQuery, filters, page, pageSize, r
                 console.log(`自动刷新文件夹缓存: ${folderPath}`);
                 const updatedContents = await updateFolderContents(folderId, folderPath);
                 if (updatedContents && updatedContents.fileInfos) {
-                  resolve([]);
+                  resolve({ files: [], total: 0 });
                   return;
                 }
               }
@@ -385,8 +401,13 @@ const getFolderContentsById = (folderId, searchQuery, filters, page, pageSize, r
           }
         }
         
-        resolve(fileInfos);
+        // 返回文件列表和总数
+        resolve({
+          files: fileInfos,
+          total: totalCount
+        });
       });
+
     } catch (error) {
       reject(error);
     }

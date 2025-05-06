@@ -21,7 +21,7 @@ import adminRoutes from "./server/routes/adminRoutes.js";
 import logRoutes from "./server/routes/logRoutes.js";
 import userRoutes from "./server/routes/userRoutes.js";
 import staticRoutes from "./server/routes/staticRoutes.js";
-import {  encryptResponseMiddleware as encryptResponse, decryptRequestMiddleware as decryptRequest  } from "./server/middleware/encryptResponse.js";
+import {  encryptResponseMiddleware as encryptResponse, decryptRequestMiddleware as decryptRequest  } from "./server/middleware/encryptHttp.js";
 
 serializeDb();
 

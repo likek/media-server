@@ -39,48 +39,73 @@ export const removeFromFavorites = (userId, fileId) => {
 // 获取用户的所有收藏
 export const getUserFavorites = (userId, page = 0, pageSize = 20) => {
   return new Promise((resolve, reject) => {
-    const query = `
-      SELECT f.id, f.name, f.type, f.mime_type, f.path, f.size, f.last_modified, f.thumbnail, f.parent_id, f.created_at, f.updated_at
+    // 首先获取总数
+    const countQuery = `
+      SELECT COUNT(*) as total
       FROM files f
       JOIN favorites fav ON f.id = fav.file_id
       WHERE fav.user_id = ?
-      ORDER BY 
-        CASE f.type
-          WHEN 'folder' THEN 1
-          ELSE 2
-        END,
-        CASE 
-          WHEN f.mime_type LIKE 'video/%' THEN 1
-          WHEN f.mime_type LIKE 'image/%' THEN 2
-          ELSE 3
-        END,
-        f.last_modified DESC,
-        f.updated_at DESC,
-        f.created_at DESC
-      ${pageSize > 0 ? `LIMIT ? OFFSET ?` : ''}
     `;
     
-    const params = pageSize > 0 
-      ? [userId, pageSize, page * pageSize]
-      : [userId];
-    
-    db.all(query, params, (err, rows) => {
-      if (err) {
-        console.error('Error getting user favorites:', err);
-        reject(err);
-      } else {
-        resolve(rows.map(row => ({
-            id: row.id,
-            type: row.type,
-            mime_type: row.mime_type,
-            filename: row.name,
-            path: row.path,
-            thumbnail: row.thumbnail,
-            lastModified: row.last_modified,
-            size: row.size,
-            parent_id: row.parent_id
-          })));
+    db.get(countQuery, [userId], (countErr, countRow) => {
+      if (countErr) {
+        console.error('Error counting user favorites:', countErr);
+        reject(countErr);
+        return;
       }
+      
+      const total = countRow?.total || 0;
+      
+      // 然后获取分页数据
+      const query = `
+        SELECT f.id, f.name, f.type, f.mime_type, f.path, f.size, f.last_modified, f.thumbnail, f.parent_id, f.created_at, f.updated_at
+        FROM files f
+        JOIN favorites fav ON f.id = fav.file_id
+        WHERE fav.user_id = ?
+        ORDER BY 
+          CASE f.type
+            WHEN 'folder' THEN 1
+            ELSE 2
+          END,
+          CASE 
+            WHEN f.mime_type LIKE 'video/%' THEN 1
+            WHEN f.mime_type LIKE 'image/%' THEN 2
+            ELSE 3
+          END,
+          f.last_modified DESC,
+          f.updated_at DESC,
+          f.created_at DESC
+        ${pageSize > 0 ? `LIMIT ? OFFSET ?` : ''}
+      `;
+      
+      const params = pageSize > 0 
+        ? [userId, pageSize, page * pageSize]
+        : [userId];
+      
+      db.all(query, params, (err, rows) => {
+        if (err) {
+          console.error('Error getting user favorites:', err);
+          reject(err);
+        } else {
+          const files = rows.map(row => ({
+              id: row.id,
+              type: row.type,
+              mime_type: row.mime_type,
+              filename: row.name,
+              path: row.path,
+              thumbnail: row.thumbnail,
+              lastModified: row.last_modified,
+              size: row.size,
+              parent_id: row.parent_id
+            }));
+            
+          // 返回文件列表和总数
+          resolve({
+            files: files,
+            total: total
+          });
+        }
+      });
     });
   });
 };

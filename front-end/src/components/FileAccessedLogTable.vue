@@ -6,8 +6,8 @@
       </template>
     </el-table-column>
     <el-table-column prop="userId" label="用户ID" width="180" />
-    <el-table-column prop="userIp" label="用户IP" width="100" />
-    <el-table-column prop="filePath" label="文件路径" min-width="300" />
+    <el-table-column prop="userIp" label="用户IP" width="120" />
+    <el-table-column prop="filePath" label="文件路径" min-width="120" />
   </el-table>
 </template>
 

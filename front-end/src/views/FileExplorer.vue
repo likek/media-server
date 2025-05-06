@@ -213,22 +213,23 @@ const loadFiles = async (resetPage = true) => {
       currentPage.value = 0
     }
 
-    let response = []
-
     // 获取当前文件夹ID（如果有）
     const folderId = route.params.id
     const query = route.query.q
 
-    response = await getFiles(folderId, query, currentPage.value, pageSize.value)
+    const response = await getFiles(folderId, query, currentPage.value, pageSize.value)
     if (route.params.id !== folderId || route.query.q !== query) {
       console.warn(`路由已变更，不更新数据`)
       loading.value = false
       return
     }
 
-    files.value = response
-    // 判断是否还有更多文件
-    hasMoreFiles.value = response.length === pageSize.value
+    // 更新文件列表
+    files.value = response.files || []
+    
+    // 判断是否还有更多文件 - 使用total字段
+    const totalLoaded = (currentPage.value + 1) * pageSize.value
+    hasMoreFiles.value = totalLoaded < response.total
   } catch (error) {
     ElMessage.error('加载文件失败')
     console.error('Error loading files:', error)
@@ -274,7 +275,7 @@ const loadFolderPath = async (folderId, leafId) => {
 const updatePageByCache = (cacheData) => {
   files.value = cacheData.files || []
   currentPage.value = cacheData.currentPage || 0
-  hasMoreFiles.value = cacheData.hasMoreFiles || false
+  hasMoreFiles.value = cacheData.hasMoreFiles || true
   nextTick(() => {
     // 检查首屏内容是否填满容器，如果不足且有更多文件，则自动加载更多
     checkContentHeight()
@@ -572,8 +573,7 @@ const loadNode = async (node, resolve) => {
   if (node.level === 0) {
     try {
       const response = await getFiles(null, null, 0, 1000, { type: 'folder' }) // Fetch root level items
-      const folders = response
-        .filter(item => item.type === 'folder')
+      const folders = response.files
         .map(folder => ({ ...folder, isLeaf: false }))
       return resolve([{ id: 0, filename: '根目录', isLeaf: false, children: folders }])
     } catch (error) {
@@ -586,8 +586,7 @@ const loadNode = async (node, resolve) => {
   const parentId = node.data.id
   try {
     const response = await getFiles(parentId, null, 0, 1000, { type: 'folder' })
-    const folders = response
-      .filter(item => item.type === 'folder')
+    const folders = response.files
       .map(folder => ({ ...folder, isLeaf: false }))
 
     resolve(folders)
@@ -649,16 +648,17 @@ const loadMoreFiles = async () => {
     if (route.params.id === folderId && route.query.q === query) {
       currentPage.value = nextPage
 
-      if (response.length > 0) {
-        files.value = [...files.value, ...response]
+      if (response.files && response.files.length > 0) {
+        files.value = [...files.value, ...response.files]
         setTimeout(() => {
           if (mediaContainer.value) {
             mediaContainer.value.scrollTop = currScrollTop
             checkContentHeight()
           }
         })
-        // 判断是否还有更多文件
-        hasMoreFiles.value = response.length === pageSize.value
+        // 判断是否还有更多文件 - 使用total字段
+        const totalLoaded = (currentPage.value + 1) * pageSize.value
+        hasMoreFiles.value = totalLoaded < response.total
 
       } else {
         hasMoreFiles.value = false

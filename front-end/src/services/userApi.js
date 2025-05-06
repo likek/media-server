@@ -124,10 +124,10 @@ export const removeFromFavorites = async (fileId) => {
 // 获取收藏列表
 export const getFavoritesList = async (page = 0, pageSize = 20) => {
   const response = await request.post('/user/favorites/list', { page, pageSize })
-  return response
+  return response // 现在返回包含files和total的结构
 }
 
 export const registerUser = async () => {
-  const response = await request.get('/user/register')
+  const response = await request.post('/user/register')
   return response
 }
