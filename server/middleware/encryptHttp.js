@@ -1,7 +1,7 @@
 import { aesEncrypt, aesDecrypt } from "../utils/encrypt.js";
 
 // 需要加密返回的接口路径
-const ENCRYPTED_PATHS = ['/api/user/', '/api/admin/', '/api/logs/'];
+const ENCRYPTED_PATHS = ['/i/user/', '/i/admin/', '/i/logs/'];
 const urlEncryptMark = '_';
 
 const shouldEncryptResponse = req => {
@@ -16,11 +16,11 @@ export function decryptRequestMiddleware(req, res, next) {
       const salt = req.body.s ? aesDecrypt(req.body.s) : '';
 
       const matches = reqUrl.split(urlEncryptMark);
-      const encryptedUrl = matches[1];
-      const decryptedUrl = aesDecrypt(encryptedUrl, salt);
-      const decryptedData = req.body.data && aesDecrypt(req.body.data, salt);
+      const decryptedUrl = aesDecrypt(matches[1], salt);
       req.url = `${matches[0]}${decryptedUrl}`;
       req.originalUrl = req.url;
+
+      const decryptedData = req.body.d && aesDecrypt(req.body.d, salt);
       req.body = decryptedData && JSON.parse(decryptedData);
     } catch (e) {
       console.error('请求解密失败', reqUrl, e);
@@ -45,7 +45,7 @@ export function encryptResponseMiddleware(req, res, next) {
       try {
         const encrypted = aesEncrypt(dataStr, salt);
         res.setHeader('X-Encrypt', 'true');
-        return originalJson.call(this, { data: encrypted, s: aesEncrypt(salt) });
+        return originalJson.call(this, { d: encrypted, s: aesEncrypt(salt) });
       } catch (e) {
         console.error('数据加密失败', e);
         return originalJson.call(this, { message: '数据加密失败' });

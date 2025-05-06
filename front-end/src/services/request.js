@@ -13,7 +13,7 @@ function shouldDecryptResponse(response) {
 }
 
 const request = axios.create({
-  baseURL: '/api',
+  baseURL: '/i',
   timeout: 1 * 60 * 1000
 })
 
@@ -28,12 +28,12 @@ request.interceptors.request.use(
       const salt = Date.now().toString();
       url = url.replace(/^\//, '')
       try {
-        const urlRoutes = url.split('/');
-        const encryptedUrl = aesEncrypt(urlRoutes.slice(1).join('/'), salt);
+        const encryptedUrl = aesEncrypt(url, salt);
+        config.url = `${urlEncryptMark}${encryptedUrl}`;
+
         const encryptedData = aesEncrypt(JSON.stringify(config.data), salt);
-        config.url = `/${urlRoutes.slice(0, 1).join('/')}/${urlEncryptMark}${encryptedUrl}`;
         config.data = {
-          data: encryptedData,
+          d: encryptedData,
           s: aesEncrypt(salt)
         };
       } catch (e) {
@@ -52,10 +52,10 @@ request.interceptors.request.use(
 request.interceptors.response.use(
   response => {
     const matched = shouldDecryptResponse(response);
-    if (matched && response.data && typeof response.data.data === 'string') {
+    if (matched && response.data && typeof response.data.d === 'string') {
       try {
         const salt = response.data.s ? aesDecrypt(response.data.s) : '';
-        const decrypted = response.data.data && aesDecrypt(response.data.data, salt);
+        const decrypted = response.data.d && aesDecrypt(response.data.d, salt);
         // 尝试将解密后的字符串转为对象
         try {
           return decrypted && JSON.parse(decrypted);

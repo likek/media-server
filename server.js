@@ -94,9 +94,9 @@ app.use(writeRequestLog);
 
 wsInit(httpServer);
 
-app.use("/api/admin", adminRoutes);
-app.use("/api/logs", logRoutes);
-app.use("/api/user", userRoutes);
+app.use("/i/admin", adminRoutes);
+app.use("/i/logs", logRoutes);
+app.use("/i/user", userRoutes);
 
 // 处理所有非API路由，返回index.html，支持前端路由
 app.get(ENTRY_ROUTE_REGEX, (req, res) => {
