@@ -116,6 +116,8 @@
           check-strictly
           :accordion="true"
           node-key="id"
+          :highlight-current="true"
+          :expand-on-click-node="false"
         >
           <template #default="{ node, data }">
             <span class="folder-tree-node">
