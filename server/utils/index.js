@@ -7,6 +7,7 @@ import { fileURLToPath } from "url";
 import useragent from "useragent";
 import ffmpeg from "fluent-ffmpeg";
 import puppeteer from 'puppeteer';
+import { aesDecrypt } from "./encrypt.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -14,6 +15,55 @@ const __dirname = path.dirname(__filename);
 const regineDBPath = path.join(__dirname, "../ip2region.xdb");
 const vectorIndex = Searcher.loadVectorIndexFromFile(regineDBPath);
 const searcher = Searcher.newWithVectorIndex(regineDBPath, vectorIndex);
+
+// 如果salt或指纹没有，则可能是因为还没有“注册”
+const getSaltByReq = (req, decrypted = true) => {
+  let salt;
+  if (req.query && req.query.s) {
+    salt = req.query.s;
+  }
+  // 检查请求头
+  else if (req.headers['x-s']) {
+    salt = req.headers['x-s'];
+  } else if (req.cookies && req.cookies?.s) {
+    salt = req.cookies.s;
+  }
+
+  if (!salt) {
+    return null;
+  }
+  
+  if (decrypted) {
+    return aesDecrypt(salt);
+  } else {
+    return salt;
+  }
+}
+
+const getUserIdByReq = (req, decrypted = true) => {
+  try {
+    // 确保fingerprint存在
+    const fp = req.headers['x-fingerprint'] || req.query?.fp || req.cookies?.fp;
+    if (!fp) {
+      // console.error("fingerprint is empty", req.headers.upgrade, req.url);
+      return null;
+    }
+
+    const salt = getSaltByReq(req);
+    if (!salt) {
+      // console.error("salt is empty");
+      return null;
+    }
+    if (!decrypted) {
+      return fp;
+    }
+    // 用解密后的salt解密fingerprint
+    return aesDecrypt(fp, salt);;
+  } catch (e) {
+    console.error("解析用户ID失败:", e);
+    return null;
+  }
+}
 
 const normalizeIp = (ip) => {
     if (!ip) {
@@ -26,7 +76,7 @@ const normalizeIp = (ip) => {
       return ip.substring(7);
     }
     return ip;
-  };
+};
 
 
   const getRequestInfo = async (req, res) => {
@@ -77,6 +127,7 @@ const normalizeIp = (ip) => {
       os: deviceInfo.os,
       browser: deviceInfo.browser,
       timestamp: new Date().toISOString(),
+      userId: getUserIdByReq(req),
 
       cookies
     };
@@ -176,5 +227,7 @@ async function get51PageInfo(pageUrl) {
     getRequestInfo,
     isVideoByName,
     generateThumbnail,
-    get51PageInfo
+    get51PageInfo,
+    getUserIdByReq,
+    getSaltByReq
   }

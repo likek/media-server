@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@fingerprintjs/fingerprintjs": "^3.4.0",
     "axios": "^1.8.4",
     "crypto-js": "^4.2.0",
     "element-plus": "^2.9.7",

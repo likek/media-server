@@ -8,15 +8,15 @@ import cookieParser from "cookie-parser";
 import { createServer } from "http";
 import { serializeDb } from "./server/dbserialize.js";
 import compression from "compression";
-import { normalizeIp } from "./server/utils/index.js";
+import { getUserIdByReq, normalizeIp } from "./server/utils/index.js";
 import { limiter } from "./server/middleware/limiter.js";
 import { checkBlacklist } from "./server/middleware/blackList.js";
 import { checkPermissions } from "./server/middleware/apiPermission.js";
+import { validateFingerprint, validateSalt } from "./server/middleware/fingerprintValidator.js";
 import { writeRequestLog, writeFileAccessedLog } from "./server/logManager.js";
 import { MEDIA_FULL_PATH, THUMB_FULL_PATH, MEDIA_ROUTE, ENTRY_ROUTE_REGEX } from "./serverConfig.js";
 import { pathNormalizer } from "./server/middleware/pathNormalizer.js";
 import { wsInit } from "./server/websocketManager.js";
-import { tryRegister } from "./server/userManager.js";
 import adminRoutes from "./server/routes/adminRoutes.js";
 import logRoutes from "./server/routes/logRoutes.js";
 import userRoutes from "./server/routes/userRoutes.js";
@@ -46,6 +46,7 @@ if (!fs.existsSync(THUMB_FULL_PATH)) {
 }
 
 app.use(express.json({ limit: "3mb" }));
+app.use("/i/", validateFingerprint, validateSalt);
 app.use(decryptRequest);
 
 app.use(compression({
@@ -65,22 +66,14 @@ app.use(cors());
 app.use(requestIp.mw());
 app.use(checkPermissions);
 
-app.use((req, res, next) => {
+app.use(`${MEDIA_ROUTE}/`, (req, res, next) => {
   const path = decodeURIComponent(req.path);
-  if (path.startsWith(`${MEDIA_ROUTE}/`)) {
-    const userIp = normalizeIp(req.clientIp || req.ip);
-    writeFileAccessedLog({
-      userId: req.cookies?.userId,
-      userIp,
-      filePath: path,
-    });
-    if (!req.cookies?.userId) {
-      console.log("尝试注册");
-      tryRegister(req, res).catch((e) => {
-        console.error("注册失败: ", e);
-      });
-    }
-  }
+  const userIp = normalizeIp(req.clientIp || req.ip);
+  writeFileAccessedLog({
+    userId: getUserIdByReq(req) || '未知用户',
+    userIp,
+    filePath: path,
+  });
   next();
 });
 
@@ -90,7 +83,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, "static")));
 app.use(pathNormalizer);
 app.use(encryptResponse);
-app.use(writeRequestLog);
+app.use("/i/", writeRequestLog);
 
 wsInit(httpServer);
 

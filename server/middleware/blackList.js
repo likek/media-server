@@ -1,11 +1,12 @@
 import serverConfig from "../../serverConfig.js";
 import db from "../dbserialize.js";
+import { getUserIdByReq } from "../utils/index.js";
 
 const blacklistDurationMs = serverConfig.blacklistDurationMs;
 function checkBlacklist(req, res, next) {
     const currentTime = Date.now();
-    const cookies = req.cookies;
-    const userId = cookies.userId;
+    // 使用请求头中的指纹作为用户ID
+    const userId = getUserIdByReq(req);
     db.get(
       "SELECT added_time FROM blacklist WHERE userId = ? AND enabled = 1",
       [userId],

@@ -1,6 +1,7 @@
 import axios from 'axios'
 import { ElMessage } from 'element-plus';
 import { aesDecrypt, aesEncrypt } from '../utils/encrypt';
+import { getEncryptedFingerprint } from '../utils/fingerprint';
 
 const ENCRYPTED_PATHS = ['/']; // "/"代表全部加密
 const urlEncryptMark = '_';
@@ -19,13 +20,18 @@ const request = axios.create({
 
 // 请求时加密，并撒一把盐,盐巴加密传给后端
 request.interceptors.request.use(
-  config => {
+  async config => {
     let url = config.url || '';
     const matched = shouldEncryptRequest(config);
     config.headers = config.headers || {};
     config.headers['X-Encrypt'] = matched ? 'true' : 'false';
+    
+    // 添加设备指纹信息
+    const { encryptedFingerprint, encryptedSalt, salt } = await getEncryptedFingerprint();
+    config.headers['x-fingerprint'] = encryptedFingerprint;
+    config.headers['x-s'] = encryptedSalt;
+    
     if (matched) {
-      const salt = Date.now().toString();
       url = url.replace(/^\//, '')
       try {
         const encryptedUrl = aesEncrypt(url, salt);
@@ -34,7 +40,6 @@ request.interceptors.request.use(
         const encryptedData = aesEncrypt(JSON.stringify(config.data), salt);
         config.data = {
           d: encryptedData,
-          s: aesEncrypt(salt)
         };
       } catch (e) {
         ElMessage.error('请求加密失败');
@@ -54,7 +59,8 @@ request.interceptors.response.use(
     const matched = shouldDecryptResponse(response);
     if (matched && response.data && typeof response.data.d === 'string') {
       try {
-        const salt = response.data.s ? aesDecrypt(response.data.s) : '';
+        const encryptedSalt = response.headers['x-s'] || response.headers['X-S'] || '';
+        const salt = aesDecrypt(encryptedSalt);
         const decrypted = response.data.d && aesDecrypt(response.data.d, salt);
         // 尝试将解密后的字符串转为对象
         try {

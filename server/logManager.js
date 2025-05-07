@@ -12,7 +12,7 @@ const writeRequestLogToDB = (logData) => {
     const values = [
       logData.requestTime,
       logData.userIp,
-      logData.cookies?.userId || "",
+      logData.userId || "",
       logData.requestMethod,
       logData.requestUrl,
       logData.requestBody,
@@ -34,25 +34,23 @@ const writeRequestLogToDB = (logData) => {
 
  const writeRequestLog = async (req, res, next) => {
     res.on("finish", async () => {
-      if (!req.path.startsWith(`${MEDIA_ROUTE}/`)) {
-        const data = await getRequestInfo(req, res);
-        console.log(
-          [
-            chalk.blue(`${new Date(data.requestTime).toLocaleString()}`),
-            chalk.green(`${data.userIp}`),
-            chalk.green(`${data.region}`),
-            chalk.yellow(`${data.requestMethod} ${data.requestUrl}`),
-            chalk.cyan(`${data.requestBody}`),
-            chalk.magenta(`${data.status}`),
-            chalk.gray(`${data.device}`),
-            chalk.gray(`${data.os}`),
-            chalk.gray(`${data.browser}`),
-            chalk.gray(`${data.userAgent}`),
-          ].join(" | ")
-        );
-  
-        writeRequestLogToDB(data);
-      }
+      const data = await getRequestInfo(req, res);
+      console.log(
+        [
+          chalk.blue(`${new Date(data.requestTime).toLocaleString()}`),
+          chalk.green(`${data.userIp}`),
+          chalk.green(`${data.region}`),
+          chalk.yellow(`${data.requestMethod} ${data.requestUrl}`),
+          chalk.cyan(`${data.requestBody}`),
+          chalk.magenta(`${data.status}`),
+          chalk.gray(`${data.device}`),
+          chalk.gray(`${data.os}`),
+          chalk.gray(`${data.browser}`),
+          chalk.gray(`${data.userAgent}`),
+        ].join(" | ")
+      );
+
+      writeRequestLogToDB(data);
     });
     next();
   }

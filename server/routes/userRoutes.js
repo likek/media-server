@@ -13,7 +13,8 @@ import { convertTxtEncoding } from "../tools/textFileTools.js";
 import { tryRegister } from "../userManager.js";
 import { downloadAllMediaByLinks } from "../downloadManager.js";
 import { addToFavorites, getUserFavorites, removeFromFavorites } from "../favoritesManager.js";
-import { get51PageInfo } from "../utils/index.js";
+import { get51PageInfo, getUserIdByReq } from "../utils/index.js";
+import { validateFingerprint } from "../middleware/fingerprintValidator.js";
 
 const router = express.Router();
 // 配置 multer
@@ -39,7 +40,7 @@ const upload = multer({ storage });
 
 // 添加收藏
 router.post("/favorites/add", async (req, res) => {
-  const userId = req.cookies?.userId;
+  const userId = getUserIdByReq(req);
   const { fileId } = req.body;
   if (!userId) {
     return res.status(401).json({ message: "未登录，无法添加收藏" });
@@ -54,7 +55,7 @@ router.post("/favorites/add", async (req, res) => {
 
 // 移除收藏
 router.post("/favorites/remove", async (req, res) => {
-  const userId = req.cookies?.userId;
+  const userId = getUserIdByReq(req);
   const { fileId } = req.body;
   if (!userId) {
     return res.status(401).json({ message: "未登录，无法移除收藏" });
@@ -69,7 +70,7 @@ router.post("/favorites/remove", async (req, res) => {
 
 // 获取收藏列表
 router.post("/favorites/list", async (req, res) => {
-  const userId = req.cookies?.userId;
+  const userId = getUserIdByReq(req);
   const { page = 0, pageSize = 20 } = req.body;
   if (!userId) {
     return res.status(401).json({ message: "未登录，无法获取收藏列表" });
@@ -82,9 +83,14 @@ router.post("/favorites/list", async (req, res) => {
   }
 });
 
-router.post("/register", async (req, res) => {
-  await tryRegister(req, res);
-  res.send({ success: true });
+router.post("/register", validateFingerprint, async (req, res) => {
+  try {
+    await tryRegister(req, res);
+    res.send({ success: true, message: "注册成功" });
+  } catch (error) {
+    console.error("注册失败:", error);
+    res.status(500).json({ success: false, message: "注册失败" });
+  }
 });
 
 router.post("/downloadFromText", async (req, res) => { 

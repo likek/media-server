@@ -2,7 +2,7 @@ import fs from "fs";
 import path from "path";
 import mime from 'mime-types';
 import { MEDIA_FULL_PATH, THUMB_FULL_PATH } from "../serverConfig.js";
-import { isVideoByName, generateThumbnail } from "./utils/index.js";
+import { isVideoByName, generateThumbnail, getUserIdByReq } from "./utils/index.js";
 import db from "./dbserialize.js";
 import { getFavoritesStatus } from "./favoritesManager.js";
 
@@ -360,7 +360,7 @@ const getFolderContentsById = (folderId, searchQuery, filters, page, pageSize, r
         }));
         
         // 获取用户ID
-        const userId = req?.cookies?.userId;
+        const userId = getUserIdByReq(req);
         
         // 如果用户已登录，获取收藏状态
         if (userId && fileInfos.length > 0) {

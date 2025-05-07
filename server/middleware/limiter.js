@@ -1,6 +1,6 @@
 import { rateLimit } from "express-rate-limit";
 import serverConfig from "../../serverConfig.js";
-import { normalizeIp } from "../utils/index.js";
+import { getUserIdByReq, normalizeIp } from "../utils/index.js";
 import db from "../dbserialize.js";
 
 const maxRequestsPerMinute = serverConfig.maxRequestsPerMinute;
@@ -16,7 +16,8 @@ const limiter = rateLimit({
         const ip = normalizeIp(req.clientIp || req.ip);
         const addedTime = new Date().toISOString();
         const cookies = req.cookies;
-        const userId = cookies.userId;
+        // 使用请求头中的指纹作为用户ID
+        const userId = getUserIdByReq(req);
 
         // 检查是否存在相同 userId 且 enabled 为 1 的记录
         db.get(

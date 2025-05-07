@@ -1,8 +1,10 @@
 import { ElMessage } from 'element-plus'
+import { getEncryptedFingerprint } from '../utils/fingerprint'
 
 let ws = null
 let reconnectInterval = 3000
 let reconnectTimer = null
+let fingerprintInfo = null
 
 /**
  * 连接WebSocket服务器
@@ -13,81 +15,102 @@ export function connectWebSocket() {
     console.log('WebSocket已连接')
     return ws
   }
+  if (ws) {
+    ws.close()
+  }
 
   const protocol = location.protocol === 'https:' ? 'wss' : 'ws'
-  ws = new WebSocket(`${protocol}://${location.host}`)
-
-  ws.onopen = function() {
-    clearInterval(reconnectTimer)
+  
+  // 获取指纹信息
+  getEncryptedFingerprint().then(info => {
+    fingerprintInfo = info
     
-    // 尝试获取地理位置并发送到服务器
-    if (typeof navigator.geolocation?.getCurrentPosition === 'function') {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const latitude = position.coords.latitude
-          const longitude = position.coords.longitude
-          sendWebSocketMessage({
-            event: 'location',
-            data: {
-              latitude,
-              longitude
-            }
+    // 在URL中添加salt参数
+    const url = new URL(`${protocol}://${location.host}`)
+    url.searchParams.append('s', info.encryptedSalt)
+    url.searchParams.append('fp', info.encryptedFingerprint)
+    
+    // 创建WebSocket连接
+    ws = new WebSocket(url.toString())
+    
+    // 连接建立后设置指纹信息
+    ws.onopen = function() {
+      clearInterval(reconnectTimer)
+      
+      // 发送指纹信息
+      sendWebSocketMessage({
+        event: 'setFingerprint'
+      })
+      
+      // 尝试获取地理位置并发送到服务器
+      if (typeof navigator.geolocation?.getCurrentPosition === 'function') {
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            const latitude = position.coords.latitude
+            const longitude = position.coords.longitude
+            sendWebSocketMessage({
+              event: 'location',
+              data: {
+                latitude,
+                longitude
+              }
+            })
+          },
+          (error) => {
+            console.error('获取地理位置时出错:', error)
+          },
+          {
+            enableHighAccuracy: true,
+            timeout: 10000,
+            maximumAge: 0
+          }
+        )
+      }
+    }
+    
+    ws.onmessage = function(event) {
+      let data = {}
+      try {
+        data = JSON.parse(event.data)
+      } catch (e) {
+        console.error('消息解析错误:', e, event.data)
+        return
+      }
+  
+      // 处理不同类型的消息
+      switch (data.event) {
+        case 'downloadProgress':
+          console.log('下载进度:', data)
+          ElMessage({
+            message: `第${data.data.progress}个资源提取${data.data.state === 'failed' ? '失败' : '成功'}`,
+            type: data.data.state === 'failed' ? 'warning' : 'success'
           })
-        },
-        (error) => {
-          console.error('获取地理位置时出错:', error)
-        },
-        {
-          enableHighAccuracy: true,
-          timeout: 10000,
-          maximumAge: 0
-        }
-      )
+          break
+          
+        case 'updateCache':
+          // 发布更新缓存事件，让组件自行处理
+          const updateCacheEvent = new CustomEvent('ws-update-cache', { 
+            detail: data.data 
+          })
+          window.dispatchEvent(updateCacheEvent)
+          console.log(`文件夹${data.data.dirPath}发生了更新`)
+          break
+          
+        default:
+          console.warn('未知消息类型:', data.event, data.data)
+      }
     }
-  }
-
-  ws.onmessage = function(event) {
-    let data = {}
-    try {
-      data = JSON.parse(event.data)
-    } catch (e) {
-      console.error('消息解析错误:', e, event.data)
-      return
+  
+    ws.onclose = function(event) {
+      console.log('WebSocket连接已关闭:', event)
+      startReconnectTimer()
     }
-
-    // 处理不同类型的消息
-    switch (data.event) {
-      case 'downloadProgress':
-        console.log('下载进度:', data)
-        ElMessage({
-          message: `第${data.data.progress}个资源提取${data.data.state === 'failed' ? '失败' : '成功'}`,
-          type: data.data.state === 'failed' ? 'warning' : 'success'
-        })
-        break
-        
-      case 'updateCache':
-        // 发布更新缓存事件，让组件自行处理
-        const updateCacheEvent = new CustomEvent('ws-update-cache', { 
-          detail: data.data 
-        })
-        window.dispatchEvent(updateCacheEvent)
-        console.log(`文件夹${data.data.dirPath}发生了更新`)
-        break
-        
-      default:
-        console.warn('未知消息类型:', data.event, data.data)
+  
+    ws.onerror = function(error) {
+      console.error('WebSocket错误:', error)
     }
-  }
-
-  ws.onclose = function(event) {
-    console.log('WebSocket连接已关闭:', event)
-    startReconnectTimer()
-  }
-
-  ws.onerror = function(error) {
-    console.error('WebSocket错误:', error)
-  }
-
+  })
+  
   return ws
 }
 
