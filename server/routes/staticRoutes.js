@@ -63,17 +63,16 @@ router.get('/thumbnail/:id', async (req, res) => {
 
 export default router;
 
-export function validateVideoToken(req, res, next) {
+function validateVideoToken(req, res, next) {
   const token = req.query.vt;
   const encryptedSalt = req.query.vs;
-  
-  // 如果没有提供令牌或盐，则继续（可能是未加密的请求）
+  const rangeHeader = req.headers.range;
+
   if (!token || !encryptedSalt) {
     return res.status(403).json({ message: '未提供访问令牌' });
   }
-  
+
   try {
-    // 解密盐
     let salt;
     try {
       salt = aesDecrypt(encryptedSalt);
@@ -84,8 +83,7 @@ export function validateVideoToken(req, res, next) {
       console.error("解密盐出错: ", e);
       return res.status(403).json({ message: '无效的加密盐' });
     }
-    
-    // 解密令牌
+
     let decryptedToken;
     try {
       decryptedToken = aesDecrypt(token, salt);
@@ -96,25 +94,40 @@ export function validateVideoToken(req, res, next) {
       console.error("解密令牌出错: ", e);
       return res.status(403).json({ message: '无效的访问令牌' });
     }
-    
-    // 验证令牌格式（时间戳-随机字符串）
+
     const tokenParts = decryptedToken.split('-');
     if (tokenParts.length !== 2) {
       return res.status(403).json({ message: '令牌格式错误' });
     }
-    
+
     const userId = getUserIdByReq(req);
     if (!userId) {
       return res.status(403).json({ message: '身份验证失败' });
     }
-    const tokens = tokenMap.get(userId);
-    if (!tokens) {
-      tokenMap.set(userId, [decryptedToken]);
-    } else if (tokens.includes(decryptedToken)) {
-      return res.status(403).json({ message: '令牌已使用' });
-    } else {
-      tokens.push(decryptedToken);
+
+    // 初始化结构
+    if (!tokenMap.has(userId)) {
+      tokenMap.set(userId, new Map());
     }
+
+    const userTokens = tokenMap.get(userId);
+    if (!userTokens.has(decryptedToken)) {
+      userTokens.set(decryptedToken, new Set());
+    }
+
+    const usedRanges = userTokens.get(decryptedToken);
+
+    // 如果客户端未发送 Range，允许通过
+    if (rangeHeader) {
+      if (usedRanges.has(rangeHeader)) {
+        return res.status(403).json({ message: '重复的 Range 请求' });
+      }
+      usedRanges.add(rangeHeader);
+    }
+    res.setHeader('Cache-Control', 'no-store');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+
     next();
   } catch (error) {
     console.error('视频令牌验证失败:', error);

@@ -1,29 +1,3 @@
-import { createApp } from 'vue'
-import App from './App.vue'
-import router from './router'
-import ElementPlus from 'element-plus'
-import 'element-plus/dist/index.css'
-import * as ElementPlusIconsVue from '@element-plus/icons-vue'
-// 导入WebSocket服务
-import { connectWebSocket } from './services/websocket'
-import { registerUser } from './services/userApi'
-const app = createApp(App)
-
-// 注册所有Element Plus图标
-for (const [key, component] of Object.entries(ElementPlusIconsVue)) {
-  app.component(key, component)
-}
-
-app.use(ElementPlus)
-app.use(router)
-
-registerUser().then(() => {
-  connectWebSocket();
-  app.mount('#app')
-}).catch((error) => {
-  console.error('注册失败:', error)
-})
-
 import videojs from 'video.js';
 import { aesEncrypt } from './utils/encrypt'
 // 创建带有加密令牌的URL
@@ -44,7 +18,6 @@ function createEncryptedUrl(url) {
 videojs.use('*', function (player) {
   return {
       setSource: function (source, next) {
-        console.log('vvvvv:', source.src)
           if (source.src.startsWith('/media/')) {
               const encryptedUrl = createEncryptedUrl(source.src)
               next(null, {

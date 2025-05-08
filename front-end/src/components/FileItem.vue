@@ -250,7 +250,7 @@ const toggleFavorite = async () => {
       if (res.success) {
         isFavorited.value = false
         ElMessage.success('已取消收藏')
-        emit('favorite', { file: props.file, favorited: false })
+        emit('favorite', props.file, isFavorited.value) // 通知父组件刷新收藏列表
       } else {
         ElMessage.error(res.message || '取消收藏失败')
       }
@@ -260,7 +260,7 @@ const toggleFavorite = async () => {
       if (res.success) {
         isFavorited.value = true
         ElMessage.success('已添加到收藏')
-        emit('favorite', { file: props.file, favorited: true })
+        emit('favorite', props.file, isFavorited.value) // 通知父组件刷新收藏列表
       } else {
         ElMessage.error(res.message || '添加收藏失败')
       }
