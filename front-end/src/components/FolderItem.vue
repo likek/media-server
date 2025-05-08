@@ -128,6 +128,7 @@ const toggleFavorite = async () => {
 
 .folder-actions {
   display: flex;
+  align-items: center;
   gap: 8px;
 }
 

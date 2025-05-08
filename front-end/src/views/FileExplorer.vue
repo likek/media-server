@@ -601,12 +601,12 @@ const loadNode = async (node, resolve) => {
 
 // 下载文件
 const downloadFile = (file) => {
-  const link = document.createElement('a')
-  link.href = `/media/${file.id}`
-  link.download = file.filename
-  document.body.appendChild(link)
-  link.click()
-  document.body.removeChild(link)
+  // const link = document.createElement('a')
+  // link.href = `/media/${file.id}`
+  // link.download = file.filename
+  // document.body.appendChild(link)
+  // link.click()
+  // document.body.removeChild(link)
 }
 
 // 查看文本文件

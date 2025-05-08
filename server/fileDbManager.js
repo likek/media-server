@@ -437,7 +437,8 @@ const getFileById = (fileId) => {
         thumbnail: row.thumbnail,
         lastModified: row.last_modified,
         size: row.size,
-        parent_id: row.parent_id
+        parent_id: row.parent_id,
+        mime_type: row.mime_type
       };
       
       resolve(fileInfo);

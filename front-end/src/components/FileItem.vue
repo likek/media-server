@@ -43,11 +43,11 @@
               <Position />
             </el-icon>
           </el-tooltip>
-          <el-tooltip content="下载" placement="top" :auto-close="1000">
+          <!-- <el-tooltip content="下载" placement="top" :auto-close="1000">
             <el-icon class="action-icon" @click.stop="$emit('download', file)">
               <Download />
             </el-icon>
-          </el-tooltip>
+          </el-tooltip> -->
           <el-tooltip content="删除" placement="top" :auto-close="1000" v-if="allowActions">
             <el-icon class="action-icon" @click.stop="$emit('delete', file)">
               <Delete />
@@ -58,15 +58,13 @@
       
       <!-- 文件预览区域 -->
       <div class="file-preview" v-if="isPreviewable">
-        <!-- 视频预览 -->
-        <video 
+        <!-- 视频预览 - 使用自定义播放器组件 -->
+        <VideoPlayer 
           v-if="isVideo" 
-          controls 
-          class="preview-content video-preview"
+          :src="`/media/${file.id}`" 
           :poster="`/thumbnail/${file.id}`"
-          :src="`/media/${file.id}`"
-          preload="metadata"
-        ></video>
+          :options="videoOptions"
+        />
         
         <!-- 图片预览 -->
         <el-image
@@ -119,6 +117,7 @@ import { computed, ref } from 'vue'
 import { Document, Edit, Delete, Position, Download } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { addToFavorites, removeFromFavorites, unzipFile } from '../services/userApi'
+import VideoPlayer from './VideoPlayer.vue'
 
 const props = defineProps({
   file: {
@@ -148,6 +147,11 @@ const props = defineProps({
 const isFavorited = ref(props.favorited)
 
 const emit = defineEmits(['rename', 'delete', 'move', 'download', 'unzip', 'viewText', 'convertTs', 'favorite'])
+
+// 视频播放器配置
+const videoOptions = ref({
+ 
+})
 
 // 文件类型判断
 const fileExt = computed(() => {
@@ -198,8 +202,9 @@ const formatFileSize = (size) => {
 }
 
 // 格式化日期
-const formatDate = (date) => {
-  return new Date(date).toLocaleString()
+const formatDate = (timestamp) => {
+  const date = new Date(timestamp)
+  return date.toLocaleString()
 }
 
 // 查看文本文件
@@ -207,18 +212,32 @@ const viewTextFile = () => {
   emit('viewText', props.file)
 }
 
+// 解压缩文件
 const unzipArchive = async () => {
   try {
-    const response = await unzipFile(props.file.id)
-    if (response.success) {
-      ElMessageBox.alert('文件解压成功', '成功', { type: 'success' })
-      emit('unzip') // 通知父组件刷新文件列表
+    await ElMessageBox.confirm(
+      `确定要解压 ${props.file.filename} 吗？`,
+      '解压确认',
+      {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning',
+      }
+    )
+    
+    const res = await unzipFile(props.file.id)
+    if (res.success) {
+      ElMessage.success('解压成功')
+      emit('unzip', props.file)
     } else {
-      ElMessageBox.alert(response.message || '解压失败', '错误', { type: 'error' })
+      ElMessage.error(res.message || '解压失败')
     }
-  } catch (error) {
-    console.error('Error unzipping file:', error)
-    ElMessageBox.alert('解压失败', '错误', { type: 'error' })
+  } catch (e) {
+    // 用户取消操作
+    if (e !== 'cancel') {
+      console.error('解压失败', e)
+      ElMessage.error('解压失败')
+    }
   }
 }
 
@@ -226,60 +245,66 @@ const unzipArchive = async () => {
 const toggleFavorite = async () => {
   try {
     if (isFavorited.value) {
-      await removeFromFavorites(props.file.id)
-      isFavorited.value = false
-      ElMessage.success('已从收藏中移除')
+      // 取消收藏
+      const res = await removeFromFavorites(props.file.id)
+      if (res.success) {
+        isFavorited.value = false
+        ElMessage.success('已取消收藏')
+        emit('favorite', { file: props.file, favorited: false })
+      } else {
+        ElMessage.error(res.message || '取消收藏失败')
+      }
     } else {
-      await addToFavorites(props.file.id)
-      isFavorited.value = true
-      ElMessage.success('已添加到收藏')
+      // 添加收藏
+      const res = await addToFavorites(props.file.id)
+      if (res.success) {
+        isFavorited.value = true
+        ElMessage.success('已添加到收藏')
+        emit('favorite', { file: props.file, favorited: true })
+      } else {
+        ElMessage.error(res.message || '添加收藏失败')
+      }
     }
-    emit('favorite', props.file, isFavorited.value) // 通知父组件刷新收藏列表
-  } catch (error) {
-    console.error('切换收藏状态失败:', error)
-    ElMessage.error('操作失败，请重试')
+  } catch (e) {
+    console.error('收藏操作失败', e)
+    ElMessage.error('操作失败')
   }
 }
 </script>
 
 <style scoped>
 .file-item {
+  border: 1px solid #ebeef5;
+  border-radius: 4px;
   background-color: #fff;
-  border-radius: 8px;
-  padding: 16px;
-  margin-bottom: 16px;
-  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.05);
-  transition: all 0.3s;
+  overflow: hidden;
+  color: #303133;
+  transition: 0.3s;
+  margin-bottom: 15px;
+  max-height: 400px;
 }
 
 .file-item:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 16px 0 rgba(0, 0, 0, 0.1);
-}
-
-.favorite-icon.is-favorited {
-  color: #409eff;
+  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
 }
 
 .file-content {
-  display: flex;
-  flex-direction: column;
+  padding: 15px;
 }
 
 .file-header {
   display: flex;
   align-items: center;
-  margin-bottom: 12px;
+  margin-bottom: 10px;
 }
 
 .file-icon {
-  color: #909399;
-  font-size: 18px;
-  margin-right: 8px;
+  font-size: 20px;
+  margin-right: 10px;
+  color: #409eff;
 }
 
 .file-name {
-  font-size: 16px;
   flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -288,18 +313,22 @@ const toggleFavorite = async () => {
 
 .file-actions {
   display: flex;
-  gap: 8px;
+  gap: 10px;
 }
 
 .action-icon {
   cursor: pointer;
+  font-size: 16px;
   color: #606266;
-  transition: all 0.3s;
+  transition: color 0.3s;
 }
 
 .action-icon:hover {
   color: #409EFF;
-  transform: scale(1.2);
+}
+
+.favorite-icon.is-favorited {
+  color: #409eff;
 }
 
 .file-preview {
@@ -311,28 +340,30 @@ const toggleFavorite = async () => {
 
 .preview-content {
   max-width: 100%;
-  max-height: 240px;
+  max-height: 400px;
   border-radius: 4px;
 }
 
 .video-preview,.image-preview {
-  height: 240px;
+  height: 400px;
 }
 
 .audio-preview {
   width: 100%;
 }
 
-.pdf-link, .text-link {
-  display: inline-block;
+.pdf-link {
+  display: block;
+  padding: 10px;
+  text-align: center;
+  background-color: #f5f7fa;
+  color: #409eff;
   text-decoration: none;
-  margin: 8px 0;
+  border-radius: 4px;
 }
 
-.archive-info {
-  display: flex;
-  gap: 10px;
-  margin: 12px 0;
+.pdf-link:hover {
+  background-color: #ecf5ff;
 }
 
 .file-info {
@@ -340,34 +371,7 @@ const toggleFavorite = async () => {
   justify-content: space-between;
   font-size: 12px;
   color: #909399;
-  margin-top: 12px;
+  margin-top: 10px;
 }
 
-/* 文本查看对话框样式 */
-.txt-dialog .el-dialog__body {
-  padding: 10px;
-}
-
-.txt-content-wrapper {
-  max-height: 60vh;
-  overflow-y: auto;
-  background-color: #f5f7fa;
-  border-radius: 4px;
-  padding: 10px;
-}
-
-.txt-content {
-  white-space: pre-wrap;
-  word-break: break-all;
-  font-family: monospace;
-  margin: 0;
-}
-
-.txt-dialog-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-top: 15px;
-  padding: 0 10px;
-}
 </style>

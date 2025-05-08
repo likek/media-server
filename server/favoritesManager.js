@@ -11,7 +11,7 @@ export const addToFavorites = (userId, fileId) => {
           console.error('Error adding to favorites:', err);
           reject(err);
         } else {
-          resolve({ id: this.lastID, added: this.changes > 0 });
+          resolve({ id: this.lastID, added: this.changes > 0, success: true });
         }
       }
     );
@@ -29,7 +29,7 @@ export const removeFromFavorites = (userId, fileId) => {
           console.error('Error removing from favorites:', err);
           reject(err);
         } else {
-          resolve({ removed: this.changes > 0 });
+          resolve({ removed: this.changes > 0, success: true });
         }
       }
     );
