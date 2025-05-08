@@ -103,15 +103,6 @@ export function validateVideoToken(req, res, next) {
       return res.status(403).json({ message: '令牌格式错误' });
     }
     
-    // 获取令牌中的时间戳
-    // const timestamp = parseInt(tokenParts[0]);
-    // const now = Date.now();
-    
-    // // 验证令牌是否过期（例如，30分钟有效期）
-    // const tokenValidity = 10 * 60 * 1000;
-    // if (now - timestamp > tokenValidity) {
-    //   return res.status(403).json({ message: '令牌已过期' });
-    // }
     const userId = getUserIdByReq(req);
     if (!userId) {
       return res.status(403).json({ message: '身份验证失败' });
