@@ -69,7 +69,7 @@ function validateVideoToken(req, res, next) {
   const rangeHeader = req.headers.range;
 
   if (!token || !encryptedSalt) {
-    return res.status(403).json({ message: '未提供访问令牌' });
+    return res.status(403).json({ message: '请求失败' });
   }
 
   try {
@@ -77,32 +77,32 @@ function validateVideoToken(req, res, next) {
     try {
       salt = aesDecrypt(encryptedSalt);
       if (!salt) {
-        return res.status(403).json({ message: '无效的加密盐' });
+        return res.status(403).json({ message: '非法请求' });
       }
     } catch (e) {
       console.error("解密盐出错: ", e);
-      return res.status(403).json({ message: '无效的加密盐' });
+      return res.status(403).json({ message: '非法请求' });
     }
 
     let decryptedToken;
     try {
       decryptedToken = aesDecrypt(token, salt);
       if (!decryptedToken) {
-        return res.status(403).json({ message: '无效的访问令牌' });
+        return res.status(403).json({ message: '非法请求' });
       }
     } catch (e) {
       console.error("解密令牌出错: ", e);
-      return res.status(403).json({ message: '无效的访问令牌' });
+      return res.status(403).json({ message: '非法请求' });
     }
 
     const tokenParts = decryptedToken.split('-');
     if (tokenParts.length !== 2) {
-      return res.status(403).json({ message: '令牌格式错误' });
+      return res.status(403).json({ message: '非法请求' });
     }
 
     const userId = getUserIdByReq(req);
     if (!userId) {
-      return res.status(403).json({ message: '身份验证失败' });
+      return res.status(403).json({ message: '请求失败' });
     }
 
     // 初始化结构
@@ -120,7 +120,7 @@ function validateVideoToken(req, res, next) {
     // 如果客户端未发送 Range，允许通过
     if (rangeHeader) {
       if (usedRanges.has(rangeHeader)) {
-        return res.status(403).json({ message: '重复的 Range 请求' });
+        return res.status(403).json({ message: '请求失败' });
       }
       usedRanges.add(rangeHeader);
     }
@@ -131,6 +131,6 @@ function validateVideoToken(req, res, next) {
     next();
   } catch (error) {
     console.error('视频令牌验证失败:', error);
-    return res.status(403).json({ message: '令牌验证失败' });
+    return res.status(403).json({ message: '请求失败' });
   }
 }

@@ -25,7 +25,7 @@ export function decryptRequestMiddleware(req, res, next) {
       req.body = decryptedData && JSON.parse(decryptedData);
     } catch (e) {
       console.error('请求解密失败', reqUrl, e);
-      return res.status(400).json({ message: '请求解密失败' });
+      return res.status(400).json({ message: '请求失败' });
     }
   }
   next();
@@ -41,7 +41,7 @@ export function encryptResponseMiddleware(req, res, next) {
         dataStr = typeof body === 'string' ? body : JSON.stringify(body);
       } catch (e) {
         console.error('数据序列化失败', e);
-        return originalJson.call(this, { message: '数据序列化失败' });
+        return originalJson.call(this, { message: '请求失败' });
       }
       try {
         const encrypted = aesEncrypt(dataStr, salt);
@@ -50,7 +50,7 @@ export function encryptResponseMiddleware(req, res, next) {
         return originalJson.call(this, { d: encrypted });
       } catch (e) {
         console.error('数据加密失败', e);
-        return originalJson.call(this, { message: '数据加密失败' });
+        return originalJson.call(this, { message: '请求失败' });
       }
     } else {
       return originalJson.call(this, body);

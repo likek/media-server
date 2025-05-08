@@ -71,7 +71,7 @@ app.use(`${MEDIA_ROUTE}/`, (req, res, next) => {
   const userIp = normalizeIp(req.clientIp || req.ip);
   const userId = getUserIdByReq(req);
   if (!userId) {
-    res.status(401).send({ message: "身份验证不通过" });
+    res.status(401).send({ message: "请求失败" });
     return;
   }
   writeFileAccessedLog({

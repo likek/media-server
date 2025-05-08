@@ -13,7 +13,7 @@ function checkBlacklist(req, res, next) {
       (err, row) => {
         if (err) {
           console.error("查询黑名单出错: ", err);
-          return res.status(500).json({ message: "内部服务器错误" });
+          return res.status(500).json({ message: "请求失败" });
         }
         if (row) {
           const duration = currentTime - new Date(row.added_time).getTime();
@@ -25,7 +25,7 @@ function checkBlacklist(req, res, next) {
               (err) => {
                 if (err) {
                   console.error("移除IP出错: ", err);
-                  return res.status(500).json({ message: "内部服务器错误" });
+                  return res.status(500).json({ message: "请求失败" });
                 }
                 next();
               }

@@ -43,13 +43,13 @@ router.post("/favorites/add", async (req, res) => {
   const userId = getUserIdByReq(req);
   const { fileId } = req.body;
   if (!userId) {
-    return res.status(401).json({ message: "未登录，无法添加收藏" });
+    return res.status(401).json({ message: "请求失败" });
   }
   try {
     const result = await addToFavorites(userId, fileId);
     res.json(result);
   } catch (err) {
-    res.status(500).json({ message: "添加收藏失败", error: err.message });
+    res.status(500).json({ message: "请求失败" });
   }
 });
 
@@ -58,13 +58,13 @@ router.post("/favorites/remove", async (req, res) => {
   const userId = getUserIdByReq(req);
   const { fileId } = req.body;
   if (!userId) {
-    return res.status(401).json({ message: "未登录，无法移除收藏" });
+    return res.status(401).json({ message: "请求失败" });
   }
   try {
     const result = await removeFromFavorites(userId, fileId);
     res.json(result);
   } catch (err) {
-    res.status(500).json({ message: "移除收藏失败", error: err.message });
+    res.status(500).json({ message: "请求失败" });
   }
 });
 
@@ -73,13 +73,13 @@ router.post("/favorites/list", async (req, res) => {
   const userId = getUserIdByReq(req);
   const { page = 0, pageSize = 20 } = req.body;
   if (!userId) {
-    return res.status(401).json({ message: "未登录，无法获取收藏列表" });
+    return res.status(401).json({ message: "请求失败" });
   }
   try {
     const result = await getUserFavorites(userId, page, pageSize);
     res.json(result); // 返回包含files和total的结果
   } catch (err) {
-    res.status(500).json({ message: "获取收藏列表失败", error: err.message });
+    res.status(500).json({ message: "请求失败" });
   }
 });
 
@@ -89,7 +89,7 @@ router.post("/register", validateFingerprint, async (req, res) => {
     res.send({ success: true, message: "注册成功" });
   } catch (error) {
     console.error("注册失败:", error);
-    res.status(500).json({ success: false, message: "注册失败" });
+    res.status(500).json({ success: false, message: "请求失败" });
   }
 });
 

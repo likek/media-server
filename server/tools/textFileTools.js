@@ -13,14 +13,14 @@ function convertTxtEncoding(filePath, res) {
     fs.readFile(filePath, (err, data) => {
       if (err) {
         console.error("读取文件失败:", err);
-        res.status(500).json({ message: "读取文件失败" });
+        res.status(500).json({ message: "请求失败" });
         return;
       }
   
       // 检测文件编码
       const detectedEncoding = jschardet.detect(data).encoding;
       if (!detectedEncoding) {
-        res.status(500).json({ message: "文件编码检测失败" });
+        res.status(500).json({ message: "请求失败" });
         return;
       }
   
@@ -38,7 +38,7 @@ function convertTxtEncoding(filePath, res) {
       fs.writeFile(filePath, utf8Content, (err) => {
         if (err) {
           console.error("写入文件失败:", err);
-          res.status(500).json({ message: "写入文件失败" });
+          res.status(500).json({ message: "请求失败" });
           return;
         }
         res.json({ message: "编码修改为UTF-8成功", success: true });

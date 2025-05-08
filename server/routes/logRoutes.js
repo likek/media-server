@@ -27,12 +27,12 @@ router.post('/request', (req, res) => {
   const whereSql = where.length ? 'WHERE ' + where.join(' AND ') : '';
   const countSql = `SELECT COUNT(*) as total FROM logs_request ${whereSql}`;
   db.get(countSql, params, (err, countRow) => {
-    if (err) return res.status(500).json({ message: '查询失败' });
+    if (err) return res.status(500).json({ message: '请求失败' });
     const total = countRow.total;
     const offset = (page - 1) * pageSize;
     const sql = `SELECT * FROM logs_request ${whereSql} ORDER BY time DESC LIMIT ? OFFSET ?`;
     db.all(sql, [...params, pageSize, offset], (err, rows) => {
-      if (err) return res.status(500).json({ message: '查询失败' });
+      if (err) return res.status(500).json({ message: '请求失败' });
       res.json({ data: { list: rows, total } });
     });
   });
@@ -62,12 +62,12 @@ router.post('/file', (req, res) => {
   const whereSql = where.length ? 'WHERE ' + where.join(' AND ') : '';
   const countSql = `SELECT COUNT(*) as total FROM logs_file_accessed ${whereSql}`;
   db.get(countSql, params, (err, countRow) => {
-    if (err) return res.status(500).json({ message: '查询失败' });
+    if (err) return res.status(500).json({ message: '请求失败' });
     const total = countRow.total;
     const offset = (page - 1) * pageSize;
     const sql = `SELECT * FROM logs_file_accessed ${whereSql} ORDER BY time DESC LIMIT ? OFFSET ?`;
     db.all(sql, [...params, pageSize, offset], (err, rows) => {
-      if (err) return res.status(500).json({ message: '查询失败' });
+      if (err) return res.status(500).json({ message: '请求失败' });
       res.json({ data: { list: rows, total } });
     });
   });
@@ -97,12 +97,12 @@ router.post('/ws', (req, res) => {
   const whereSql = where.length ? 'WHERE ' + where.join(' AND ') : '';
   const countSql = `SELECT COUNT(*) as total FROM logs_ws ${whereSql}`;
   db.get(countSql, params, (err, countRow) => {
-    if (err) return res.status(500).json({ message: '查询失败' });
+    if (err) return res.status(500).json({ message: '请求失败' });
     const total = countRow.total;
     const offset = (page - 1) * pageSize;
     const sql = `SELECT * FROM logs_ws ${whereSql} ORDER BY time DESC LIMIT ? OFFSET ?`;
     db.all(sql, [...params, pageSize, offset], (err, rows) => {
-      if (err) return res.status(500).json({ message: '查询失败' });
+      if (err) return res.status(500).json({ message: '请求失败' });
       res.json({ data: { list: rows, total } });
     });
   });

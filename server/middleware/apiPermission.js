@@ -42,7 +42,7 @@ const checkPermissions = (req, res, next) => {
       return next();
     }
   
-    res.status(403).json({ message: "请联系管理员为你添加该权限" });
+    res.status(403).json({ message: "无权限" });
   };
 
   export {

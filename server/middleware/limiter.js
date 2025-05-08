@@ -26,7 +26,7 @@ const limiter = rateLimit({
           (err, row) => {
             if (err) {
               console.error("查询黑名单出错: ", err);
-              res.status(500).json({ message: "内部服务器错误" });
+              res.status(500).json({ message: "请求失败" });
               return reject();
             }
 
@@ -46,7 +46,7 @@ const limiter = rateLimit({
                 function (err) {
                   if (err) {
                     console.error("插入黑名单出错: ", err);
-                    res.status(500).json({ message: "内部服务器错误" });
+                    res.status(500).json({ message: "请求失败" });
                     return reject();
                   }
                   res.status(429).json({
