@@ -4,8 +4,10 @@ import path from "path";
 import fs from "fs";
 import { MEDIA_FULL_PATH, THUMB_FULL_PATH } from "../../serverConfig.js";
 import { aesDecrypt } from "../utils/encrypt.js";
+import { getUserIdByReq } from "../utils/index.js";
 
 const router = express.Router();
+const tokenMap = new Map();
 
 // 基于ID的文件访问路由
 router.get('/media/:id', async (req, res) => {
@@ -102,15 +104,26 @@ export function validateVideoToken(req, res, next) {
     }
     
     // 获取令牌中的时间戳
-    const timestamp = parseInt(tokenParts[0]);
-    const now = Date.now();
+    // const timestamp = parseInt(tokenParts[0]);
+    // const now = Date.now();
     
-    // 验证令牌是否过期（例如，30分钟有效期）
-    const tokenValidity = 10 * 60 * 1000;
-    if (now - timestamp > tokenValidity) {
-      return res.status(403).json({ message: '令牌已过期' });
+    // // 验证令牌是否过期（例如，30分钟有效期）
+    // const tokenValidity = 10 * 60 * 1000;
+    // if (now - timestamp > tokenValidity) {
+    //   return res.status(403).json({ message: '令牌已过期' });
+    // }
+    const userId = getUserIdByReq(req);
+    if (!userId) {
+      return res.status(403).json({ message: '身份验证失败' });
     }
-    
+    const tokens = tokenMap.get(userId);
+    if (!tokens) {
+      tokenMap.set(userId, [decryptedToken]);
+    } else if (tokens.includes(decryptedToken)) {
+      return res.status(403).json({ message: '令牌已使用' });
+    } else {
+      tokens.push(decryptedToken);
+    }
     next();
   } catch (error) {
     console.error('视频令牌验证失败:', error);
