@@ -1,5 +1,5 @@
 import videojs from 'video.js';
-import { aesEncrypt } from './utils/encrypt'
+import { aesEncrypt } from './encrypt.js';
 // 创建带有加密令牌的URL
 function createEncryptedUrl(url) {
   // 获取加密指纹和盐
@@ -15,18 +15,22 @@ function createEncryptedUrl(url) {
   return `${url}${separator}vt=${encodeURIComponent(encryptedToken)}&vs=${encodeURIComponent(encryptedSalt)}`;
 }
 
-videojs.use('*', function (player) {
-  return {
-      setSource: function (source, next) {
-          if (source.src.startsWith('/media/')) {
-              const encryptedUrl = createEncryptedUrl(source.src)
-              next(null, {
-                  ...source,
-                  src: encryptedUrl
-              });
-          } else {
-              next(null, source);
-          }
-      }
-  };
-});
+const videoMiddlewareInit = () => {
+    videojs.use('*', function (player) {
+        return {
+            setSource: function (source, next) {
+                if (source.src.startsWith('/media/')) {
+                    const encryptedUrl = createEncryptedUrl(source.src)
+                    next(null, {
+                        ...source,
+                        src: encryptedUrl
+                    });
+                } else {
+                    next(null, source);
+                }
+            }
+        };
+    });
+}
+
+export { videoMiddlewareInit }

@@ -7,6 +7,7 @@ import * as ElementPlusIconsVue from '@element-plus/icons-vue'
 // 导入WebSocket服务
 import { connectWebSocket } from './services/websocket'
 import { registerUser } from './services/userApi'
+import { videoMiddlewareInit } from './utils/videoMiddleware.js'
 const app = createApp(App)
 
 // 注册所有Element Plus图标
@@ -24,36 +25,4 @@ registerUser().then(() => {
   console.error('注册失败:', error)
 })
 
-import videojs from 'video.js';
-import { aesEncrypt } from './utils/encrypt'
-// 创建带有加密令牌的URL
-function createEncryptedUrl(url) {
-  // 获取加密指纹和盐
-  const salt = `${Date.now().toString().slice(8)}${Math.random().toString(36).substring(2, 10)}`
-  const encryptedSalt = aesEncrypt(salt)
-
-  // 创建令牌
-  const token = `${Date.now()}-${Math.random().toString(36).substring(2, 10)}`;
-  const encryptedToken = aesEncrypt(token, salt);
-
-  // 构建URL，添加加密令牌和加密盐
-  const separator = url.includes('?') ? '&' : '?';
-  return `${url}${separator}vt=${encodeURIComponent(encryptedToken)}&vs=${encodeURIComponent(encryptedSalt)}`;
-}
-
-videojs.use('*', function (player) {
-  return {
-      setSource: function (source, next) {
-        console.log('vvvvv:', source.src)
-          if (source.src.startsWith('/media/')) {
-              const encryptedUrl = createEncryptedUrl(source.src)
-              next(null, {
-                  ...source,
-                  src: encryptedUrl
-              });
-          } else {
-              next(null, source);
-          }
-      }
-  };
-});
+videoMiddlewareInit()
