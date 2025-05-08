@@ -69,8 +69,13 @@ app.use(checkPermissions);
 app.use(`${MEDIA_ROUTE}/`, (req, res, next) => {
   const path = decodeURIComponent(req.path);
   const userIp = normalizeIp(req.clientIp || req.ip);
+  const userId = getUserIdByReq(req);
+  if (!userId) {
+    res.status(401).send({ message: "身份验证不通过" });
+    return;
+  }
   writeFileAccessedLog({
-    userId: getUserIdByReq(req) || '未知用户',
+    userId,
     userIp,
     filePath: path,
   });

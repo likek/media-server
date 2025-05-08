@@ -16,10 +16,10 @@ for (const [key, component] of Object.entries(ElementPlusIconsVue)) {
 
 app.use(ElementPlus)
 app.use(router)
-app.mount('#app')
 
 registerUser().then(() => {
   connectWebSocket();
+  app.mount('#app')
 }).catch((error) => {
   console.error('注册失败:', error)
 })

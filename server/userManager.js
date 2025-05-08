@@ -2,7 +2,7 @@
 import { getRequestInfo, getSaltByReq, getUserIdByReq } from "./utils/index.js";
 import db from "./dbserialize.js";
 import { FINGERPRINT_PREFIX } from "./middleware/fingerprintValidator.js";
-import { aesDecrypt, aesEncrypt } from "./utils/encrypt.js";
+import { aesEncrypt } from "./utils/encrypt.js";
 
 async function tryRegister(req, res) {
     // 从请求头获取指纹，而不是使用cookie
