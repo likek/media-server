@@ -19,10 +19,13 @@ import SideMenu from './components/SideMenu.vue'
 import HumanVerification from './components/HumanVerification.vue'
 import { aesDecrypt } from './utils/encrypt'
 import { getFingerprint } from './utils/fingerprint'
+import { registerUser } from './services/userApi'
+import { useRoute } from 'vue-router'
 
 // 验证状态
 const isVerified = ref(false)
 const loading = ref(true)
+const route = useRoute()
 
 // 检查是否已通过人机验证
 const checkVerification = async () => {
@@ -57,10 +60,10 @@ const checkVerification = async () => {
       return
     }
     const fp = await getFingerprint()
-    if (fp === trackData) {
-      isVerified.value = true
-    } else {
-      isVerified.value = false
+    isVerified.value = fp === trackData
+    if (isVerified.value) {
+      // 验证通过时掉用register为了更新用户一些信息(进入信息)
+      registerUser(route.query.iv)
     }
   } catch (error) {
     console.error('验证检查失败:', error)

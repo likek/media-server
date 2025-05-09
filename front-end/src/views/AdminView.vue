@@ -25,6 +25,7 @@
         <el-table-column prop="os" label="操作系统" width="120" />
         <el-table-column prop="browser" label="浏览器" width="120" />
         <el-table-column prop="userId" label="用户ID" width="280" />
+        <el-table-column prop="iv" label="iv" width="280" />
       </el-table>
       
       <div class="pagination-container">
@@ -52,7 +53,6 @@ const loading = ref(false)
 const currentPage = ref(1)
 const pageSize = ref(10)
 const total = ref(0)
-const searchQuery = ref('')
 
 // 格式化日期
 const formatDate = (dateString) => {

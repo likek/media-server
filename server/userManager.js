@@ -37,45 +37,66 @@ async function tryRegister(req, res) {
     });
   
     const userInfo = await getRequestInfo(req);
-    db.run(
-      `INSERT OR IGNORE INTO userInfo (userId, ip, create_time, update_time, userAgent, region, device, os, browser) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        fp,
-        userInfo.userIp,
-        userInfo.requestTime,
-        userInfo.requestTime,
-        userInfo.userAgent,
-        userInfo.region,
-        userInfo.device,
-        userInfo.os,
-        userInfo.browser,
-      ],
-      (err) => {
-        if (err) {
-          console.error("Error inserting user info:", err);
+    // 查询用户是否存在
+    const user = await new Promise((resolve, reject) => {
+      db.get(
+        `SELECT * FROM userInfo WHERE userId = ?`,
+        [fp],
+        (err, row) => {
+          if (err) {
+            reject(err);
+          } else {
+            resolve(row);
+          }
         }
-      }
-    );
-  
-    // 修改除create_time外的其他所有字段
-    db.run(
-      `UPDATE userInfo SET ip = ?, update_time = ?, userAgent = ?, region = ?, device = ?, os = ?, browser = ? WHERE userId = ?`,
-      [
-        userInfo.userIp,
-        userInfo.requestTime,
-        userInfo.userAgent,
-        userInfo.region,
-        userInfo.device,
-        userInfo.os,
-        userInfo.browser,
-        fp,
-      ],
-      (err) => {
-        if (err) {
-          console.error("Error updating user info:", err);
+      );
+    });
+
+    // 如果用户不存在，则插入新用户
+    if (!user) {
+      db.run(
+        `INSERT INTO userInfo (userId, ip, create_time, update_time, userAgent, region, device, os, browser, iv) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          fp,
+          userInfo.userIp,
+          userInfo.requestTime,
+          userInfo.requestTime,
+          userInfo.userAgent,
+          userInfo.region,
+          userInfo.device,
+          userInfo.os,
+          userInfo.browser,
+          req.body?.iv,
+        ],
+        (err) => {
+          if (err) {
+            console.error("Error inserting user info:", err);
+          }
         }
-      }
-    );
+      );
+    } else {
+      // 如果用户存在，则更新用户信息
+      // 修改除create_time外的其他所有字段
+      db.run(
+        `UPDATE userInfo SET ip = ?, update_time = ?, userAgent = ?, region = ?, device = ?, os = ?, browser = ?, iv = ? WHERE userId = ?`,
+        [
+          userInfo.userIp,
+          userInfo.requestTime,
+          userInfo.userAgent,
+          userInfo.region,
+          userInfo.device,
+          userInfo.os,
+          userInfo.browser,
+          req.body?.iv || user.iv,
+          fp,
+        ],
+        (err) => {
+          if (err) {
+            console.error("Error updating user info:", err);
+          }
+        }
+      );
+    }
     return fp;
   }
 

@@ -127,7 +127,8 @@ export const getFavoritesList = async (page = 0, pageSize = 20) => {
   return response // 现在返回包含files和total的结构
 }
 
-export const registerUser = async () => {
-  const response = await request.post('/user/register')
+// iv可选
+export const registerUser = async (iv) => {
+  const response = await request.post('/user/register', { iv })
   return response
 }

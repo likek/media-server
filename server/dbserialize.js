@@ -64,7 +64,8 @@ const initAll = () => {
       region TEXT,
       device TEXT,
       os TEXT,
-      browser TEXT
+      browser TEXT,
+      iv TEXT
     );
     `)
 

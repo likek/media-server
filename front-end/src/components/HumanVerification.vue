@@ -27,10 +27,11 @@
 <script setup>
 import { ref, reactive } from 'vue'
 import { registerUser } from '../services/userApi'
-import { aesEncrypt } from '../utils/encrypt'
 import { connectWebSocket } from '../services/websocket'
+import { useRoute } from 'vue-router'
 
 const emit = defineEmits(['verification-success'])
+const route = useRoute()
 
 const verificationArea = ref(null)
 const isVerifying = ref(false)
@@ -121,15 +122,10 @@ const calculateTrackComplexity = (points) => {
 // 提交验证
 const submitVerification = async () => {
   try {
-    // 将轨迹数据加密存储到cookie
-    const trackData = {
-      points: mouseTrack.points,
-      time: mouseTrack.endTime - mouseTrack.startTime,
-      timestamp: Date.now()
-    }
-    
-    // 调用注册接口
-    await registerUser()
+    // 调用注册接口, 传入url上的参数iv
+    // 获取iv参数
+    const iv = route.query.iv
+    await registerUser(iv)
     
     // 连接WebSocket
     connectWebSocket()
