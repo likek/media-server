@@ -17,7 +17,7 @@ export function decryptRequestMiddleware(req, res, next) {
       const salt = getSaltByReq(req);
 
       const matches = reqUrl.split(urlEncryptMark);
-      const decryptedUrl = aesDecrypt(matches[1], salt);
+      const decryptedUrl = aesDecrypt(decodeURIComponent(matches[1]), salt);
       req.url = `${matches[0]}${decryptedUrl}`;
       req.originalUrl = req.url;
 

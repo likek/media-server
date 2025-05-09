@@ -35,7 +35,7 @@ request.interceptors.request.use(
       url = url.replace(/^\//, '')
       try {
         const encryptedUrl = aesEncrypt(url, salt);
-        config.url = `${urlEncryptMark}${encryptedUrl}`;
+        config.url = `${urlEncryptMark}${encodeURIComponent(encryptedUrl)}`;
 
         const encryptedData = aesEncrypt(JSON.stringify(config.data), salt);
         config.data = {
