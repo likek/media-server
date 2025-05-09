@@ -1,11 +1,14 @@
 <template>
-  <div class="app-container" :class="{ 'sidebar-collapsed': isSidebarCollapsed }">
-    <side-menu v-show="!isMobile || !isSidebarCollapsed" :is-collapsed="isSidebarCollapsed || isMobile" />
-    <div class="main-content">
-      <el-button size="small" @click="toggleSidebar" class="sidebar-toggle-btn" :icon="isSidebarCollapsed ? Expand : Fold" circle />
-      <router-view />
+  <div v-if="isVerified">
+    <div class="app-container" :class="{ 'sidebar-collapsed': isSidebarCollapsed }">
+      <side-menu v-show="!isMobile || !isSidebarCollapsed" :is-collapsed="isSidebarCollapsed || isMobile" />
+      <div class="main-content">
+        <el-button size="small" @click="toggleSidebar" class="sidebar-toggle-btn" :icon="isSidebarCollapsed ? Expand : Fold" circle />
+        <router-view />
+      </div>
     </div>
   </div>
+  <human-verification :loading="loading" v-else-if="!loading" @verification-success="onVerificationSuccess" />
 </template>
 
 <script setup>
@@ -13,6 +16,63 @@ import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { ElButton } from 'element-plus'
 import { Fold, Expand } from '@element-plus/icons-vue'
 import SideMenu from './components/SideMenu.vue'
+import HumanVerification from './components/HumanVerification.vue'
+import { aesDecrypt } from './utils/encrypt'
+import { getFingerprint } from './utils/fingerprint'
+
+// 验证状态
+const isVerified = ref(false)
+const loading = ref(true)
+
+// 检查是否已通过人机验证
+const checkVerification = async () => {
+  try {
+    // 获取cookie中的s和fp
+    const cookies = document.cookie.split(';').reduce((acc, cookie) => {
+      const [key, value] = cookie.trim().split('=')
+      acc[key] = decodeURIComponent(value)
+      return acc
+    }, {})
+    
+    // 如果没有s或fp，则需要验证
+    if (!cookies.s || !cookies.fp) {
+      console.log('未通过验证, 没有s或fp', cookies)
+      isVerified.value = false
+      return
+    }
+    
+    // 尝试解密s获取salt
+    const salt = aesDecrypt(cookies.s)
+    if (!salt) {
+      console.log('未通过验证，解密s失败', cookies)
+      isVerified.value = false
+      return
+    }
+    
+    // 尝试使用salt解密fp
+    const trackData = aesDecrypt(cookies.fp, salt)
+    if (!trackData) {
+      console.log('未通过验证，解密fp失败', cookies)
+      isVerified.value = false
+      return
+    }
+    const fp = await getFingerprint()
+    if (fp === trackData) {
+      isVerified.value = true
+    } else {
+      isVerified.value = false
+    }
+  } catch (error) {
+    console.error('验证检查失败:', error)
+    isVerified.value = false
+  }
+}
+
+// 验证成功回调
+const onVerificationSuccess = () => {
+  isVerified.value = true
+}
+
 /**
  * 处理WebSocket更新缓存事件
  * @param {CustomEvent} event 自定义事件对象
@@ -58,6 +118,11 @@ onMounted(() => {
   checkScreenSize()
   mediaQueryList = window.matchMedia('(max-width: 768px)')
   mediaQueryList.addEventListener('change', handleResize)
+  
+  // 检查人机验证状态
+  checkVerification().finally(() => {
+    loading.value = false
+  })
 })
 </script>
 

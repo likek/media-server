@@ -24,14 +24,14 @@ async function tryRegister(req, res) {
 
     // 将指纹信息写入cookie
     res.cookie("fp", aesEncrypt(fp, salt), {
-      httpOnly: true,
+      httpOnly: false,
       sameSite: "strict",
       maxAge: 365 * 24 * 60 * 60 * 1000, // 1 year
     });
 
     // 将salt信息写入cookie
     res.cookie("s", aesEncrypt(salt), {
-      httpOnly: true,
+      httpOnly: false,
       sameSite: "strict",
       maxAge: 365 * 24 * 60 * 60 * 1000, // 1 year
     });
