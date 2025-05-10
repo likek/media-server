@@ -1,34 +1,30 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import FileExplorer from '../views/FileExplorer.vue'
-import FavoritesView from '../views/FavoritesView.vue'
-import AdminView from '../views/AdminView.vue'
-import LogManagerView from '../views/LogManagerView.vue'
 
 const routes = [
   {
     path: '/',
     name: 'home',
-    component: FileExplorer
+    component: () => import('../views/FileExplorer.vue')
   },
   {
     path: '/folder/:id?',
     name: 'folder',
-    component: FileExplorer
+    component: () => import('../views/FileExplorer.vue')
   },
   {
     path: '/favorites',
     name: 'favorites',
-    component: FavoritesView
+    component: () => import('../views/FavoritesView.vue')
   },
   {
     path: '/admin',
     name: 'admin',
-    component: AdminView
+    component: () => import('../views/AdminView.vue')
   },
   {
     path: '/log-manager',
     name: 'log-manager',
-    component: LogManagerView
+    component: () => import('../views/LogManagerView.vue')
   }
 ]
 
