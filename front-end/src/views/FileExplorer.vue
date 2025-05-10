@@ -166,7 +166,7 @@ const breadcrumbPath = ref([]) // 存储面包屑导航路径
 
 // 分页状态
 const currentPage = ref(0)
-const pageSize = ref(20)
+const pageSize = ref(5)
 const hasMoreFiles = ref(true)
 
 // 对话框状态

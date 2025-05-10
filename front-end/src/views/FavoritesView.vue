@@ -70,7 +70,7 @@ const mediaContainer = ref(null)
 
 // 分页状态
 const currentPage = ref(0)
-const pageSize = ref(20)
+const pageSize = ref(5)
 const hasMoreFiles = ref(true)
 
 // 文本查看对话框状态
