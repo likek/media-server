@@ -7,7 +7,7 @@ import { aesDecrypt } from "../utils/encrypt.js";
 import { getUserIdByReq } from "../utils/index.js";
 
 const router = express.Router();
-const tokenMap = new Map();
+const userId_audioTokenAndRangesMap_Map = new Map();
 
 // 基于ID的文件访问路由
 router.get('/media/:id', async (req, res) => {
@@ -69,6 +69,7 @@ function validateVideoToken(req, res, next) {
   const rangeHeader = req.headers.range;
 
   if (!token || !encryptedSalt) {
+    console.error('Invalid video token or salt:', token, encryptedSalt, rangeHeader);
     return res.status(403).json({ message: '请求失败' });
   }
 
@@ -77,6 +78,7 @@ function validateVideoToken(req, res, next) {
     try {
       salt = aesDecrypt(encryptedSalt);
       if (!salt) {
+        console.error('Failed to decrypt salt:', e);
         return res.status(403).json({ message: '非法请求' });
       }
     } catch (e) {
@@ -88,6 +90,7 @@ function validateVideoToken(req, res, next) {
     try {
       decryptedToken = aesDecrypt(token, salt);
       if (!decryptedToken) {
+        console.error('Failed to decrypt token:', e);
         return res.status(403).json({ message: '非法请求' });
       }
     } catch (e) {
@@ -97,29 +100,33 @@ function validateVideoToken(req, res, next) {
 
     const tokenParts = decryptedToken.split('-');
     if (tokenParts.length !== 2) {
+      console.error('Invalid token format:', decryptedToken);
       return res.status(403).json({ message: '非法请求' });
     }
 
     const userId = getUserIdByReq(req);
     if (!userId) {
+      console.error('User ID not found in request');
       return res.status(403).json({ message: '请求失败' });
     }
 
     // 初始化结构
-    if (!tokenMap.has(userId)) {
-      tokenMap.set(userId, new Map());
+    if (!userId_audioTokenAndRangesMap_Map.has(userId)) {
+      userId_audioTokenAndRangesMap_Map.set(userId, new Map());
     }
 
-    const userTokens = tokenMap.get(userId);
-    if (!userTokens.has(decryptedToken)) {
-      userTokens.set(decryptedToken, new Set());
+    const audioTokenAndRangesMap = userId_audioTokenAndRangesMap_Map.get(userId);
+    if (!audioTokenAndRangesMap.has(decryptedToken)) {
+      audioTokenAndRangesMap.set(decryptedToken, new Set());
     }
 
-    const usedRanges = userTokens.get(decryptedToken);
+    const usedRanges = audioTokenAndRangesMap.get(decryptedToken);
 
     // 如果客户端未发送 Range，允许通过
     if (rangeHeader) {
       if (usedRanges.has(rangeHeader)) {
+        console.warn(`Token ${decryptedToken} has already used range: ${rangeHeader}, all ranges: ${usedRanges}`);
+        console.warn(`audioTokensAll: ${audioTokenAndRangesMap.keys()}`)
         return res.status(403).json({ message: '请求失败' });
       }
       usedRanges.add(rangeHeader);

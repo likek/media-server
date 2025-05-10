@@ -141,6 +141,13 @@ router.post("/downloadFromText", async (req, res) => {
       const title = pageInfo.title
       const inputText = [...pageInfo.imgLinks, ...pageInfo.videoLinks].join('\n')
       const targetFolder = `${folder}/${title}`;
+
+      const downloadDir = path.join(MEDIA_FULL_PATH, targetFolder);
+      if (fs.existsSync(downloadDir)) {
+        console.warn(chalk.yellow(`目标文件夹已存在, 跳过下载: ${targetFolder}`));
+        continue
+      }
+
       let result;
       try {
         result = await downloadAllMediaByLinks(inputText, targetFolder, successItemCb)

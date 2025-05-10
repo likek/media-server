@@ -79,11 +79,11 @@ async function downloadAllMediaByLinks(text, folder, successItemCb) {
         });
   
         child.stdout.on("data", (data) => {
-          process.stdout.write(`stdout: ${data}`);
+          process.stdout.write(`\nstdout: ${data}`);
         });
   
         child.stderr.on("data", (data) => {
-          process.stderr.write(`stderr: ${data}`);
+          process.stderr.write(`\nstderr: ${data}`);
         });
   
         child.on("close", (code) => {
