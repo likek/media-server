@@ -8,6 +8,7 @@ export enum CacheNames {
     assetpng = 'assetpng',
     assetswasm = 'assetswasm',
     indexhtml = 'indexhtml',
+    workboxjs = 'workboxjs',
 }
 
 export interface RouteConfig {

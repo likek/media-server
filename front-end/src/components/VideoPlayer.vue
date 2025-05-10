@@ -33,7 +33,7 @@ const initializePlayer = async () => {
     const defaultOptions = {
         controls: true,
         autoplay: false,
-        preload: 'auto',
+        preload: 'none',
         // fluid: true,
         responsive: true,
         playbackRates: [0.5, 1, 1.5, 2],

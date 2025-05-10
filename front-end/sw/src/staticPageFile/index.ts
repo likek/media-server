@@ -23,7 +23,13 @@ const routes: RouteConfig[] = [
     {
         match: ({ url }) => /^\/assets\/.+\.wasm$/.test(url.pathname),
         cacheName: CacheNames.assetswasm,
-        maxEntries: 300,
+        maxEntries: 10,
+        maxAgeSeconds: 365 * 24 * 60 * 60
+    },
+    {
+        match: ({ url }) => url.pathname === '/workbox-window.prod.umd.js',
+        cacheName: CacheNames.workboxjs,
+        maxEntries: 1,
         maxAgeSeconds: 365 * 24 * 60 * 60
     },
     {
