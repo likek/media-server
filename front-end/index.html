@@ -9,6 +9,34 @@
   </head>
   <body>
     <div id="app"></div>
+
+    <script src="./workbox-window.prod.umd.js"></script>
+    <script>
+      if ('serviceWorker' in navigator && !localStorage.getItem('disable-sw')) {
+        var wb = new workbox.Workbox('./sw.js');
+        wb.addEventListener('activated', event => {
+          if (!event.isUpdate) {
+            console.log('sw首次激活!');
+          } else {
+            console.log('sw更新!');
+          }
+        });
+        wb.addEventListener('waiting', event => {
+          console.log('sw waiting状态');
+        });
+        wb.addEventListener('message', event => {
+          if (event.data.type === 'CACHE_UPDATED') {
+            var updatedURL = event.data.payload.updatedURL;
+            console.log(`缓存更新: ${updatedURL}!`);
+          }
+        });
+        wb.addEventListener('installed', event => {
+          console.log('sw已安装, isUpdate:', event.isUpdate);
+        });
+        wb.register();
+      }
+    </script>
+
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>

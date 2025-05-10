@@ -2,12 +2,16 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import path from 'path'
 import wasm from 'vite-plugin-wasm'
+import Components from 'unplugin-vue-components/vite'
+import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
 
 // https://vitejs.dev/config/
 export default defineConfig({
     host: '0.0.0.0',
     port: 5173,
-  plugins: [vue(), wasm()],
+  plugins: [vue(), wasm(), Components({
+    resolvers: [ElementPlusResolver()],
+  })],
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src')
