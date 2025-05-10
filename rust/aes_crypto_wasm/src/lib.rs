@@ -28,6 +28,9 @@ fn get_iv(key: &str) -> Vec<u8> {
 
 fn combine_key(key_salt: &str, base_key: Option<&str>) -> String {
     let mut key = format!("{}{}", key_salt, base_key.unwrap_or(DEFAULT_BASE_KEY));
+    while key.len() < 32 {
+        key.push('0');
+    }
     key.truncate(32);
     key
 }
@@ -40,12 +43,10 @@ pub fn encrypt(data: &str, key_salt: &str, base_key: Option<String>) -> String {
 
     let cipher = Encryptor::<Aes256>::new_from_slices(&cipher_key, &iv).unwrap();
 
-    let mut buffer = [0u8; 1024];
-    let data_bytes = data.as_bytes();
-    let msg_len = data_bytes.len();
-    buffer[..msg_len].copy_from_slice(data_bytes);
+    let mut buffer = data.as_bytes().to_vec();
+    buffer.resize(buffer.len() + 16, 0); // extra space for padding
 
-    let ciphertext = cipher.encrypt_padded_mut::<Pkcs7>(&mut buffer, msg_len).unwrap();
+    let ciphertext = cipher.encrypt_padded_mut::<Pkcs7>(&mut buffer, data.len()).unwrap();
     general_purpose::STANDARD.encode(ciphertext)
 }
 
@@ -55,11 +56,14 @@ pub fn decrypt(data: &str, key_salt: &str, base_key: Option<String>) -> String {
     let cipher_key = get_key(&key);
     let iv = get_iv(&key);
 
-    let mut decoded = general_purpose::STANDARD.decode(data).unwrap();
-    let cipher = Decryptor::<Aes256>::new_from_slices(&cipher_key, &iv).unwrap();
-
-    let decrypted = cipher.decrypt_padded_mut::<Pkcs7>(&mut decoded).unwrap();
-    String::from_utf8(decrypted.to_vec()).unwrap()
+    match general_purpose::STANDARD.decode(data) {
+        Ok(mut decoded) => {
+            let cipher = Decryptor::<Aes256>::new_from_slices(&cipher_key, &iv).unwrap();
+            let decrypted = cipher.decrypt_padded_mut::<Pkcs7>(&mut decoded).unwrap();
+            String::from_utf8(decrypted.to_vec()).unwrap()
+        }
+        Err(_) => "Invalid base64".to_string(),
+    }
 }
 
 #[cfg(test)]
@@ -74,7 +78,6 @@ mod tests {
 
         let enc = encrypt(plain, salt, Some(key.to_string()));
         let dec = decrypt(&enc, salt, Some(key.to_string()));
-
         assert_eq!(plain, dec);
     }
 
@@ -83,10 +86,10 @@ mod tests {
         let key = "Y1G2IC3F4WE5ZDXBVU67JT8H9SA0K1NM";
         let plain = "FP-2ea9acead014c1f870e3be9d623b4cd5";
         let salt = "362544s2pfk05";
-        let encreypt_plain = "0NYi3hP5SrPS8G++eQ75d4M+FYFSr2QCUmKBHnDSoJrJkMuk8dEVQU2Pg+HUtkcj";
+        let expected = "0NYi3hP5SrPS8G++eQ75d4M+FYFSr2QCUmKBHnDSoJrJkMuk8dEVQU2Pg+HUtkcj";
 
         let enc = encrypt(plain, salt, Some(key.to_string()));
-        assert_eq!(encreypt_plain, enc);
+        assert_eq!(expected, enc);
     }
 
     #[test]
@@ -94,10 +97,10 @@ mod tests {
         let key = "Y1G2IC3F4WE5ZDXBVU67JT8H9SA0K1NM";
         let plain = "362544s2pfk05";
         let salt = "";
-        let encreypt_plain = "b4e6fhs7TgxwX9rBXyBpGQ==";
+        let expected = "b4e6fhs7TgxwX9rBXyBpGQ==";
 
         let enc = encrypt(plain, salt, Some(key.to_string()));
-        assert_eq!(encreypt_plain, enc);
+        assert_eq!(expected, enc);
     }
 
     #[test]

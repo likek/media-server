@@ -8,3 +8,4 @@ permission.json
 database.db
 .temp
 static
+.DS_Store

@@ -4,5 +4,6 @@
  - GPU加速和多线程 `ffmpeg -hwaccel cuda -i input.mp4 -c:v h264_nvenc -movflags faststart -threads 8 output.mp4`
 
  cargo test
- wasm-pack build --target nodejs
- wasm-pack build --target web
+ wasm-pack build --target bundler -d dist/bundler // 前后端都能import放使用
+ wasm-pack build --target nodejs -d dist/nodejs // 只能后端nodejs 里require使用
+ wasm-pack build --target web -d dist/web // 浏览器里import使用
