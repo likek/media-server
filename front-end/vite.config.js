@@ -4,14 +4,20 @@ import path from 'path'
 import wasm from 'vite-plugin-wasm'
 import Components from 'unplugin-vue-components/vite'
 import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
+import AutoImport from 'unplugin-auto-import/vite'
 
 // https://vitejs.dev/config/
 export default defineConfig({
     host: '0.0.0.0',
     port: 5173,
-  plugins: [vue(), wasm(), Components({
-    resolvers: [ElementPlusResolver()],
-  })],
+    plugins: [vue(), wasm(), 
+      AutoImport({
+        resolvers: [ElementPlusResolver()],
+      }), 
+      Components({
+        resolvers: [ElementPlusResolver()],
+      })
+  ],
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src')
