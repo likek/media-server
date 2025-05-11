@@ -1,5 +1,5 @@
 import * as wasm from 'aes_crypto_wasm'
-const cryptKey = "Y1G2IC3F4WE5ZDXBVU67JT8H9SA0K1NM2LQ3O4PR5678".slice(0, 32)
+const cryptKey = undefined // rust有默认key，可以是undefined，也可以另外指定，但必须和前端保持一致
 export function aesEncrypt(data, keySalt = '', key = cryptKey) {
   if (!data) return data
   return wasm.encrypt(data, keySalt, key)
