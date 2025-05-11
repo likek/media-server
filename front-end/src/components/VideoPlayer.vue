@@ -33,8 +33,7 @@ const initializePlayer = async () => {
     const defaultOptions = {
         controls: true,
         autoplay: false,
-        preload: 'none',
-        // fluid: true,
+        preload: 'none', // 如果蛇尾none，在其他地方必须强制发起首次token请求防止token被再次重放
         responsive: true,
         playbackRates: [0.5, 1, 1.5, 2],
         sources: [{
@@ -78,6 +77,7 @@ const initializePlayer = async () => {
                 event.preventDefault()
             })
         }
+        player.load() // 必须强制发起首次token请求防止token被再次重放
     })
 
     // 错误处理

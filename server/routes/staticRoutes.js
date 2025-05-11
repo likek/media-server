@@ -122,15 +122,21 @@ function validateVideoToken(req, res, next) {
 
     const usedRanges = audioTokenAndRangesMap.get(decryptedToken);
 
-    // 如果客户端未发送 Range，允许通过
-    if (rangeHeader) {
-      if (usedRanges.has(rangeHeader)) {
-        console.warn(`Token ${decryptedToken} has already used range: ${rangeHeader}, all ranges: ${usedRanges}`);
-        console.warn(`audioTokensAll: ${audioTokenAndRangesMap.keys()}`)
-        return res.status(403).json({ message: '请求失败' });
-      }
-      usedRanges.add(rangeHeader);
+    // 如果客户端未发送 Range，不允许通过
+    if (!rangeHeader) {
+      const url = new URL(req.url, `http://${req.headers.host}`)
+      console.warn(`[${new Date().toLocaleString()}] userId ${userId} pathname ${ url.pathname } Token ${decryptedToken} has no range`);
+      res.status(403).json({ message: '请求失败' });
+      return;
     }
+
+    if (usedRanges.has(rangeHeader)) {
+      const url = new URL(req.url, `http://${req.headers.host}`)
+      console.warn(`[${new Date().toLocaleString()}] userId ${userId} pathname ${ url.pathname } Token ${decryptedToken} has already used range: ${rangeHeader}, all ranges: ${Array.from(usedRanges).join(',')}`);
+      return res.status(403).json({ message: '请求失败' });
+    }
+    usedRanges.add(rangeHeader);
+
     res.setHeader('Cache-Control', 'no-store');
     res.setHeader('Pragma', 'no-cache');
     res.setHeader('Expires', '0');

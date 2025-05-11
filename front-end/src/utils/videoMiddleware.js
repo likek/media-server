@@ -3,11 +3,12 @@ import { aesEncrypt } from './encrypt.js';
 // 创建带有加密令牌的URL
 function createEncryptedUrl(url) {
   // 获取加密指纹和盐
-  const salt = `${Date.now().toString().slice(8)}${Math.random().toString(36).substring(2, 10)}`
+  const salt = `${Date.now().toString().slice(8)}${Math.random().toString(36).substring(2)}`
   const encryptedSalt = aesEncrypt(salt)
 
   // 创建令牌
-  const token = `${Date.now()}-${Math.random().toString(36).substring(2, 10)}`;
+  const token = `${Date.now()}-${Math.random().toString(36).substring(2)}`;
+  console.log(`[video request] url: ${url}, token: ${token}, salt: ${salt}`)
   const encryptedToken = aesEncrypt(token, salt);
 
   // 构建URL，添加加密令牌和加密盐
