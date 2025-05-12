@@ -28,7 +28,7 @@ request.interceptors.request.use(
     
     // 添加设备指纹信息
     const { encryptedFingerprint, encryptedSalt, salt } = await getEncryptedFingerprint();
-    config.headers['x-fingerprint'] = encryptedFingerprint;
+    config.headers['x-fp'] = encryptedFingerprint;
     config.headers['x-s'] = encryptedSalt;
     
     if (matched) {

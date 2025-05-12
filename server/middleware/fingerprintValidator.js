@@ -19,7 +19,7 @@ function validateFingerprint(req, res, next) {
     return res.status(401).json({ message: "缺少salt值" });
   }
 
-  let fingerprint = req.headers['x-fingerprint'];
+  let fingerprint = req.headers['x-fp'];
   // 检查指纹是否存在
   if (!fingerprint) {
     console.log("验证指纹失败，缺少指纹信息");

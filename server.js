@@ -45,6 +45,11 @@ if (!fs.existsSync(THUMB_FULL_PATH)) {
   fs.mkdirSync(THUMB_FULL_PATH);
 }
 
+app.use((req, res, next) => {
+  res.setHeader('X-Powered-By', 'o')
+  next()
+})
+
 app.use(express.json({ limit: "3mb" }));
 app.use("/i/", validateFingerprint, validateSalt);
 app.use(decryptRequest);

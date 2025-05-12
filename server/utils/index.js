@@ -43,7 +43,7 @@ const getSaltByReq = (req, decrypted = true) => {
 const getUserIdByReq = (req, decrypted = true) => {
   try {
     // 确保fingerprint存在
-    const fp = req.headers['x-fingerprint'] || req.query?.fp || req.cookies?.fp;
+    const fp = req.headers['x-fp'] || req.query?.fp || req.cookies?.fp;
     if (!fp) {
       // console.error("fingerprint is empty", req.headers.upgrade, req.url);
       return null;

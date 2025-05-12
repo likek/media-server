@@ -10,6 +10,8 @@ let limiterQueue = Promise.resolve();
 const limiter = rateLimit({
   windowMs: 1 * 60 * 1000,
   max: maxRequestsPerMinute,
+  standardHeaders: false,
+  legacyHeaders: false,
   handler: (req, res, next) => {
     limiterQueue = limiterQueue.finally(() => {
       return new Promise((resolve, reject) => {
