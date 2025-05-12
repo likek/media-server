@@ -14,7 +14,6 @@
 <script setup>
 import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { ElButton } from 'element-plus'
-import { Fold, Expand } from '@element-plus/icons-vue'
 import SideMenu from './components/SideMenu.vue'
 import HumanVerification from './components/HumanVerification.vue'
 import { aesDecrypt } from './utils/encrypt'

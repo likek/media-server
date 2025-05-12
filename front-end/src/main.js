@@ -14,7 +14,6 @@ for (const [key, component] of Object.entries(ElementPlusIconsVue)) {
 
 app.use(router)
 
-
 // 初始化视频中间件
 videoMiddlewareInit()
 
