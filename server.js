@@ -21,7 +21,9 @@ import adminRoutes from "./server/routes/adminRoutes.js";
 import logRoutes from "./server/routes/logRoutes.js";
 import userRoutes from "./server/routes/userRoutes.js";
 import staticRoutes from "./server/routes/staticRoutes.js";
-import {  encryptResponseMiddleware as encryptResponse, decryptRequestMiddleware as decryptRequest  } from "./server/middleware/encryptHttp.js";
+import { encryptResponseMiddleware as encryptResponse, decryptRequestMiddleware as decryptRequest } from "./server/middleware/encryptHttp.js";
+import { sqlInjectionProtection, contentSecurityPolicy, csrfProtection, securityHeaders, validateFilePath } from "./server/middleware/security.js";
+
 
 serializeDb();
 
@@ -45,10 +47,12 @@ if (!fs.existsSync(THUMB_FULL_PATH)) {
   fs.mkdirSync(THUMB_FULL_PATH);
 }
 
-app.use((req, res, next) => {
-  res.setHeader('X-Powered-By', 'o')
-  next()
-})
+// 应用安全中间件
+app.use(securityHeaders);
+app.use(contentSecurityPolicy);
+app.use(csrfProtection);
+app.use(sqlInjectionProtection);
+app.use(validateFilePath);
 
 app.use(express.json({ limit: "3mb" }));
 app.use("/i/", validateFingerprint, validateSalt);

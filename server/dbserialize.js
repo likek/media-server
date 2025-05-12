@@ -45,16 +45,6 @@ const initAll = () => {
   `);
 
   db.run(`
-    CREATE TABLE IF NOT EXISTS blacklist (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      userId TEXT,
-      cookies TEXT,
-      ip TEXT,
-      added_time TEXT
-    );
-    `)
-
-  db.run(`
     CREATE TABLE IF NOT EXISTS userInfo (
       userId TEXT PRIMARY KEY,
       ip TEXT,
