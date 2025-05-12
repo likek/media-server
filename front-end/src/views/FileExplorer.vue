@@ -59,12 +59,6 @@
             </template>
           </template>
         </div>
-        <!-- 加载中提示 -->
-        <div class="loading-indicator" v-if="loading && currentPage > 0">
-          <el-icon class="is-loading">
-            <Loading />
-          </el-icon> 加载中...
-        </div>
       </template>
     </div>
 
