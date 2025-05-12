@@ -8,7 +8,7 @@ import cookieParser from "cookie-parser";
 import { createServer } from "http";
 import { serializeDb } from "./server/dbserialize.js";
 import compression from "compression";
-import { getUserIdByReq, normalizeIp } from "./server/utils/index.js";
+import { getIpByReq, getUserIdByReq, normalizeIp } from "./server/utils/index.js";
 import { limiter } from "./server/middleware/limiter.js";
 import { checkBlacklist } from "./server/middleware/blackList.js";
 import { checkPermissions } from "./server/middleware/apiPermission.js";
@@ -73,7 +73,7 @@ app.use(checkPermissions);
 
 app.use(`${MEDIA_ROUTE}/`, (req, res, next) => {
   const path = decodeURIComponent(req.path);
-  const userIp = normalizeIp(req.clientIp || req.ip);
+  const userIp = getIpByReq(req);
   const userId = getUserIdByReq(req);
   if (!userId) {
     res.status(401).send({ message: "请求失败" });
@@ -105,6 +105,14 @@ app.use("/i/user", userRoutes);
 app.get(ENTRY_ROUTE_REGEX, (req, res) => {
   res.sendFile(path.join(__dirname, "static", "index.html"));
 });
+
+app.use((err, req, res, next) => {
+  console.error(err) // 仅输出在服务端日志
+  res.status(500).json({
+    code: 500,
+    message: '服务器内部错误'  // 不暴露 err.stack 给前端
+  })
+})
 
 httpServer.listen(PORT, () => {
   console.log(`Server is running on http://localhost:${PORT}`);

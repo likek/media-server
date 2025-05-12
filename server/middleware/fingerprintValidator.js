@@ -1,6 +1,6 @@
 import db from "../dbserialize.js";
 import serverConfig from "../../serverConfig.js";
-import { getSaltByReq, normalizeIp } from "../utils/index.js";
+import { getIpByReq, getSaltByReq, normalizeIp } from "../utils/index.js";
 import { aesDecrypt } from "../utils/encrypt.js";
 
 // 存储每个用户的salt历史记录和非法请求计数
@@ -87,7 +87,7 @@ function validateSalt(req, res, next) {
 
 // 将用户加入黑名单
 function addToBlacklist(req, fingerprint) {
-  const ip = normalizeIp(req.clientIp || req.ip);
+  const ip = getIpByReq(req);
   const addedTime = new Date().toISOString();
   const cookies = req.cookies;
   

@@ -1,4 +1,4 @@
-import { getUserIdByReq, normalizeIp } from "../utils/index.js"
+import { getIpByReq, getUserIdByReq, normalizeIp } from "../utils/index.js"
 import { fileURLToPath } from "url";
 import fs from "fs";
 import path from "path";
@@ -26,7 +26,7 @@ const loadPermissions = () => {
 const checkPermissions = (req, res, next) => {
     loadPermissions();
   
-    const userIp = normalizeIp(req.clientIp || req.ip);
+    const userIp = getIpByReq(req);
     let userId = getUserIdByReq(req);
     const requestUrl = req.originalUrl.split("?")[0].replace(/^\/i/, '');
     const allowedUsers = permissions[requestUrl];

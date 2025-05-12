@@ -16,6 +16,34 @@ const regineDBPath = path.join(__dirname, "../ip2region.xdb");
 const vectorIndex = Searcher.loadVectorIndexFromFile(regineDBPath);
 const searcher = Searcher.newWithVectorIndex(regineDBPath, vectorIndex);
 
+const normalizeIp = (ip) => {
+  if (!ip) {
+    return "unknown ip";
+  }
+  if(ip === '::1') {
+    return "127.0.0.1";
+  }
+  if (ip.startsWith("::ffff:")) {
+    return ip.substring(7);
+  }
+  return ip;
+};
+
+const getIpByReq = (req) => {
+  let ipAddress = req.clientIp || req.ip;
+  if (!ipAddress) {
+    if (req.headers["x-forwarded-for"]) {
+      ipAddress = req.headers["x-forwarded-for"].split(",")[0];
+    } else if (req.headers["x-real-ip"]) {
+      ipAddress = req.headers["x-real-ip"];
+    } else if (req.connection.remoteAddress) {
+      ipAddress = req.connection.remoteAddress;
+    }
+  }
+  // console.log(`111:, ${req.socket?.remoteAddress}`)
+  return normalizeIp(ipAddress);
+}
+
 // 如果salt或指纹没有，则可能是因为还没有“注册”
 const getSaltByReq = (req, decrypted = true) => {
   let salt;
@@ -65,33 +93,9 @@ const getUserIdByReq = (req, decrypted = true) => {
   }
 }
 
-const normalizeIp = (ip) => {
-    if (!ip) {
-      return "unknown ip";
-    }
-    if(ip === '::1') {
-      return "127.0.0.1";
-    }
-    if (ip.startsWith("::ffff:")) {
-      return ip.substring(7);
-    }
-    return ip;
-};
-
-
   const getRequestInfo = async (req, res) => {
     const requestTime = new Date().toISOString();
-    let ipAddress = req.clientIp || req.ip;
-    if (!ipAddress) {
-      if (req.headers["x-forwarded-for"]) {
-        ipAddress = req.headers["x-forwarded-for"].split(",")[0];
-      } else if (req.headers["x-real-ip"]) {
-        ipAddress = req.headers["x-real-ip"];
-      } else if (req.connection.remoteAddress) {
-        ipAddress = req.connection.remoteAddress;
-      }
-    }
-    const userIp = normalizeIp(ipAddress);
+    const userIp = getIpByReq(req);
     const requestMethod = req.method;
     const requestUrl = decodeURIComponent(req.originalUrl);
     const requestBody = decodeURIComponent(JSON.stringify(req.body));
@@ -229,5 +233,6 @@ async function get51PageInfo(pageUrl) {
     generateThumbnail,
     get51PageInfo,
     getUserIdByReq,
-    getSaltByReq
+    getSaltByReq,
+    getIpByReq
   }
