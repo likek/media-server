@@ -2,15 +2,70 @@ import { createApp } from 'vue'
 import App from './App.vue'
 import router from './router'
 import 'element-plus/dist/index.css'
-import * as ElementPlusIconsVue from '@element-plus/icons-vue'
-// 导入WebSocket服务
+// 按需导入Element Plus图标
+import { 
+  Refresh,
+  FolderAdd,
+  UploadFilled,
+  Link,
+  HomeFilled,
+  Folder,
+  Star,
+  StarFilled,
+  User,
+  Tickets,
+  Expand,
+  Fold,
+  VideoCamera,
+  Picture,
+  Collection,
+  Reading,
+  Microphone,
+  Document,
+  View,
+  FolderOpened,
+  VideoPlay,
+  Edit,
+  Position,
+  Delete,
+  Loading
+} from '@element-plus/icons-vue'
+
 import { videoMiddlewareInit } from './utils/videoMiddleware.js'
 const app = createApp(App)
 
-// 注册所有Element Plus图标
-for (const [key, component] of Object.entries(ElementPlusIconsVue)) {
-  app.component(key, component)
-}
+// 注册使用到的Element Plus图标
+const icons = [
+  Refresh,
+  FolderAdd,
+  UploadFilled,
+  Link,
+  HomeFilled,
+  Folder,
+  Star,
+  StarFilled,
+  User,
+  Tickets,
+  Expand,
+  Fold,
+  VideoCamera,
+  Picture,
+  Collection,
+  Reading,
+  Microphone,
+  Document,
+  View,
+  FolderOpened,
+  VideoPlay,
+  Edit,
+  Position,
+  Delete,
+  Loading
+]
+
+icons.forEach(icon => {
+  app.component(icon.name, icon)
+})
 
 app.use(router)
 
