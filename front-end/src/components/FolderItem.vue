@@ -1,34 +1,43 @@
 <template>
   <div class="folder-item" @click="$emit('navigate', folder.id)">
     <div class="folder-content">
-      <div class="folder-header">
-        <el-icon class="folder-icon"><Folder /></el-icon>
-        <div class="folder-actions">
-          <el-tooltip :content="isFavorited ? '取消收藏' : '收藏'" placement="top" :auto-close="1000">
-            <el-icon class="action-icon favorite-icon" @click.stop="toggleFavorite" :class="{ 'is-favorited': isFavorited }">
-              <Star v-if="!isFavorited" />
-              <StarFilled v-else />
-            </el-icon>
-          </el-tooltip>
-          <el-tooltip content="重命名" placement="top" :auto-close="1000" v-if="allowActions">
-            <el-icon class="action-icon" @click.stop="$emit('rename', folder)" >
-              <Edit />
-            </el-icon>
-          </el-tooltip>
-          <el-tooltip content="移动" placement="top" :auto-close="1000" v-if="allowActions">
-            <el-icon class="action-icon" @click.stop="$emit('move', folder)">
-              <Position />
-            </el-icon>
-          </el-tooltip>
-          <el-tooltip content="删除" placement="top" :auto-close="1000" v-if="allowActions">
-            <el-icon class="action-icon" @click.stop="$emit('delete', folder)">
-              <Delete />
-            </el-icon>
-          </el-tooltip>
+      <div>
+        <div class="folder-header">
+          <el-icon class="folder-icon"><Folder /></el-icon>
+          <div class="folder-actions">
+            <el-tooltip :content="isFavorited ? '取消收藏' : '收藏'" placement="top" :auto-close="1000">
+              <el-icon class="action-icon favorite-icon" @click.stop="toggleFavorite" :class="{ 'is-favorited': isFavorited }">
+                <Star v-if="!isFavorited" />
+                <StarFilled v-else />
+              </el-icon>
+            </el-tooltip>
+            <el-tooltip content="重命名" placement="top" :auto-close="1000" v-if="allowActions">
+              <el-icon class="action-icon" @click.stop="$emit('rename', folder)" >
+                <Edit />
+              </el-icon>
+            </el-tooltip>
+            <el-tooltip content="移动" placement="top" :auto-close="1000" v-if="allowActions">
+              <el-icon class="action-icon" @click.stop="$emit('move', folder)">
+                <Position />
+              </el-icon>
+            </el-tooltip>
+            <el-tooltip content="删除" placement="top" :auto-close="1000" v-if="allowActions">
+              <el-icon class="action-icon" @click.stop="$emit('delete', folder)">
+                <Delete />
+              </el-icon>
+            </el-tooltip>
+          </div>
+        </div>
+        <div>
+          <span class="folder-name">{{ folder.filename }}</span>
         </div>
       </div>
-      <div>
-        <span class="folder-name">{{ folder.filename }}</span>
+      <!-- 文件信息 -->
+      <div class="file-info">
+        <span>
+          <!-- {{ formatFileSize(folder.size) }} -->
+        </span>
+        <span>{{ formatDate(folder.lastModified) }}</span>
       </div>
     </div>
   </div>
@@ -57,6 +66,22 @@ const props = defineProps({
 const isFavorited = ref(props.favorited)
 
 const emit = defineEmits(['navigate', 'rename', 'move', 'delete', 'favorite'])
+// 格式化日期
+const formatDate = (timestamp) => {
+  const date = new Date(timestamp)
+  return date.toLocaleDateString()
+}
+
+// // 格式化文件大小
+// const formatFileSize = (size) => {
+//   const sizeInMB = size / (1024 * 1024)
+//   if (sizeInMB >= 1024) {
+//     const sizeInGB = (sizeInMB / 1024).toFixed(2)
+//     return `${sizeInGB} GB`
+//   } else {
+//     return `${sizeInMB.toFixed(2)} MB`
+//   }
+// }
 
 // 切换收藏状态
 const toggleFavorite = async () => {
@@ -101,6 +126,8 @@ const toggleFavorite = async () => {
 .folder-content {
   display: flex;
   flex-direction: column;
+  height: 100%;
+  justify-content: space-between;
 }
 
 .folder-header {
@@ -140,5 +167,13 @@ const toggleFavorite = async () => {
 
 .action-icon:hover {
   color: #409eff;
+}
+
+.file-info {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: #909399;
+  margin-top: 10px;
 }
 </style>

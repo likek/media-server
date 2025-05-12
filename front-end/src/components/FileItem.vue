@@ -1,112 +1,114 @@
 <template>
   <div class="file-item">
     <div class="file-content">
-      <div class="file-header">
-        <el-icon class="file-icon">
-            <VideoCamera v-if="isVideo"/>
-            <Picture v-else-if="isImage" />
-            <Collection v-else-if="isArchive"/>
-            <Reading v-else-if="isText"/>
-            <Microphone v-else-if="isAudio"/>
-            <Document v-else/>
-        </el-icon>
-        <span class="file-name">{{ file.filename }}</span>
-        <div class="file-actions">
-          <el-tooltip content="查看文本" placement="top" :auto-close="1000">
-            <el-icon class="action-icon" @click.stop="viewTextFile" v-if="isText" >
-              <View />
-            </el-icon>
-          </el-tooltip>
-          <el-tooltip content="解压缩" placement="top" :auto-close="1000">
-            <el-icon class="action-icon" @click.stop="unzipArchive" v-if="isArchive" >
-              <FolderOpened />
-            </el-icon>
-          </el-tooltip>
-          <el-tooltip content="转换为MP4" placement="top" :auto-close="1000" v-if="isTs && allowActions">
-            <el-icon class="action-icon" @click.stop="$emit('convertTs', file)">
-              <VideoPlay />
-            </el-icon>
-          </el-tooltip>
-          <el-tooltip :content="isFavorited ? '取消收藏' : '收藏'" placement="top" :auto-close="1000">
-            <el-icon class="action-icon favorite-icon" @click.stop="toggleFavorite" :class="{ 'is-favorited': isFavorited }">
-              <Star v-if="!isFavorited" />
-              <StarFilled v-else />
-            </el-icon>
-          </el-tooltip>
-          <el-tooltip content="重命名" placement="top" :auto-close="1000" v-if="allowActions">
-            <el-icon class="action-icon" @click.stop="$emit('rename', file)">
-              <Edit />
-            </el-icon>
-          </el-tooltip>
-          <el-tooltip content="移动" placement="top" :auto-close="1000" v-if="allowActions">
-            <el-icon class="action-icon" @click.stop="$emit('move', file)">
-              <Position />
-            </el-icon>
-          </el-tooltip>
-          <!-- <el-tooltip content="下载" placement="top" :auto-close="1000">
-            <el-icon class="action-icon" @click.stop="$emit('download', file)">
-              <Download />
-            </el-icon>
-          </el-tooltip> -->
-          <el-tooltip content="删除" placement="top" :auto-close="1000" v-if="allowActions">
-            <el-icon class="action-icon" @click.stop="$emit('delete', file)">
-              <Delete />
-            </el-icon>
-          </el-tooltip>
+      <div>
+        <div class="file-header">
+          <el-icon class="file-icon">
+              <VideoCamera v-if="isVideo"/>
+              <Picture v-else-if="isImage" />
+              <Collection v-else-if="isArchive"/>
+              <Reading v-else-if="isText"/>
+              <Microphone v-else-if="isAudio"/>
+              <Document v-else/>
+          </el-icon>
+          <span class="file-name">{{ file.filename }}</span>
+          <div class="file-actions">
+            <el-tooltip content="查看文本" placement="top" :auto-close="1000">
+              <el-icon class="action-icon" @click.stop="viewTextFile" v-if="isText" >
+                <View />
+              </el-icon>
+            </el-tooltip>
+            <el-tooltip content="解压缩" placement="top" :auto-close="1000">
+              <el-icon class="action-icon" @click.stop="unzipArchive" v-if="isArchive" >
+                <FolderOpened />
+              </el-icon>
+            </el-tooltip>
+            <el-tooltip content="转换为MP4" placement="top" :auto-close="1000" v-if="isTs && allowActions">
+              <el-icon class="action-icon" @click.stop="$emit('convertTs', file)">
+                <VideoPlay />
+              </el-icon>
+            </el-tooltip>
+            <el-tooltip :content="isFavorited ? '取消收藏' : '收藏'" placement="top" :auto-close="1000">
+              <el-icon class="action-icon favorite-icon" @click.stop="toggleFavorite" :class="{ 'is-favorited': isFavorited }">
+                <Star v-if="!isFavorited" />
+                <StarFilled v-else />
+              </el-icon>
+            </el-tooltip>
+            <el-tooltip content="重命名" placement="top" :auto-close="1000" v-if="allowActions">
+              <el-icon class="action-icon" @click.stop="$emit('rename', file)">
+                <Edit />
+              </el-icon>
+            </el-tooltip>
+            <el-tooltip content="移动" placement="top" :auto-close="1000" v-if="allowActions">
+              <el-icon class="action-icon" @click.stop="$emit('move', file)">
+                <Position />
+              </el-icon>
+            </el-tooltip>
+            <!-- <el-tooltip content="下载" placement="top" :auto-close="1000">
+              <el-icon class="action-icon" @click.stop="$emit('download', file)">
+                <Download />
+              </el-icon>
+            </el-tooltip> -->
+            <el-tooltip content="删除" placement="top" :auto-close="1000" v-if="allowActions">
+              <el-icon class="action-icon" @click.stop="$emit('delete', file)">
+                <Delete />
+              </el-icon>
+            </el-tooltip>
+          </div>
         </div>
-      </div>
-      
-      <!-- 文件预览区域 -->
-      <div class="file-preview" v-if="isPreviewable">
-        <!-- 视频预览 - 使用自定义播放器组件 -->
-        <VideoPlayer 
-          v-if="isVideo" 
-          :src="`/media/${file.id}`" 
-          :poster="`/thumbnail/${file.id}`"
-          :options="videoOptions"
-        />
         
-        <!-- 图片预览 -->
-        <el-image
-          v-else-if="isImage"
-          class="preview-content image-preview"
-          :src="`/media/${file.id}`"
-          :zoom-rate="1.02"
-          :max-scale="7"
-          :min-scale="0.2"
-          show-progress
-          fit="contain"
-          :preview-src-list="imageList.map(item => `/media/${item.id}`)"
-          :initial-index="imageIndex"
-          :hide-on-click-modal="true"
-          :preview-teleported="true"
-          :infinite="true"
-        />
-        <!-- 文本预览 -->
-        
-        <!-- PDF链接 -->
-        <a 
-          v-else-if="isPdf" 
-          :href="`/media/${file.id}`" 
-          target="_blank"
-          class="pdf-link"
-        >
-          查看PDF
-        </a>
+        <!-- 文件预览区域 -->
+        <div class="file-preview" v-if="isPreviewable">
+          <!-- 视频预览 - 使用自定义播放器组件 -->
+          <VideoPlayer 
+            v-if="isVideo" 
+            :src="`/media/${file.id}`" 
+            :poster="`/thumbnail/${file.id}`"
+            :options="videoOptions"
+          />
+          
+          <!-- 图片预览 -->
+          <el-image
+            v-else-if="isImage"
+            class="preview-content image-preview"
+            :src="`/media/${file.id}`"
+            :zoom-rate="1.02"
+            :max-scale="7"
+            :min-scale="0.2"
+            show-progress
+            fit="contain"
+            :preview-src-list="imageList.map(item => `/media/${item.id}`)"
+            :initial-index="imageIndex"
+            :hide-on-click-modal="true"
+            :preview-teleported="true"
+            :infinite="true"
+          />
+          <!-- 文本预览 -->
+          
+          <!-- PDF链接 -->
+          <a 
+            v-else-if="isPdf" 
+            :href="`/media/${file.id}`" 
+            target="_blank"
+            class="pdf-link"
+          >
+            查看PDF
+          </a>
 
-        <!-- 音频预览 -->
-        <audio 
-          v-else-if="isAudio" 
-          controls 
-          class="preview-content audio-preview"
-          :src="`/media/${file.id}`"
-        ></audio>
+          <!-- 音频预览 -->
+          <audio 
+            v-else-if="isAudio" 
+            controls 
+            class="preview-content audio-preview"
+            :src="`/media/${file.id}`"
+          ></audio>
+        </div>
       </div>
       
       <!-- 文件信息 -->
       <div class="file-info">
-        <span>大小: {{ formatFileSize(file.size) }}</span>
-        <span>修改日期: {{ formatDate(file.lastModified) }}</span>
+        <span>{{ formatFileSize(file.size) }}</span>
+        <span>{{ formatDate(file.lastModified) }}</span>
       </div>
     </div>
   </div>
@@ -203,7 +205,7 @@ const formatFileSize = (size) => {
 // 格式化日期
 const formatDate = (timestamp) => {
   const date = new Date(timestamp)
-  return date.toLocaleString()
+  return date.toLocaleDateString()
 }
 
 // 查看文本文件
@@ -273,6 +275,7 @@ const toggleFavorite = async () => {
 
 <style scoped>
 .file-item {
+  padding: 16px;
   border: 1px solid #ebeef5;
   border-radius: 4px;
   background-color: #fff;
@@ -288,7 +291,10 @@ const toggleFavorite = async () => {
 }
 
 .file-content {
-  padding: 15px;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  justify-content: space-between;
 }
 
 .file-header {
@@ -344,7 +350,7 @@ const toggleFavorite = async () => {
 }
 
 .video-preview,.image-preview {
-  height: 400px;
+  height: 320px;
 }
 
 .audio-preview {
