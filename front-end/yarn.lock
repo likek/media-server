@@ -523,7 +523,7 @@ aes-decrypter@^4.0.2:
     global "^4.4.0"
     pkcs7 "^1.0.4"
 
-"aes_crypto_wasm@file:wasm/bundler":
+aes_crypto_wasm@./wasm/xxx:
   version "0.1.0"
 
 anymatch@~3.1.2:

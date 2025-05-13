@@ -12,7 +12,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "aes_crypto_wasm": "file:rust/aes_crypto_wasm/dist/nodejs",
+    "aes_crypto_wasm": "./rust/aes_crypto_wasm/dist/nodejs",
     "axios": "^1.7.4",
     "chalk": "^5.3.0",
     "compression": "^1.7.4",

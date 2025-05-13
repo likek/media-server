@@ -34,6 +34,7 @@ const sqlInjectionProtection = (req, res, next) => {
     checkForSQLInjection(req.body) ||
     checkForSQLInjection(req.params)
   ) {
+    console.log('检测到恶意请求', req.path);
     return res.status(403).json({ message: '检测到潜在的恶意请求' });
   }
   
@@ -60,6 +61,7 @@ const csrfProtection = (req, res, next) => {
   // 检查Referer头
   const referer = req.headers.referer || req.headers.referrer;
   if (!referer) {
+    console.log('missing referer', req.url);
     return res.status(403).json({ message: '缺少Referer头' });
   }
   
@@ -71,9 +73,11 @@ const csrfProtection = (req, res, next) => {
   try {
     const refererUrl = new URL(referer);
     if (refererUrl.host !== host && (!origin || new URL(origin).host !== host)) {
+      console.log('cross site request forbidden', refererUrl.host, host, origin);
       return res.status(403).json({ message: '跨站请求被拒绝' });
     }
   } catch (error) {
+    console.error('Invalid referer:', referer);
     return res.status(403).json({ message: '无效的请求来源' });
   }
   
@@ -104,6 +108,7 @@ const validateFilePath = (req, res, next) => {
         
         // 防止路径遍历攻击
         if (filePath.includes('..') || filePath.includes('../')) {
+          console.log('path traversal attack detected', filePath);
           return res.status(403).json({ message: '检测到非法的文件路径' });
         }
         
@@ -114,12 +119,14 @@ const validateFilePath = (req, res, next) => {
           
           // 确保路径在媒体目录内
           if (!fullPath.startsWith(MEDIA_FULL_PATH)) {
+            console.log('file path out of range', filePath);
             return res.status(403).json({ message: '文件路径超出允许范围' });
           }
           
           // 替换为规范化的路径
           obj[key] = normalizedPath;
         } catch (error) {
+          console.error('Invalid file path:', filePath);
           return res.status(400).json({ message: '无效的文件路径' });
         }
       } else if (typeof obj[key] === 'object') {

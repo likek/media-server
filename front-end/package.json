@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "@fingerprintjs/fingerprintjs": "^3.4.0",
-    "aes_crypto_wasm": "file:wasm/bundler",
+    "aes_crypto_wasm": "./wasm/xxx",
     "axios": "^1.8.4",
     "crypto-js": "^4.2.0",
     "element-plus": "^2.9.7",
