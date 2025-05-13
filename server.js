@@ -8,7 +8,7 @@ import cookieParser from "cookie-parser";
 import { createServer } from "http";
 import { serializeDb } from "./server/dbserialize.js";
 import compression from "compression";
-import { getIpByReq, getUserIdByReq, normalizeIp } from "./server/utils/index.js";
+import { getIpByReq, getUserIdByReq } from "./server/utils/index.js";
 import { limiter } from "./server/middleware/limiter.js";
 import { checkBlacklist } from "./server/middleware/blackList.js";
 import { checkPermissions } from "./server/middleware/apiPermission.js";
@@ -64,14 +64,16 @@ app.use(requestIp.mw());
 app.use(checkBlacklist);
 app.use(limiter);
 
+// 应用安全中间件
+app.use(csrfProtection);
+app.use(securityHeaders);
+app.use(contentSecurityPolicy);
+
 // 解密相关
 app.use("/i/", validateFingerprint, validateSalt);
 app.use(decryptRequest);
 
-// 应用安全中间件
-app.use(securityHeaders);
-app.use(contentSecurityPolicy);
-app.use(csrfProtection);
+// 依赖解密后的安全中间件
 app.use(sqlInjectionProtection);
 app.use(validateFilePath);
 

@@ -1,7 +1,6 @@
 import { getRequestInfo } from "./utils/index.js";
 import db from "./dbserialize.js";
 import chalk from "chalk";
-import { MEDIA_ROUTE } from "../serverConfig.js";
 const writeRequestLogToDB = (logData) => {
     // 插入日志到数据库
     const query = `

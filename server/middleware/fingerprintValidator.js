@@ -1,4 +1,3 @@
-import serverConfig from "../../serverConfig.js";
 import { getSaltByReq } from "../utils/index.js";
 import { aesDecrypt } from "../utils/encrypt.js";
 import { addToBlacklist } from "../utils/blacklistUtils.js";

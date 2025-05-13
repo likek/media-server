@@ -1,8 +1,7 @@
-import { getRequestInfo, getSaltByReq, getUserIdByReq } from "./utils/index.js";
+import { getRequestInfo, getUserIdByReq } from "./utils/index.js";
 import chalk from "chalk";
 import { writeWsLog } from "./logManager.js";
 import WebSocket, { WebSocketServer } from "ws";
-import { aesDecrypt } from "./utils/encrypt.js";
 
 const clientsById = new Map();
 let wss;
