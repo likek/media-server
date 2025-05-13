@@ -15,7 +15,6 @@ import { checkPermissions } from "./server/middleware/apiPermission.js";
 import { validateFingerprint, validateSalt } from "./server/middleware/fingerprintValidator.js";
 import { writeRequestLog, writeFileAccessedLog } from "./server/logManager.js";
 import { MEDIA_FULL_PATH, THUMB_FULL_PATH, MEDIA_ROUTE, ENTRY_ROUTE_REGEX } from "./serverConfig.js";
-import { pathNormalizer } from "./server/middleware/pathNormalizer.js";
 import { wsInit } from "./server/websocketManager.js";
 import adminRoutes from "./server/routes/adminRoutes.js";
 import logRoutes from "./server/routes/logRoutes.js";
@@ -47,6 +46,28 @@ if (!fs.existsSync(THUMB_FULL_PATH)) {
   fs.mkdirSync(THUMB_FULL_PATH);
 }
 
+// 基础
+app.use(express.json({ limit: "3mb" }));
+app.use(compression({
+  filter: (req, res) => {
+    if (req.headers["x-no-compression"]) {
+      return false;
+    }
+    return compression.filter(req, res);
+  }
+}));
+app.use(cors());
+app.use(cookieParser());
+app.use(requestIp.mw());
+
+// 黑名单
+app.use(checkBlacklist);
+app.use(limiter);
+
+// 解密相关
+app.use("/i/", validateFingerprint, validateSalt);
+app.use(decryptRequest);
+
 // 应用安全中间件
 app.use(securityHeaders);
 app.use(contentSecurityPolicy);
@@ -54,27 +75,10 @@ app.use(csrfProtection);
 app.use(sqlInjectionProtection);
 app.use(validateFilePath);
 
-app.use(express.json({ limit: "3mb" }));
-app.use("/i/", validateFingerprint, validateSalt);
-app.use(decryptRequest);
-
-app.use(compression({
-  filter: (req, res) => {
-    if (req.headers["x-no-compression"]) {
-      return false;
-    }
-
-    return compression.filter(req, res);
-  }
-}));
-
-app.use(cookieParser());
-app.use(checkBlacklist);
-app.use(limiter);
-app.use(cors());
-app.use(requestIp.mw());
+// 权限
 app.use(checkPermissions);
 
+// 日志
 app.use(`${MEDIA_ROUTE}/`, (req, res, next) => {
   const path = decodeURIComponent(req.path);
   const userIp = getIpByReq(req);
@@ -90,20 +94,22 @@ app.use(`${MEDIA_ROUTE}/`, (req, res, next) => {
   });
   next();
 });
-
-app.use("", staticRoutes);
-
-app.use(express.urlencoded({ extended: true }));
-app.use(express.static(path.join(__dirname, "static")));
-app.use(pathNormalizer);
-app.use(encryptResponse);
 app.use("/i/", writeRequestLog);
 
-wsInit(httpServer);
+// 静态资源
+app.use("", staticRoutes);
+app.use(express.urlencoded({ extended: true }));
+app.use(express.static(path.join(__dirname, "static")));
 
+// res.json改写(加密)
+app.use(encryptResponse);
+
+// API路由
 app.use("/i/admin", adminRoutes);
 app.use("/i/logs", logRoutes);
 app.use("/i/user", userRoutes);
+
+wsInit(httpServer);
 
 // 处理所有非API路由，返回index.html，支持前端路由
 app.get(ENTRY_ROUTE_REGEX, (req, res) => {

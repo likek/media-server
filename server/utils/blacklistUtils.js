@@ -14,7 +14,7 @@ function getBlackListTimeLeftByAddedTime(addedTime) {
         return 0;
     }
     const currentTime = Date.now();
-    const duration = currentTime - new Date(row.added_time).getTime();
+    const duration = currentTime - new Date(addedTime).getTime();
     const timeLeft = Math.floor((blacklistDurationMs - duration) / 1000);
     return timeLeft > 0 ? timeLeft : 0;
 }
@@ -35,7 +35,7 @@ async function isInBlacklist(userId) {
           resolve({ inBlacklist: false, row: null, error: err });
           return;
         }
-        resolve({ inBlacklist: !!row, row, error: null, timeLeft: getBlackListTimeLeftByAddedTime(row.added_time) });
+        resolve({ inBlacklist: !!row, row, error: null, timeLeft: getBlackListTimeLeftByAddedTime(row?.added_time) });
       }
     );
   });
@@ -81,7 +81,7 @@ async function addToBlacklist(req, userId) {
         [ip, JSON.stringify(cookies), userId, addedTime],
         (err) => {
           if (err) {
-            console.error("插入黑名单出错: ", err);
+            console.error("插入黑名单出错: ", userId, err);
             resolve({ success: false, error: err, timeLeft: 0 });
             return;
           }

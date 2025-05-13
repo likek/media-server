@@ -1,11 +1,9 @@
 import { rateLimit } from "express-rate-limit";
 import serverConfig from "../../serverConfig.js";
-import { getIpByReq, getUserIdByReq } from "../utils/index.js";
-import db from "../dbserialize.js";
+import { getUserIdByReq } from "../utils/index.js";
 import { addToBlacklist } from "../utils/blacklistUtils.js";
 
 const maxRequestsPerMinute = serverConfig.maxRequestsPerMinute;
-const blacklistDurationMs = serverConfig.blacklistDurationMs;
 
 let limiterQueue = Promise.resolve();
 const limiter = rateLimit({
@@ -15,12 +13,12 @@ const limiter = rateLimit({
   legacyHeaders: false,
   handler: (req, res, next) => {
     limiterQueue = limiterQueue.finally(() => {
-      return new Promise((resolve, reject) => {
+      return new Promise(async (resolve, reject) => {
         // 使用请求头中的指纹作为用户ID
         const userId = getUserIdByReq(req);
-        const { success, error, timeLeft } = addToBlacklist(req, userId);
+        const { success, error, timeLeft } = await addToBlacklist(req, userId);
         if (!success) {
-          console.error("添加黑名单出错: ", error);
+          console.error("[limiter] 添加黑名单出错: ", error);
           res.status(500).json({ message: "请求失败" });
           return reject();
         }

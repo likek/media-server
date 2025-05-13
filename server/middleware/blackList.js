@@ -13,7 +13,7 @@ async function checkBlacklist(req, res, next) {
     }
     
     if (inBlacklist) {
-      console.log(`用户 ${userId} 在黑名单中，请求被拒绝, 剩余时间: ${timeLeft}`);
+      console.log(`用户 ${userId} 在黑名单中，请求被拒绝, 剩余时间: ${timeLeft}s`);
       return res.status(403).json({
         message: `您已被列入黑名单，无法访问该资源，${timeLeft}秒后解除。`,
         black_time_left: timeLeft,
