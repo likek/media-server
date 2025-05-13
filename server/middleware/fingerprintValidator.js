@@ -77,6 +77,7 @@ async function validateSalt(req, res, next) {
       });
     }
     
+    console.log(`[validate salt]非法请求次数: ${newCount}/3`);
     return res.status(400).json({ 
       message: `非法请求次数: ${newCount}/3` 
     });

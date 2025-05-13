@@ -71,5 +71,5 @@ export {
 };
 export default {
     maxRequestsPerMinute: 8 * 60,
-    blacklistDurationMs: 1 * 60 * 1000
+    blacklistDurationMs: 60 * 60 * 1000
 }
