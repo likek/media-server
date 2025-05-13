@@ -1,7 +1,7 @@
-import db from "../dbserialize.js";
 import serverConfig from "../../serverConfig.js";
-import { getIpByReq, getSaltByReq, normalizeIp } from "../utils/index.js";
+import { getSaltByReq } from "../utils/index.js";
 import { aesDecrypt } from "../utils/encrypt.js";
+import { addToBlacklist } from "../utils/blacklistUtils.js";
 
 // 存储每个用户的salt历史记录和非法请求计数
 const userSaltHistory = new Map();
@@ -83,49 +83,6 @@ function validateSalt(req, res, next) {
   
   // 继续处理请求
   next();
-}
-
-// 将用户加入黑名单
-function addToBlacklist(req, fingerprint) {
-  const ip = getIpByReq(req);
-  const addedTime = new Date().toISOString();
-  const cookies = req.cookies;
-  
-  // 检查是否已经在黑名单中
-  db.get(
-    "SELECT * FROM blacklist WHERE userId = ? AND enabled = 1",
-    [fingerprint],
-    (err, row) => {
-      if (err) {
-        console.error("查询黑名单出错: ", err);
-        return;
-      }
-      
-      if (row) {
-        // 如果已经在黑名单中，更新时间
-        db.run(
-          "UPDATE blacklist SET added_time = ?, enabled = 1 WHERE userId = ?",
-          [addedTime, fingerprint],
-          (err) => {
-            if (err) {
-              console.error("更新黑名单出错: ", err);
-            }
-          }
-        );
-      } else {
-        // 插入新的记录
-        db.run(
-          "INSERT INTO blacklist (ip, cookies, userId, added_time, enabled) VALUES (?, ?, ?, ?, 1)",
-          [ip, JSON.stringify(cookies), fingerprint, addedTime],
-          (err) => {
-            if (err) {
-              console.error("插入黑名单出错: ", err);
-            }
-          }
-        );
-      }
-    }
-  );
 }
 
 export { validateFingerprint, validateSalt, FINGERPRINT_PREFIX };
