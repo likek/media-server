@@ -22,7 +22,7 @@ function getBlackListTimeLeftByAddedTime(addedTime) {
 /**
  * 检查用户是否在黑名单中
  * @param {string} userId - 用户ID
- * @returns {Promise<{inBlacklist: boolean, row: object|null, error: Error|null}>}
+ * @returns {Promise<{inBlacklist: boolean, row: object|null, error: Error|null, timeLeft: number}>}
  */
 async function isInBlacklist(userId) {
   return new Promise((resolve) => {
@@ -45,7 +45,7 @@ async function isInBlacklist(userId) {
  * 添加用户到黑名单
  * @param {object} req - 请求对象
  * @param {string} userId - 用户ID
- * @returns {Promise<{success: boolean, error: Error|null}>}
+ * @returns {Promise<{success: boolean, error: Error|null, timeLeft: number}>}
  */
 async function addToBlacklist(req, userId) {
   const ip = getIpByReq(req);
@@ -53,7 +53,7 @@ async function addToBlacklist(req, userId) {
   const cookies = req.cookies;
 
   // 先检查是否已在黑名单中
-  const { inBlacklist, error: checkError } = await isInBlacklist(userId);
+  const { inBlacklist, error: checkError, row } = await isInBlacklist(userId);
   if (checkError) {
     return { success: false, error: checkError, timeLeft: 0 };
   }
@@ -85,6 +85,7 @@ async function addToBlacklist(req, userId) {
             resolve({ success: false, error: err, timeLeft: 0 });
             return;
           }
+          console.log("已添加到黑名单: ", userId);
           resolve({ success: true, error: null, timeLeft: Math.floor(blacklistDurationMs / 1000) });
         }
       );

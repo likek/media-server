@@ -67,14 +67,19 @@ function validateSalt(req, res, next) {
     
     // 如果非法请求次数超过3次，将用户加入黑名单
     if (newCount > 3) {
-      addToBlacklist(req, fingerprint);
-      return res.status(403).json({ 
-        message: `非法请求次数过多，您已被列入黑名单，${serverConfig.blacklistDurationMs / 1000}秒后解除。` 
+      const { success, error, timeLeft } = addToBlacklist(req, fingerprint);
+      if (!success) {
+        console.error("添加黑名单出错: ", error);
+        return res.status(500).json({ message: "请求失败" });
+      }
+
+      return res.status(403).json({
+        message: `您已被列入黑名单，${timeLeft}秒后解除。` 
       });
     }
     
     return res.status(400).json({ 
-      message: `Salt值重复，非法请求次数: ${newCount}/3` 
+      message: `非法请求次数: ${newCount}/3` 
     });
   }
   
