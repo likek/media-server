@@ -70,6 +70,6 @@ export {
     ENTRY_ROUTE_REGEX
 };
 export default {
-    maxRequestsPerMinute: 1200,
-    blacklistDurationMs: 1800000
+    maxRequestsPerMinute: 600,
+    blacklistDurationMs: 30 * 60 * 1000
 }

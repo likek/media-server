@@ -27,6 +27,7 @@ function checkBlacklist(req, res, next) {
                   console.error("移除IP出错: ", err);
                   return res.status(500).json({ message: "请求失败" });
                 }
+                console.log("已移除id黑名单: ", userId);
                 next();
               }
             );
