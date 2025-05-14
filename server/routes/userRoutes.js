@@ -148,7 +148,7 @@ router.post("/downloadFromText", async (req, res) => {
 
       const downloadDir = path.join(MEDIA_FULL_PATH, targetFolder);
       if (fs.existsSync(downloadDir)) {
-        console.warn(chalk.yellow(`${processLog}目标文件夹已存在, 跳过下载: ${targetFolder}`), pageUrl);
+        console.warn(chalk.yellow(`\n${processLog}目标文件夹已存在, 跳过下载: ${targetFolder}`), pageUrl);
         continue
       }
 
