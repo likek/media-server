@@ -7,8 +7,8 @@ import chalk from "chalk";
 import { TEMP_FULL_PATH, MEDIA_FULL_PATH } from "../serverConfig.js";
 
 
-async function downloadAllMediaByLinks(text, folder, successItemCb) {
-    console.log('开始下载：', text.length > 300 ? `${text.slice(0, 300)}......` : text, folder)
+async function downloadAllMediaByLinks(text, folder, successItemCb, processLog = '') {
+    console.log(`${processLog}开始下载：`, text.length > 300 ? `${text.slice(0, 300)}......` : text, folder)
     // Match HTTP links
     const urlRegex = /https?:\/\/[^\s]+/g;
     const allLinks = text.match(urlRegex) || [];
@@ -37,7 +37,7 @@ async function downloadAllMediaByLinks(text, folder, successItemCb) {
       })
     }
   
-    console.log("开始批量下载资源: ", links, `${base64Images.length}个base64图片`);
+    console.log(`${processLog}开始批量下载资源: `, links, `${base64Images.length}个base64图片`);
   
     let downloadRoot = "";
     let downloadSub = "";
@@ -72,28 +72,28 @@ async function downloadAllMediaByLinks(text, folder, successItemCb) {
           ? `N_m3u8DL-RE --auto-select "${link}" --save-dir "${downloadDir}" --save-name ${saveName} --tmp-dir ${tempDir} --ui-language en-US`
           : `curl -L "${link}" -o "${path.join(downloadDir, saveName)}"`;
   
-        console.log(`开始执行: ${command}`);
+        console.log(`${processLog}开始执行: ${command}`);
   
         const child = exec(command, {
           env: { ...process.env, LANG: "en-US.UTF-8" },
         });
   
         child.stdout.on("data", (data) => {
-          process.stdout.write(`\nstdout: ${data}`);
+          process.stdout.write(`\n${processLog}stdout: ${data}`);
         });
   
         child.stderr.on("data", (data) => {
-          process.stderr.write(`\nstderr: ${data}`);
+          process.stderr.write(`\n${processLog}stderr: ${data}`);
         });
   
         child.on("close", (code) => {
           let failed = false;
           if (code !== 0) {
             failed = true;
-            console.error(`${chalk.red("下载失败")}: ${link}`);
+            console.error(`${chalk.red(`${processLog}下载失败`)}: ${link}`);
             failedLinks.push(link);
           } else {
-            console.log(`${chalk.green("下载成功")}: ${link}`);
+            console.log(`${chalk.green(`${processLog}下载成功`)}: ${link}`);
           }
           completedCount++;
   
@@ -117,10 +117,10 @@ async function downloadAllMediaByLinks(text, folder, successItemCb) {
   
         fs.writeFile(filePath, imageBuffer, (err) => {
           if (err) {
-            console.error(`${chalk.red("保存失败")}: ${filePath}`);
+            console.error(`${chalk.red(`${processLog}保存失败`)}: ${filePath}`);
             failedLinks.push(filePath);
           } else {
-            console.log(`${chalk.green("保存成功")}: ${filePath}`);
+            console.log(`${chalk.green(`${processLog}保存成功`)}: ${filePath}`);
           }
           completedCount++;
           

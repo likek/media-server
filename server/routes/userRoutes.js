@@ -116,10 +116,10 @@ router.post("/downloadFromText", async (req, res) => {
     );
   }
 
-  const failedCb = (e) => {
+  const failedCb = (e, pageUrl) => {
     const { code, msg, ignoreLinks } = e
     // 失败
-    console.error(chalk.red('下载出错:'), e);
+    console.error(chalk.red('下载出错:'), e, pageUrl);
     return res.status(code || 400).json({ error: msg || e, ignoreLinks: ignoreLinks || [] });
   }
 
@@ -130,12 +130,16 @@ router.post("/downloadFromText", async (req, res) => {
     let failedLinksAll = [];
     text = text.replace(reg, '')
     const pageUrlList = text.split('\n')
-    for (const pageUrl of pageUrlList) {
+    const batchTime = new Date().toLocaleTimeString()
+    const total = pageUrlList.length
+    for (let i = 0; i < total; i++) {
+      const pageUrl = pageUrlList[i].trim()
+      const processLog = `[${i + 1}/${total}_${batchTime}]`
       let pageInfo;
       try {
         pageInfo = await get51PageInfo(pageUrl);
       } catch(e) {
-        console.warn(chalk.red('获取页面信息出错:'), e)
+        console.warn(chalk.red(`${processLog}获取页面信息出错:`), e, pageUrl)
         continue
       }
       const title = pageInfo.title
@@ -144,17 +148,19 @@ router.post("/downloadFromText", async (req, res) => {
 
       const downloadDir = path.join(MEDIA_FULL_PATH, targetFolder);
       if (fs.existsSync(downloadDir)) {
-        console.warn(chalk.yellow(`目标文件夹已存在, 跳过下载: ${targetFolder}`));
+        console.warn(chalk.yellow(`${processLog}目标文件夹已存在, 跳过下载: ${targetFolder}`), pageUrl);
         continue
       }
 
       let result;
       try {
-        result = await downloadAllMediaByLinks(inputText, targetFolder, successItemCb)
+        console.log(`${processLog}开始下载页面内所有链接`)
+        result = await downloadAllMediaByLinks(inputText, targetFolder, successItemCb, processLog)
       } catch(e) {
-        failedCb(e)
-        return
+        failedCb(e, pageUrl)
+        continue
       }
+      console.log(chalk.green(`${processLog}页面内所有链接下载完成`))
       // 当前页面 所有文件下载成功
       const { downloadRoot, downloadSub, completedCount, ignoreLinks, failedLinks } = result
       await updateFolderByPath(`${downloadRoot}/${downloadSub}`); // 更新数据库
@@ -187,7 +193,7 @@ router.post("/downloadFromText", async (req, res) => {
   try {
     result = await downloadAllMediaByLinks(text, folder, successItemCb)
   } catch(e) {
-    failedCb(e)
+    failedCb(e, text)
     return
   }
   // 所有文件下载成功
