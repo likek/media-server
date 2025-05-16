@@ -140,7 +140,7 @@ const props = defineProps({
     default: false
   },
   allowActions: {
-    type: Array, // 'viewtext' | 'unzip' | 'convertts' | 'favorite' |'rename' |'move' | 'delete'
+    type: Array, // 'viewtext', 'unzip', 'convertts', 'favorite', 'rename', 'move', 'delete'
     default: true
   }
 })

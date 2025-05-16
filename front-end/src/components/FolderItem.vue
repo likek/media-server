@@ -58,7 +58,7 @@ const props = defineProps({
     default: false
   },
   allowActions: {
-    type: Array, // 'favorite' | 'rename' | 'move' | 'delete'
+    type: Array, // 'favorite', 'rename', 'move', 'delete'
     default: true
   }
 })
