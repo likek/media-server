@@ -5,23 +5,23 @@
         <div class="folder-header">
           <el-icon class="folder-icon"><Folder /></el-icon>
           <div class="folder-actions">
-            <el-tooltip :content="isFavorited ? '取消收藏' : '收藏'" placement="top" :auto-close="1000">
+            <el-tooltip :content="isFavorited ? '取消收藏' : '收藏'" placement="top" :auto-close="1000" v-if="allowActions.includes('favorite')">
               <el-icon class="action-icon favorite-icon" @click.stop="toggleFavorite" :class="{ 'is-favorited': isFavorited }">
                 <Star v-if="!isFavorited" />
                 <StarFilled v-else />
               </el-icon>
             </el-tooltip>
-            <el-tooltip content="重命名" placement="top" :auto-close="1000" v-if="allowActions">
+            <el-tooltip content="重命名" placement="top" :auto-close="1000" v-if="allowActions.includes('rename')">
               <el-icon class="action-icon" @click.stop="$emit('rename', folder)" >
                 <Edit />
               </el-icon>
             </el-tooltip>
-            <el-tooltip content="移动" placement="top" :auto-close="1000" v-if="allowActions">
+            <el-tooltip content="移动" placement="top" :auto-close="1000" v-if="allowActions.includes('move')">
               <el-icon class="action-icon" @click.stop="$emit('move', folder)">
                 <Position />
               </el-icon>
             </el-tooltip>
-            <el-tooltip content="删除" placement="top" :auto-close="1000" v-if="allowActions">
+            <el-tooltip content="删除" placement="top" :auto-close="1000" v-if="allowActions.includes('delete')">
               <el-icon class="action-icon" @click.stop="$emit('delete', folder)">
                 <Delete />
               </el-icon>
@@ -58,7 +58,7 @@ const props = defineProps({
     default: false
   },
   allowActions: {
-    type: Boolean,
+    type: Array, // 'favorite' | 'rename' | 'move' | 'delete'
     default: true
   }
 })

@@ -15,7 +15,7 @@
                 :key="file.id"
                 :folder="file"
                 :favorited="true"
-                :allow-actions="false" 
+                :allow-actions="['favorite']" 
                 @navigate="navigateToFolder"
                 @favorite="refreshFavorites"
               />
@@ -27,7 +27,7 @@
                 :imageList="imageList"
                 :imageIndex="imageList.findIndex(item => item.id === file.id)"
                 :favorited="true"
-                :allow-actions="false"
+                :allow-actions="['favorite', 'viewtext']"
                 @download="downloadFile"
                 @viewText="viewTextFile"
                 @favorite="refreshFavorites"

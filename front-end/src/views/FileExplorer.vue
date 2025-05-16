@@ -48,11 +48,11 @@
         <div class="media-grid">
           <template v-for="file in files">
             <template v-if="file.type === 'folder'">
-              <folder-item :key="file.id" :folder="file" :favorited="file.favorited" @navigate="navigateToFolder"
+              <folder-item :allow-actions="['favorite', 'rename', 'move', 'delete']" :key="file.id" :folder="file" :favorited="file.favorited" @navigate="navigateToFolder"
                 @rename="showRenameDialog" @move="showMoveDialog" @delete="confirmDelete" @favorite="refreshFavorites" />
             </template>
             <template v-else>
-              <file-item :key="file.id" :file="file" :imageList="imageList"
+              <file-item :allow-actions="['viewtext', 'unzip', 'convertts', 'favorite', 'rename', 'move', 'delete']" :key="file.id" :file="file" :imageList="imageList"
                 :imageIndex="imageList.findIndex(item => item.id === file.id)" :favorited="file.favorited"
                 @rename="showRenameDialog" @move="showMoveDialog" @download="downloadFile" @delete="confirmDelete"
                 @unzip="refreshCache" @viewText="viewTextFile" @convertTs="convertTsFile" @favorite="refreshFavorites" />
