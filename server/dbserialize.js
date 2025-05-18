@@ -86,6 +86,11 @@ const initAll = () => {
     )
   `);
 
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_files_parent_id ON files (parent_id);
+    CREATE INDEX IF NOT EXISTS idx_files_parent_name ON files (parent_id, name);
+  `)
+
   db.run(`
     CREATE TABLE IF NOT EXISTS favorites (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
