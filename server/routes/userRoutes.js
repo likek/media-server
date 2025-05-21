@@ -46,7 +46,7 @@ router.post("/favorites/add", async (req, res) => {
     return res.status(401).json({ message: "请求失败" });
   }
   try {
-    const result = await addToFavorites(userId, fileId);
+    const result = addToFavorites(userId, fileId);
     res.json(result);
   } catch (err) {
     res.status(500).json({ message: "请求失败" });
@@ -61,7 +61,7 @@ router.post("/favorites/remove", async (req, res) => {
     return res.status(401).json({ message: "请求失败" });
   }
   try {
-    const result = await removeFromFavorites(userId, fileId);
+    const result = removeFromFavorites(userId, fileId);
     res.json(result);
   } catch (err) {
     res.status(500).json({ message: "请求失败" });
@@ -76,7 +76,7 @@ router.post("/favorites/list", async (req, res) => {
     return res.status(401).json({ message: "请求失败" });
   }
   try {
-    const result = await getUserFavorites(userId, page, pageSize);
+    const result = getUserFavorites(userId, page, pageSize);
     res.json(result); // 返回包含files和total的结果
   } catch (err) {
     res.status(500).json({ message: "请求失败" });
@@ -242,7 +242,7 @@ router.post("/upload", upload.single("file"), async (req, res) => {
         await updateFolderByPath(folderPath); // 更新数据库
         
         // 获取新创建的文件信息
-        const fileInfo = await getFileByPath(path.join(folderPath, filename));
+        const fileInfo = getFileByPath(path.join(folderPath, filename));
         
         res.send({
           id: fileInfo ? fileInfo.id : null,
@@ -257,7 +257,7 @@ router.post("/upload", upload.single("file"), async (req, res) => {
       await updateFolderByPath(folderPath); // 更新数据库
       
       // 获取新创建的文件信息
-      const fileInfo = await getFileByPath(path.join(folderPath, filename));
+      const fileInfo = getFileByPath(path.join(folderPath, filename));
       
       res.send({
         id: fileInfo ? fileInfo.id : null,
@@ -301,7 +301,7 @@ router.post("/delete", async (req, res) => {
     }
     
     // 通过ID删除文件或文件夹
-    const result = await deleteFileById(id);
+    const result = deleteFileById(id);
     res.send(result);
   } catch (err) {
     console.error(`Error deleting file or folder:`, err);
@@ -350,7 +350,7 @@ router.post("/rename", async (req, res) => {
     }
     
     // 通过ID重命名文件或文件夹
-    const result = await renameFileById(id, newName);
+    const result = renameFileById(id, newName);
     res.send(result);
   } catch (err) {
     console.error(`Error renaming file or folder:`, err);
@@ -416,7 +416,7 @@ router.post("/move", async (req, res) => {
     }
     
     // 通过ID移动文件或文件夹
-    const result = await moveFileById(sourceId, targetId);
+    const result = moveFileById(sourceId, targetId);
     res.json(result);
   } catch (err) {
     console.error("Error moving file/folder:", err);

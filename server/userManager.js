@@ -37,26 +37,17 @@ async function tryRegister(req, res) {
     });
   
     const userInfo = await getRequestInfo(req);
-    // 查询用户是否存在
-    const user = await new Promise((resolve, reject) => {
-      db.get(
-        `SELECT * FROM userInfo WHERE userId = ?`,
-        [fp],
-        (err, row) => {
-          if (err) {
-            reject(err);
-          } else {
-            resolve(row);
-          }
-        }
-      );
-    });
+    try {
+      // 查询用户是否存在
+      const stmt = db.prepare(`SELECT * FROM userInfo WHERE userId = ?`);
+      const user = stmt.get(fp);
 
-    // 如果用户不存在，则插入新用户
-    if (!user) {
-      db.run(
-        `INSERT INTO userInfo (userId, ip, create_time, update_time, userAgent, region, device, os, browser, iv) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
+      // 如果用户不存在，则插入新用户
+      if (!user) {
+        const insertStmt = db.prepare(
+          `INSERT INTO userInfo (userId, ip, create_time, update_time, userAgent, region, device, os, browser, iv) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        );
+        insertStmt.run(
           fp,
           userInfo.userIp,
           userInfo.requestTime,
@@ -66,20 +57,15 @@ async function tryRegister(req, res) {
           userInfo.device,
           userInfo.os,
           userInfo.browser,
-          req.body?.iv,
-        ],
-        (err) => {
-          if (err) {
-            console.error("Error inserting user info:", err);
-          }
-        }
-      );
-    } else {
-      // 如果用户存在，则更新用户信息
-      // 修改除create_time外的其他所有字段
-      db.run(
-        `UPDATE userInfo SET ip = ?, update_time = ?, userAgent = ?, region = ?, device = ?, os = ?, browser = ?, iv = ? WHERE userId = ?`,
-        [
+          req.body?.iv
+        );
+      } else {
+        // 如果用户存在，则更新用户信息
+        // 修改除create_time外的其他所有字段
+        const updateStmt = db.prepare(
+          `UPDATE userInfo SET ip = ?, update_time = ?, userAgent = ?, region = ?, device = ?, os = ?, browser = ?, iv = ? WHERE userId = ?`
+        );
+        updateStmt.run(
           userInfo.userIp,
           userInfo.requestTime,
           userInfo.userAgent,
@@ -88,16 +74,14 @@ async function tryRegister(req, res) {
           userInfo.os,
           userInfo.browser,
           req.body?.iv || user.iv,
-          fp,
-        ],
-        (err) => {
-          if (err) {
-            console.error("Error updating user info:", err);
-          }
-        }
-      );
+          fp
+        );
+      }
+      return fp;
+    } catch (err) {
+      console.error('Error in tryRegister:', err);
+      throw err;
     }
-    return fp;
   }
 
   export { tryRegister };

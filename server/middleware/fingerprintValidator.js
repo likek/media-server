@@ -66,7 +66,7 @@ async function validateSalt(req, res, next) {
     
     // 如果非法请求次数超过3次，将用户加入黑名单
     if (newCount > 3) {
-      const { success, error, timeLeft } = await addToBlacklist(req, fingerprint);
+      const { success, error, timeLeft } = addToBlacklist(req, fingerprint);
       if (!success) {
         console.error("[validate salt]添加黑名单出错: ", error);
         return res.status(500).json({ message: "请求失败" });

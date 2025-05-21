@@ -78,8 +78,8 @@ async function fetchLogs() {
   } else {
     res = await getWsLogs(params)
   }
-  logs.value = res?.data?.list || []
-  pagination.value.total = res?.data?.total || 0
+  logs.value = res?.data?.data || []
+  pagination.value.total = res?.data?.count || 0
   loading.value = false
 }
 

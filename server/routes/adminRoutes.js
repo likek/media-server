@@ -1,43 +1,32 @@
 import express from 'express';
-import db from '../dbserialize.js';
+import db from "../dbserialize.js";
 
 const router = express.Router();
 
 // 获取用户列表
-router.post('/users', async (req, res) => {
+router.post('/users', (req, res) => {
   try {
-    const page = req.body.page || 1;
-    const limit = req.body.limit || 10;
-    const offset = (page - 1) * limit;
+    const page = parseInt(req.body.page) || 0;
+    const pageSize = parseInt(req.body.pageSize) || 20;
+    const offset = (page - 1) * pageSize; // 已修改
 
-    // 查询总记录数
-    const countQuery = `SELECT COUNT(*) AS total FROM userInfo`;
-    db.get(countQuery, [], (err, row) => {
-      if (err) {
-        console.error("Error executing count query:", err);
-        return res.status(500).send({ message: "Database error" });
-      }
+    // 获取总数
+    const countStmt = db.prepare('SELECT COUNT(*) as total FROM userInfo');
+    const { total } = countStmt.get();
 
-      // 分页查询
-      const query = `
-                SELECT * FROM userInfo
-                ORDER BY update_time DESC
-                LIMIT ? OFFSET ?
-            `;
+    // 获取分页数据
+    const usersStmt = db.prepare(
+      `SELECT * FROM userInfo ORDER BY create_time DESC LIMIT ? OFFSET ?`
+    );
+    const users = usersStmt.all(pageSize, offset);
 
-      db.all(query, [limit, offset], (err, rows) => {
-        if (err) {
-          console.error("Error executing query:", err);
-          return res.status(500).send({ message: "Database error" });
-        }
-
-        // 返回结果包括数据和总数
-        res.json({ data: rows, count: row.total });
-      });
+    res.json({
+      count: total,
+      data: users
     });
   } catch (error) {
-    console.error("Error handling request:", error);
-    res.status(500).send({ message: "Internal server error" });
+    console.error('Error in /users route:', error);
+    res.status(500).json({ error: 'Server error' });
   }
 });
 

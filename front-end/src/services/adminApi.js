@@ -1,8 +1,8 @@
 import request from "./request"
 
-export const getUserList = (page, limit) => {
+export const getUserList = (page, pageSize) => {
     return request.post('/admin/users', {
         page,
-        limit
+        pageSize
     })
 }

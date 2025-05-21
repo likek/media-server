@@ -2,13 +2,14 @@ import { getRequestInfo } from "./utils/index.js";
 import db from "./dbserialize.js";
 import chalk from "chalk";
 const writeRequestLogToDB = (logData) => {
-    // 插入日志到数据库
+  try {
     const query = `
-          INSERT INTO logs_request (
-            time, userIp, userId, requestMethod, requestUrl, requestBody, status, userAgent, region, device, os, browser, timestamp
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `;
-    const values = [
+      INSERT INTO logs_request (
+        time, userIp, userId, requestMethod, requestUrl, requestBody, status, userAgent, region, device, os, browser, timestamp
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `;
+    const stmt = db.prepare(query);
+    stmt.run(
       logData.requestTime,
       logData.userIp,
       logData.userId || "",
@@ -21,15 +22,12 @@ const writeRequestLogToDB = (logData) => {
       logData.device,
       logData.os,
       logData.browser,
-      logData.timestamp,
-    ];
-  
-    db.run(query, values, (err) => {
-      if (err) {
-        console.error("Failed to insert log into database (logs_request):", err);
-      }
-    });
-  };
+      logData.timestamp
+    );
+  } catch (err) {
+    console.error("Failed to insert log into database (logs_request):", err);
+  }
+};
 
  const writeRequestLog = async (req, res, next) => {
     res.on("finish", async () => {
@@ -55,49 +53,45 @@ const writeRequestLogToDB = (logData) => {
   }
 
   const writeWsLog = (logData) => {
+  try {
     const query = `
       INSERT INTO logs_ws (
         time, action, userId, userIp, userRegion, location
       ) VALUES (?, ?, ?, ?, ?, ?)
     `;
-  
-    const values = [
+    const stmt = db.prepare(query);
+    stmt.run(
       new Date().toISOString(),
       logData.action || "",
       logData.userId || "",
       logData.userIp || "",
       logData.userRegion || "",
-      logData.location || "",
-    ];
-  
-    db.run(query, values, (err) => {
-      if (err) {
-        console.error("Failed to insert log into database (logs_ws):", err);
-      }
-    });
-  };
+      logData.location || ""
+    );
+  } catch (err) {
+    console.error("Failed to insert log into database (logs_ws):", err);
+  }
+};
 
 
   const writeFileAccessedLog = (logData) => {
+  try {
     const query = `
       INSERT INTO logs_file_accessed (
         time, userId, userIp, filePath
       ) VALUES (?, ?, ?, ?)
     `;
-  
-    const values = [
+    const stmt = db.prepare(query);
+    stmt.run(
       new Date().toISOString(),
       logData.userId || "",
       logData.userIp || "",
-      logData.filePath || "",
-    ];
-  
-    db.run(query, values, (err) => {
-      if (err) {
-        console.error("Failed to insert log into database (logs_ws):", err);
-      }
-    });
-  };
+      logData.filePath || ""
+    );
+  } catch (err) {
+    console.error("Failed to insert log into database (logs_file_accessed):", err);
+  }
+};
 
   export {
     writeRequestLog,

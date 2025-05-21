@@ -1,8 +1,8 @@
-import sqlite3 from "sqlite3";
-const db = new sqlite3.Database("./database.db");
+import Database from "better-sqlite3";
+const db = new Database('./database.db');
 
 const initAll = () => {
-  db.run(`
+  db.prepare(`
     CREATE TABLE IF NOT EXISTS logs_request (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       time TEXT,
@@ -19,9 +19,9 @@ const initAll = () => {
       browser TEXT,
       timestamp TEXT
     )
-  `);
+  `).run();
 
-  db.run(`
+  db.prepare(`
     CREATE TABLE IF NOT EXISTS logs_ws (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       time TEXT,
@@ -31,9 +31,9 @@ const initAll = () => {
       userRegion TEXT,
       location TEXT
     )
-  `);
+  `).run();
 
-  db.run(`
+  db.prepare(`
   CREATE TABLE IF NOT EXISTS blacklist (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       ip TEXT,
@@ -42,9 +42,9 @@ const initAll = () => {
       added_time TEXT,
       enabled INTEGER DEFAULT 1
   )
-  `);
+  `).run();
 
-  db.run(`
+  db.prepare(`
     CREATE TABLE IF NOT EXISTS userInfo (
       userId TEXT PRIMARY KEY,
       ip TEXT,
@@ -57,9 +57,9 @@ const initAll = () => {
       browser TEXT,
       iv TEXT
     );
-    `)
+  `).run();
 
-  db.run(`
+  db.prepare(`
     CREATE TABLE IF NOT EXISTS logs_file_accessed (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       time TEXT,
@@ -67,9 +67,9 @@ const initAll = () => {
       userIp TEXT,
       filePath TEXT
     )
-  `);
+  `).run();
 
-  db.run(`
+  db.prepare(`
     CREATE TABLE IF NOT EXISTS files (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
@@ -84,14 +84,12 @@ const initAll = () => {
       updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (parent_id) REFERENCES files(id) ON DELETE CASCADE
     )
-  `);
+  `).run();
 
-  db.exec(`
-    CREATE INDEX IF NOT EXISTS idx_files_parent_id ON files (parent_id);
-    CREATE INDEX IF NOT EXISTS idx_files_parent_name ON files (parent_id, name);
-  `)
+  db.prepare('CREATE INDEX IF NOT EXISTS idx_files_parent_id ON files (parent_id)').run();
+  db.prepare('CREATE INDEX IF NOT EXISTS idx_files_parent_name ON files (parent_id, name)').run();
 
-  db.run(`
+  db.prepare(`
     CREATE TABLE IF NOT EXISTS favorites (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id TEXT NOT NULL,
@@ -100,9 +98,9 @@ const initAll = () => {
       FOREIGN KEY (file_id) REFERENCES files(id) ON DELETE CASCADE,
       UNIQUE(user_id, file_id)
     )
-  `);
+  `).run();
 
-  db.run(`
+  db.prepare(`
     CREATE TRIGGER IF NOT EXISTS limit_logs_request
     AFTER INSERT ON logs_request
     WHEN (SELECT COUNT(*) FROM logs_request) > 10000
@@ -111,9 +109,9 @@ const initAll = () => {
         SELECT id FROM logs_request ORDER BY timestamp ASC LIMIT (SELECT COUNT(*) - 10000 FROM logs_request)
       );
     END;
-  `);
+  `).run();
 
-  db.run(`
+  db.prepare(`
     CREATE TRIGGER IF NOT EXISTS limit_logs_ws
     AFTER INSERT ON logs_ws
     WHEN (SELECT COUNT(*) FROM logs_ws) > 10000
@@ -122,9 +120,9 @@ const initAll = () => {
         SELECT id FROM logs_ws ORDER BY time ASC LIMIT (SELECT COUNT(*) - 10000 FROM logs_ws)
       );
     END;
-  `);
+  `).run();
 
-  db.run(`
+  db.prepare(`
     CREATE TRIGGER IF NOT EXISTS limit_logs_file_accessed
     AFTER INSERT ON logs_file_accessed
     WHEN (SELECT COUNT(*) FROM logs_file_accessed) > 10000
@@ -133,13 +131,14 @@ const initAll = () => {
         SELECT id FROM logs_file_accessed ORDER BY time ASC LIMIT (SELECT COUNT(*) - 10000 FROM logs_file_accessed)
       );
     END;
-  `);
+  `).run();
 
 }
 
 
 export function serializeDb() {
-  db.serialize(initAll);
+  db.pragma('journal_mode = WAL')
+  initAll();
 }
 
 export default db;
