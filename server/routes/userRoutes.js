@@ -15,6 +15,7 @@ import { downloadAllMediaByLinks } from "../downloadManager.js";
 import { addToFavorites, getUserFavorites, removeFromFavorites } from "../favoritesManager.js";
 import { get51PageInfo, getUserIdByReq } from "../utils/index.js";
 import { validateFingerprint } from "../middleware/fingerprintValidator.js";
+import db from "../dbserialize.js";
 
 const router = express.Router();
 // 配置 multer
@@ -146,10 +147,10 @@ router.post("/downloadFromText", async (req, res) => {
       const inputText = [...pageInfo.imgLinks, ...pageInfo.videoLinks].join('\n')
       const targetFolder = `${folder}/${title}`;
 
-      const downloadDir = path.join(MEDIA_FULL_PATH, targetFolder);
-      if (fs.existsSync(downloadDir)) {
+      const row = db.prepare(`SELECT 1 AS found FROM files WHERE name = ? LIMIT 1`).get(title);
+      if (row?.found) {
         console.warn(chalk.yellow(`\n${processLog}目标文件夹已存在, 跳过下载: ${targetFolder}`), pageUrl);
-        continue
+        continue;
       }
 
       let result;
