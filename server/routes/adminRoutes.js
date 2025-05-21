@@ -16,7 +16,7 @@ router.post('/users', (req, res) => {
 
     // 获取分页数据
     const usersStmt = db.prepare(
-      `SELECT * FROM userInfo ORDER BY create_time DESC LIMIT ? OFFSET ?`
+      `SELECT * FROM userInfo ORDER BY update_time DESC LIMIT ? OFFSET ?`
     );
     const users = usersStmt.all(pageSize, offset);
 
