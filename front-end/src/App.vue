@@ -21,6 +21,7 @@ import { aesDecrypt } from './utils/encrypt'
 import { getFingerprint } from './utils/fingerprint'
 import { registerUser } from './services/userApi'
 import { useRoute } from 'vue-router'
+import { connectWebSocket } from './services/websocket'
 
 // 验证状态
 const isVerified = ref(false)
@@ -63,7 +64,10 @@ const checkVerification = async () => {
     isVerified.value = fp === trackData
     if (isVerified.value) {
       // 验证通过时掉用register为了更新用户一些信息(进入信息)
-      registerUser(route.query.iv)
+      registerUser(route.query.iv).then(res => {
+        // 连接WebSocket
+        connectWebSocket()
+      })
     }
   } catch (error) {
     console.error('验证检查失败:', error)
