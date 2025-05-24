@@ -8,6 +8,8 @@ import db from "../dbserialize.js";
 
 const router = express.Router();
 
+const convertList = new Set(); // 正在转换的文件id列表
+
 // 创建HLS源文件夹
 if (!fs.existsSync(HLS_SOURCE_DIR)) {
   fs.mkdirSync(HLS_SOURCE_DIR, { recursive: true });
@@ -21,7 +23,12 @@ if (!fs.existsSync(HLS_SOURCE_DIR)) {
 router.post("/convertToHls", (req, res) => {
   try {
     const { id } = req.body;
-    
+    if (convertList.has(id)) {
+        console.error("文件正在转换中", id);
+        res.status(400).json({ message: "文件正在转换中", success: false });
+        return;
+    }
+    convertList.add(id);
     convertMp4ToHls(id).then(result => {
         if (result.success) {
             res.json({
@@ -35,10 +42,13 @@ router.post("/convertToHls", (req, res) => {
     }).catch(err => {
         console.error("转换请求处理出错:", err);
         res.status(500).json({ message: "服务器内部错误", error: err.message });
-    })
+    }).finally(() => {
+        convertList.delete(id);
+    });
   } catch (err) {
     console.error("转换请求处理出错:", err);
     res.status(500).json({ message: "服务器内部错误", error: err.message });
+    convertList.delete(id);
   }
 });
 
@@ -67,31 +77,44 @@ router.post("/convertToHlsBatch", async (req, res) => {
         let failCount = 0;
         let failList = [];
         for (const row of rows) {
-          await convertMp4ToHls(row.id).then(result => {
-            if (result.success) {
-                successCount++;
-            } else {
+            if (convertList.has(row.id)) {
+                console.error("文件正在转换中", row.id);
                 failCount++;
                 failList.push({
                     id: row.id,
-                    message: result.message,
-                    error: result.error
+                    message: "文件正在转换中",
+                    error: "文件正在转换中"
                 })
+                total--;
+                continue;
             }
-            if (total === 0) {
-                res.json({
-                    message: "转换完成",
-                    success: true,
-                    successCount,
-                    failCount,
-                    failList
-                })
-            }
-        }).catch(err => {
-            console.error("转换请求处理出错:", err);
-        }).finally(() => {
-            total--;
-        })
+            convertList.add(row.id);
+            await convertMp4ToHls(row.id).then(result => {
+                if (result.success) {
+                    successCount++;
+                } else {
+                    failCount++;
+                    failList.push({
+                        id: row.id,
+                        message: result.message,
+                        error: result.error
+                    })
+                }
+                if (total === 0) {
+                    res.json({
+                        message: "转换完成",
+                        success: true,
+                        successCount,
+                        failCount,
+                        failList
+                    })
+                }
+            }).catch(err => {
+                console.error("转换请求处理出错:", err);
+            }).finally(() => {
+                total--;
+                convertList.delete(row.id);
+            })
         }
     } catch (err) {
         console.error("转换请求处理出错:", err);
