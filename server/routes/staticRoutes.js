@@ -2,18 +2,28 @@ import express from "express";
 import { getFileById } from "../fileDbManager.js";
 import path from "path";
 import fs from "fs";
-import { MEDIA_FULL_PATH, THUMB_FULL_PATH } from "../../serverConfig.js";
+import { HLS_SOURCE_DIR, MEDIA_FULL_PATH, THUMB_FULL_PATH } from "../../serverConfig.js";
 import { aesDecrypt } from "../utils/encrypt.js";
 import { getUserIdByReq } from "../utils/index.js";
 
 const router = express.Router();
 const userId_audioTokenAndRangesMap_Map = new Map();
 
+// ts片段请求
+router.get('/media/:id/:segment', (req, res) => {
+  const segmentPath = path.join(HLS_SOURCE_DIR, req.params.id, req.params.segment);
+  if (fs.existsSync(segmentPath)) {
+    res.type('.ts').sendFile(segmentPath);
+  } else {
+    res.status(404).send('Not found');
+  }
+});
+
 // 基于ID的文件访问路由
-router.get('/media/:id', async (req, res) => {
+router.get('/media/:id', (req, res) => {
     try {
       const fileId = req.params.id;
-      const fileInfo = await getFileById(fileId);
+      const fileInfo = getFileById(fileId);
       
       if (!fileInfo || fileInfo.type !== 'file') {
         return res.status(404).send('File not found');
@@ -21,7 +31,17 @@ router.get('/media/:id', async (req, res) => {
 
       if (fileInfo.mime_type.startsWith('video/')) {
         // 对于视频文件，需要验证令牌
-        return validateVideoToken(req, res, () => {
+        return validateVideoToken(req, res, fileInfo.m3u8_path, () => {
+          // 优先使用m3u8文件（如果存在）
+          if (fileInfo.m3u8_path) {
+            const m3u8FilePath = path.join(HLS_SOURCE_DIR, fileInfo.m3u8_path);
+            if (fs.existsSync(m3u8FilePath)) {
+              return res.sendFile(m3u8FilePath);
+            } else {
+              console.log(`m3u8文件不存在: ${m3u8FilePath}`);
+            }
+          }
+          // 如果m3u8文件不存在，回退到原始MP4文件
           const filePath = path.join(MEDIA_FULL_PATH, fileInfo.path);
           res.sendFile(filePath);
         });
@@ -63,7 +83,7 @@ router.get('/thumbnail/:id', async (req, res) => {
 
 export default router;
 
-function validateVideoToken(req, res, next) {
+function validateVideoToken(req, res, m3u8_path, next) {
   const token = req.query.vt;
   const encryptedSalt = req.query.vs;
   const rangeHeader = req.headers.range;
@@ -115,31 +135,45 @@ function validateVideoToken(req, res, next) {
       userId_audioTokenAndRangesMap_Map.set(userId, new Map());
     }
 
-    const audioTokenAndRangesMap = userId_audioTokenAndRangesMap_Map.get(userId);
-    if (!audioTokenAndRangesMap.has(decryptedToken)) {
+    if (m3u8_path) {
+      const audioTokenAndRangesMap = userId_audioTokenAndRangesMap_Map.get(userId);
+      if (audioTokenAndRangesMap.has(decryptedToken)) {
+        // 403,m3u8不能重复使用相同token
+        console.warn('m3u8不能重复使用相同token', userId, decryptedToken);
+        res.status(403).json({ message: '请求失败' });
+        return
+      }
       audioTokenAndRangesMap.set(decryptedToken, new Set());
+    } else {
+      const audioTokenAndRangesMap = userId_audioTokenAndRangesMap_Map.get(userId);
+      if (!audioTokenAndRangesMap.has(decryptedToken)) {
+        audioTokenAndRangesMap.set(decryptedToken, new Set());
+      }
+      const usedRanges = audioTokenAndRangesMap.get(decryptedToken);
+      // 如果客户端未发送 Range，不允许通过
+      if (!rangeHeader) {
+        const url = new URL(req.url, `http://${req.headers.host}`)
+        console.warn(`[${new Date().toLocaleString()}] userId ${userId} pathname ${ url.pathname } Token ${decryptedToken} has no range`);
+        res.status(403).json({ message: '请求失败' });
+        return;
+      }
+
+      if (usedRanges.has(rangeHeader)) {
+        const url = new URL(req.url, `http://${req.headers.host}`)
+        console.warn(`[${new Date().toLocaleString()}] userId ${userId} pathname ${ url.pathname } Token ${decryptedToken} has already used range: ${rangeHeader}, all ranges: ${Array.from(usedRanges).join(',')}`);
+        return res.status(403).json({ message: '请求失败' });
+      }
+      usedRanges.add(rangeHeader);
+      
+      // 如果有range头，仍然记录它，但不进行验证
+      if (rangeHeader) {
+        usedRanges.add(rangeHeader);
+      }
     }
 
-    const usedRanges = audioTokenAndRangesMap.get(decryptedToken);
-
-    // 如果客户端未发送 Range，不允许通过
-    if (!rangeHeader) {
-      const url = new URL(req.url, `http://${req.headers.host}`)
-      console.warn(`[${new Date().toLocaleString()}] userId ${userId} pathname ${ url.pathname } Token ${decryptedToken} has no range`);
-      res.status(403).json({ message: '请求失败' });
-      return;
-    }
-
-    if (usedRanges.has(rangeHeader)) {
-      const url = new URL(req.url, `http://${req.headers.host}`)
-      console.warn(`[${new Date().toLocaleString()}] userId ${userId} pathname ${ url.pathname } Token ${decryptedToken} has already used range: ${rangeHeader}, all ranges: ${Array.from(usedRanges).join(',')}`);
-      return res.status(403).json({ message: '请求失败' });
-    }
-    usedRanges.add(rangeHeader);
-
-    res.setHeader('Cache-Control', 'no-store');
-    res.setHeader('Pragma', 'no-cache');
-    res.setHeader('Expires', '0');
+    // res.setHeader('Cache-Control', 'no-store');
+    // res.setHeader('Pragma', 'no-cache');
+    // res.setHeader('Expires', '0');
 
     next();
   } catch (error) {

@@ -28,6 +28,11 @@
                 <VideoPlay />
               </el-icon>
             </el-tooltip>
+            <el-tooltip content="转换为HLS" placement="top" :auto-close="1000" v-if="isMp4 && allowActions.includes('converthls')">
+              <el-icon class="action-icon" @click.stop="handleConvertToHls">
+                <Switch />
+              </el-icon>
+            </el-tooltip>
             <el-tooltip :content="isFavorited ? '取消收藏' : '收藏'" placement="top" :auto-close="1000" v-if="allowActions.includes('favorite')">
               <el-icon class="action-icon favorite-icon" @click.stop="toggleFavorite" :class="{ 'is-favorited': isFavorited }">
                 <Star v-if="!isFavorited" />
@@ -59,12 +64,13 @@
         
         <!-- 文件预览区域 -->
         <div class="file-preview" v-if="isPreviewable">
-          <!-- 视频预览 - 使用自定义播放器组件 -->
+          <!-- 视频预览 - 使用自定义播放器组件， src必须以/结尾，否则.ts文件访问路径会变为/media/xxx.ts，应该是/media/:id/xxx.ts -->
           <VideoPlayer 
             v-if="isVideo" 
-            :src="`/media/${file.id}`" 
+            :src="`/media/${file.id}/`"
             :poster="`/thumbnail/${file.id}`"
             :options="videoOptions"
+            :m3u8-path="`${file.m3u8_path || ''}`"
           />
           
           <!-- 图片预览 -->
@@ -117,7 +123,7 @@
 <script setup>
 import { computed, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { addToFavorites, removeFromFavorites, unzipFile } from '../services/userApi'
+import { addToFavorites, removeFromFavorites, unzipFile, convertToHls } from '../services/userApi'
 import VideoPlayer from './VideoPlayer.vue'
 
 const props = defineProps({
@@ -140,7 +146,7 @@ const props = defineProps({
     default: false
   },
   allowActions: {
-    type: Array, // 'viewtext', 'unzip', 'convertts', 'favorite', 'rename', 'move', 'delete'
+    type: Array, // 'viewtext', 'unzip', 'convertts', 'favorite', 'rename', 'move', 'delete', 'converthls'
     default: true
   }
 })
@@ -160,11 +166,15 @@ const fileExt = computed(() => {
 })
 
 const isVideo = computed(() => {
-  return ['mp4', 'webm', 'ogg', 'ts', 'avi', 'wmv'].includes(fileExt.value)
+  return ['mp4', 'webm', 'ogg', 'ts', 'avi', 'wmv', 'm3u8'].includes(fileExt.value)
 })
 
 const isTs = computed(() => {
   return fileExt.value === 'ts'
+})
+
+const isMp4 = computed(() => {
+  return fileExt.value === 'mp4'
 })
 
 const isImage = computed(() => {
@@ -190,6 +200,20 @@ const isArchive = computed(() => {
 const isPreviewable = computed(() => {
   return isVideo.value || isImage.value || isPdf.value || isAudio.value
 })
+
+const handleConvertToHls = async () => {
+  try {
+    const res = await convertToHls(props.file.id)
+    if (res.success) {
+      ElMessage.success('转换成功')
+    } else {
+      ElMessage.error(res.message || '转换失败')
+    }
+  } catch (e) {
+    console.error('转换失败', e)
+    ElMessage.error('转换失败')
+  }
+}
 
 // 格式化文件大小
 const formatFileSize = (size) => {

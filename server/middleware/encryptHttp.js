@@ -2,7 +2,7 @@ import { aesEncrypt, aesDecrypt } from "../utils/encrypt.js";
 import { getSaltByReq } from "../utils/index.js";
 
 // 需要加密返回的接口路径
-const ENCRYPTED_PATHS = ['/i/user/', '/i/admin/', '/i/logs/'];
+const ENCRYPTED_PATHS = ['/i/'];
 const urlEncryptMark = '_';
 
 const shouldEncryptResponse = req => {

@@ -315,7 +315,9 @@ const getFolderContentsById = async (folderId, searchQuery, filters, page, pageS
     lastModified: row.last_modified,
     size: row.size,
     parent_id: row.parent_id,
-    favorited: false // 默认为未收藏状态，后续会更新
+    favorited: false, // 默认为未收藏状态，后续会更新
+    m3u8_path: row.m3u8_path,
+    mime_type: row.mime_type
   }));
   
   // 获取用户ID
@@ -385,7 +387,8 @@ const getFileById = (fileId) => {
     lastModified: row.last_modified,
     size: row.size,
     parent_id: row.parent_id,
-    mime_type: row.mime_type
+    mime_type: row.mime_type,
+    m3u8_path: row.m3u8_path,
   }
   return fileInfo;
 };
@@ -412,7 +415,8 @@ const getFileByPath = (filePath) => {
     lastModified: row.last_modified,
     size: row.size,
     parent_id: row.parent_id,
-    mime_type: row.mime_type
+    mime_type: row.mime_type,
+    m3u8_path: row.m3u8_path,
   };
   return fileInfo;
 };

@@ -109,6 +109,14 @@ export const convertFileToMp4 = async (inputFileId, outputFileSuffix = 'mp4') =>
   return response
 }
 
+// 转换MP4文件为HLS
+export const convertToHls = async (id) => {
+  const response = await request.post('/media/convertToHls', { id }, {
+    timeout: 3 * 60 * 60 * 1000
+  })
+  return response
+}
+
 // 添加到收藏
 export const addToFavorites = async (fileId) => {
   const response = await request.post('/user/favorites/add', { fileId })

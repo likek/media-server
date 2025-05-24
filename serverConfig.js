@@ -27,6 +27,7 @@ const cmdArgs = parseCommandLineArgs();
 // 项目内部固定路径
 const THUMB_FULL_PATH = path.join(__dirname, "./.thumbnails");
 const TEMP_FULL_PATH = path.join(__dirname, "./.temp");
+const HLS_SOURCE_DIR = path.join(__dirname, "./.hls_source");
 
 // 路由名称配置
 const MEDIA_ROUTE = "/media";
@@ -67,7 +68,8 @@ export {
     MEDIA_FULL_PATH,
     THUMB_FULL_PATH,
     TEMP_FULL_PATH,
-    ENTRY_ROUTE_REGEX
+    ENTRY_ROUTE_REGEX,
+    HLS_SOURCE_DIR
 };
 export default {
     maxRequestsPerMinute: 8 * 60,

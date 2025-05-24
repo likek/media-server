@@ -52,7 +52,7 @@
                 @rename="showRenameDialog" @move="showMoveDialog" @delete="confirmDelete" @favorite="refreshFavorites" />
             </template>
             <template v-else>
-              <file-item :allow-actions="['viewtext', 'unzip', 'convertts', 'favorite', 'rename', 'move', 'delete']" :key="file.id" :file="file" :imageList="imageList"
+              <file-item :allow-actions="['viewtext', 'unzip', 'convertts', 'favorite', 'rename', 'move', 'delete', 'converthls']" :key="file.id" :file="file" :imageList="imageList"
                 :imageIndex="imageList.findIndex(item => item.id === file.id)" :favorited="file.favorited"
                 @rename="showRenameDialog" @move="showMoveDialog" @download="downloadFile" @delete="confirmDelete"
                 @unzip="refreshCache" @viewText="viewTextFile" @convertTs="convertTsFile" @favorite="refreshFavorites" />

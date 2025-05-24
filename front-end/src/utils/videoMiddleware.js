@@ -20,7 +20,7 @@ const videoMiddlewareInit = () => {
     videojs.use('*', function (player) {
         return {
             setSource: function (source, next) {
-                if (source.src.startsWith('/media/')) {
+                if (source.src.startsWith('/media/') && !source.src.includes('vt=')) {
                     const encryptedUrl = createEncryptedUrl(source.src)
                     next(null, {
                         ...source,

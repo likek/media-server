@@ -21,6 +21,10 @@ const props = defineProps({
     options: {
         type: Object,
         default: () => ({})
+    },
+    m3u8Path: {
+        type: String,
+        default: ''
     }
 });
 
@@ -29,6 +33,9 @@ let player = null;
 
 // 初始化播放器
 const initializePlayer = async () => {
+    // 根据文件后缀判断视频类型
+    const videoType = props.m3u8Path ? 'application/x-mpegURL' : 'video/mp4';
+    
     // 默认配置
     const defaultOptions = {
         controls: true,
@@ -38,7 +45,7 @@ const initializePlayer = async () => {
         playbackRates: [0.5, 1, 1.5, 2],
         sources: [{
             src: props.src,
-            type: 'video/mp4'
+            type: videoType
         }],
         controlBar: {
             children: [
@@ -94,10 +101,13 @@ onMounted(() => {
 // 监听src变化，更新播放源
 watch(() => props.src, async (newSrc) => {
     if (player && newSrc) {
+        // 根据文件后缀判断视频类型
+        const videoType = props.m3u8Path ? 'application/x-mpegURL' : 'video/mp4';
+        
         // const encryptedSrc = createEncryptedUrl(newSrc);
         player.src({
             src: newSrc,
-            type: 'video/mp4'
+            type: videoType
         });
     }
 });

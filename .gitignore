@@ -11,3 +11,5 @@ static
 .DS_Store
 *.db-shm
 *.db-wal
+
+.hls_source

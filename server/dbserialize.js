@@ -80,6 +80,7 @@ const initAll = () => {
       last_modified TEXT,
       mime_type TEXT,
       thumbnail TEXT,
+      m3u8_path TEXT,
       created_at TEXT DEFAULT CURRENT_TIMESTAMP,
       updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (parent_id) REFERENCES files(id) ON DELETE CASCADE
