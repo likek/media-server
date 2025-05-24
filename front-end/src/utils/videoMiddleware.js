@@ -57,11 +57,6 @@ const videoMiddlewareInit = () => {
         }
         return options;
     })
-
-    videojs.Vhs.xhr.beforeRequest = ((options) => {
-        console.log("beforeRequest", options);
-        return options;
-    })
 }
 
 export { videoMiddlewareInit }
