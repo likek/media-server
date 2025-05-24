@@ -6,6 +6,10 @@ import Components from 'unplugin-vue-components/vite'
 import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
 import AutoImport from 'unplugin-auto-import/vite'
 
+const PORT_SERVER = process.env.PORT_SERVER || 7777;
+const HOST_SERVER = 'localhost'
+console.log('PORT_SERVER', PORT_SERVER)
+
 // https://vitejs.dev/config/
 export default defineConfig({
     host: '0.0.0.0',
@@ -51,15 +55,15 @@ export default defineConfig({
   server: {
     proxy: {
       '/i': {
-        target: 'http://localhost:7777',
+        target: `http://${HOST_SERVER}:${PORT_SERVER}`,
         changeOrigin: true
       },
       '/media': {
-        target: 'http://localhost:7777',
+        target: `http://${HOST_SERVER}:${PORT_SERVER}`,
         changeOrigin: true
       },
       '/thumbnail': {
-        target: 'http://localhost:7777',
+        target: `http://${HOST_SERVER}:${PORT_SERVER}`,
         changeOrigin: true
       }
     }

@@ -49,6 +49,8 @@ router.post("/convertToHls", (req, res) => {
             success: true
         });
     }
+
+    const m3u8_path = `./${id}/index.m3u8`;
     
     // 创建HLS输出目录
     const hlsOutputDir = path.join(HLS_SOURCE_DIR, id.toString());
@@ -70,9 +72,10 @@ router.post("/convertToHls", (req, res) => {
     // 使用ffmpeg转换为HLS格式
     ffmpeg(inputFilePath)
       .outputOptions([
-        "-c:v", "h264", // 使用H.264编码
+        "-c:v", "libx264", // 使用H.264编码
+        "-crf", "23", "-preset", "medium", // 设置编码质量
         "-c:a", "aac", // 使用AAC音频编码
-        "-hls_time", "10", // 每个分片的时长（秒）
+        "-hls_time", "6", // 每个分片的时长（秒）
         "-hls_list_size", "0", // 保留所有分片
         "-hls_segment_filename", path.join(hlsOutputDir, "segment_%03d.ts"), // 分片文件命名格式
         "-f", "hls" // 输出格式为HLS
@@ -80,11 +83,9 @@ router.post("/convertToHls", (req, res) => {
       .output(outputFilePath)
       .on("end", async () => {
         // 更新数据库中的m3u8_path字段
-        const m3u8_path = `./${id}/index.m3u8`;
-        // 更新表数据
         db.prepare(`UPDATE files SET m3u8_path = ? WHERE id = ?`).run(m3u8_path, id);
         console.log("转换完成", m3u8_path);
-        res.json({ 
+        res.json({
           message: "转换成功", 
           m3u8_path,
           success: true

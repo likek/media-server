@@ -53,6 +53,10 @@ const contentSecurityPolicy = (req, res, next) => {
 
 // CSRF保护中间件
 const csrfProtection = (req, res, next) => {
+  if (process.env.NODE_ENV === 'development') {
+    return next();
+  }
+
   // 跳过GET、HEAD、OPTIONS请求
   if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) {
     return next();

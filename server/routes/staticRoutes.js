@@ -3,7 +3,7 @@ import { getFileById } from "../fileDbManager.js";
 import path from "path";
 import fs from "fs";
 import { HLS_SOURCE_DIR, MEDIA_FULL_PATH, THUMB_FULL_PATH } from "../../serverConfig.js";
-import { aesDecrypt } from "../utils/encrypt.js";
+import { aesDecrypt, aesEncrypt } from "../utils/encrypt.js";
 import { getUserIdByReq } from "../utils/index.js";
 
 const router = express.Router();
@@ -11,12 +11,15 @@ const userId_audioTokenAndRangesMap_Map = new Map();
 
 // ts片段请求
 router.get('/media/:id/:segment', (req, res) => {
-  const segmentPath = path.join(HLS_SOURCE_DIR, req.params.id, req.params.segment);
-  if (fs.existsSync(segmentPath)) {
-    res.type('.ts').sendFile(segmentPath);
-  } else {
-    res.status(404).send('Not found');
-  }
+  validateVideoToken(req, res, false, () => {
+    const segmentPath = path.join(HLS_SOURCE_DIR, req.params.id, req.params.segment);
+    if (fs.existsSync(segmentPath)) {
+      res.setHeader('Cache-Control', 'public, max-age=691200');
+      res.type('.ts').sendFile(segmentPath);
+    } else {
+      res.status(404).send('Not found');
+    }
+  })
 });
 
 // 基于ID的文件访问路由
@@ -28,17 +31,34 @@ router.get('/media/:id', (req, res) => {
       if (!fileInfo || fileInfo.type !== 'file') {
         return res.status(404).send('File not found');
       }
+      res.setHeader('Cache-Control', 'public, max-age=691200');
 
-      if (fileInfo.mime_type.startsWith('video/')) {
+      const isVideo = fileInfo.mime_type.startsWith('video/')
+      if (isVideo) {
         // 对于视频文件，需要验证令牌
-        return validateVideoToken(req, res, fileInfo.m3u8_path, () => {
+        // return validateVideoToken(req, res, !fileInfo.m3u8_path, () => {
+        return validateVideoToken(req, res, false, () => {
           // 优先使用m3u8文件（如果存在）
           if (fileInfo.m3u8_path) {
             const m3u8FilePath = path.join(HLS_SOURCE_DIR, fileInfo.m3u8_path);
             if (fs.existsSync(m3u8FilePath)) {
-              return res.sendFile(m3u8FilePath);
+              let m3u8Content = fs.readFileSync(m3u8FilePath, 'utf8');
+
+              m3u8Content = m3u8Content.split('\n').map(line => {
+                if (line.trim().endsWith('.ts')) {
+                  // 避免重复添加参数
+                  if (!line.includes('?')) {
+                    return createEncryptedTsUrl(line, fileId); // Safari浏览器不支持前端videojs的请求拦截，只能后端来处理
+                  }
+                }
+                return line;
+              }).join('\n');
+
+              res.setHeader('Content-Type', 'application/vnd.apple.mpegurl');
+              return res.send(m3u8Content);
             } else {
               console.log(`m3u8文件不存在: ${m3u8FilePath}`);
+              return res.status(404).send('m3u8文件不存在');
             }
           }
           // 如果m3u8文件不存在，回退到原始MP4文件
@@ -59,7 +79,7 @@ router.get('/media/:id', (req, res) => {
 router.get('/thumbnail/:id', async (req, res) => {
   try {
     const fileId = req.params.id;
-    const fileInfo = await getFileById(fileId);
+    const fileInfo = getFileById(fileId);
     
     if (!fileInfo || fileInfo.type !== 'file') {
       return res.status(404).send('File not found');
@@ -67,6 +87,7 @@ router.get('/thumbnail/:id', async (req, res) => {
     
     // 对于视频文件，缩略图通常是文件名加.png
     const thumbnailPath = path.join(THUMB_FULL_PATH, fileInfo.path + '.png');
+    res.setHeader('Cache-Control', 'public, max-age=691200');
     
     // 检查缩略图是否存在
     if (fs.existsSync(thumbnailPath)) {
@@ -83,13 +104,12 @@ router.get('/thumbnail/:id', async (req, res) => {
 
 export default router;
 
-function validateVideoToken(req, res, m3u8_path, next) {
+function validateVideoToken(req, res, validateRanges, next) {
   const token = req.query.vt;
   const encryptedSalt = req.query.vs;
-  const rangeHeader = req.headers.range;
 
   if (!token || !encryptedSalt) {
-    console.error('Invalid video token or salt:', token, encryptedSalt, rangeHeader);
+    console.error('Invalid video token or salt:', token, encryptedSalt);
     return res.status(403).json({ message: '请求失败' });
   }
 
@@ -119,7 +139,7 @@ function validateVideoToken(req, res, m3u8_path, next) {
     }
 
     const tokenParts = decryptedToken.split('-');
-    if (tokenParts.length !== 2) {
+    if (tokenParts.length !== 2 || !/^\d+$/.test(tokenParts[0]) || !tokenParts[1].startsWith(`/media/${req.params.id}`)) {
       console.error('Invalid token format:', decryptedToken);
       return res.status(403).json({ message: '非法请求' });
     }
@@ -135,16 +155,8 @@ function validateVideoToken(req, res, m3u8_path, next) {
       userId_audioTokenAndRangesMap_Map.set(userId, new Map());
     }
 
-    if (m3u8_path) {
-      const audioTokenAndRangesMap = userId_audioTokenAndRangesMap_Map.get(userId);
-      if (audioTokenAndRangesMap.has(decryptedToken)) {
-        // 403,m3u8不能重复使用相同token
-        console.warn('m3u8不能重复使用相同token', userId, decryptedToken);
-        res.status(403).json({ message: '请求失败' });
-        return
-      }
-      audioTokenAndRangesMap.set(decryptedToken, new Set());
-    } else {
+    if (validateRanges) {
+      const rangeHeader = req.headers.range;
       const audioTokenAndRangesMap = userId_audioTokenAndRangesMap_Map.get(userId);
       if (!audioTokenAndRangesMap.has(decryptedToken)) {
         audioTokenAndRangesMap.set(decryptedToken, new Set());
@@ -171,13 +183,34 @@ function validateVideoToken(req, res, m3u8_path, next) {
       }
     }
 
-    // res.setHeader('Cache-Control', 'no-store');
-    // res.setHeader('Pragma', 'no-cache');
-    // res.setHeader('Expires', '0');
-
     next();
   } catch (error) {
     console.error('视频令牌验证失败:', error);
     return res.status(403).json({ message: '请求失败' });
   }
+}
+
+export function createEncryptedTsUrl(segment, fileId) {
+  // 获取本周周一的00点时间戳
+  const now = new Date();
+  const day = now.getDay();
+  const diffToMonday = day === 0 ? -6 : 1 - day; // 周日特殊处理为上周一
+  const weekMonday = new Date(now);
+  weekMonday.setDate(now.getDate() + diffToMonday);
+  weekMonday.setHours(0, 0, 0, 0);
+  const weekMondayTimestamp = weekMonday.getTime().toString().slice(2);
+
+  // 获取加密指纹和盐
+  //   const salt = `${Date.now().toString().slice(8)}${Math.random().toString(36).substring(2)}`
+  const salt = `${weekMondayTimestamp}`
+  const encryptedSalt = aesEncrypt(salt)
+
+  const path = `/media/${fileId}/${segment}`
+  const token = `${weekMondayTimestamp}-${path}`;
+  // console.log(`[video request] path: ${path}, token: ${token}, salt: ${salt}`)
+  const encryptedToken = aesEncrypt(token, salt);
+
+  // 构建URL，添加加密令牌和加密盐
+  const separator = segment.includes('?') ? '&' : '?';
+  return `${segment}${separator}vt=${encodeURIComponent(encryptedToken)}&vs=${encodeURIComponent(encryptedSalt)}`;
 }

@@ -6,7 +6,8 @@
   "type": "module",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node server --path ../okk"
+    "start": "node server --path ../okk",
+    "dev": "NODE_ENV=development PORT=6666 node server --path ../okk"
   },
   "keywords": [],
   "author": "",

@@ -8,6 +8,7 @@
 import { ref, onMounted, onBeforeUnmount, watch } from 'vue';
 import videojs from 'video.js';
 import 'video.js/dist/video-js.css';
+import { createEncryptedUrl } from '../utils/videoMiddleware';
 
 const props = defineProps({
     src: {
@@ -44,7 +45,7 @@ const initializePlayer = async () => {
         responsive: true,
         playbackRates: [0.5, 1, 1.5, 2],
         sources: [{
-            src: props.src,
+            src: createEncryptedUrl(props.src),
             type: videoType
         }],
         controlBar: {
