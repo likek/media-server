@@ -37,7 +37,7 @@ const videoMiddlewareInit = () => {
     videojs.use('*', function (player) {
         return {
             setSource: function (source, next) {
-                if (source.src.startsWith('/media/') && !source.src.includes('vt=')) {
+                if (source.src.startsWith('/media/') && !source.src.includes('vt=')) { // 这里可以不处理，src初始化时已添加
                     const encryptedUrl = createEncryptedUrl(source.src)
                     next(null, {
                         ...source,
@@ -52,7 +52,7 @@ const videoMiddlewareInit = () => {
 
     videojs.Vhs.xhr.onRequest(options => {
         console.log("onRequest", options);
-        if (options.requestType ==='segment' && !options.uri.includes('vt=')) {
+        if (options.requestType ==='segment' && !options.uri.includes('vt=')) { // 这里可以不处理，后端已处理
             options.uri = createEncryptedUrl(options.uri)
         }
         return options;
