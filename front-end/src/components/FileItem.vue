@@ -160,7 +160,7 @@ const fileExt = computed(() => {
 })
 
 const isVideo = computed(() => {
-  return ['mp4', 'webm', 'ogg', 'ts', 'avi'].includes(fileExt.value)
+  return ['mp4', 'webm', 'ogg', 'ts', 'avi', 'wmv'].includes(fileExt.value)
 })
 
 const isTs = computed(() => {
