@@ -207,7 +207,7 @@ function convertMp4ToHls(id) {
           });
         } catch (err) {
           console.error(`转换 ${id}/${q.name} 失败`, err);
-          continue;
+          return resolve({ message: `转换 ${id}/${q.name} 失败`, code: 500, success: false, error: err.message });
         }
       }
   
