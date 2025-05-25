@@ -9,7 +9,40 @@ import { getUserIdByReq } from "../utils/index.js";
 const router = express.Router();
 const userId_audioTokenAndRangesMap_Map = new Map();
 
-// ts片段请求
+// /media/10119/240p/index.m3u8
+// 多码率的ts片段 或 次级m3u8文件
+router.get('/media/:id/:target/:m3u8file', (req, res) => {
+  validateVideoToken(req, res, false, () => {
+    const m3u8filePath = path.join(HLS_SOURCE_DIR, req.params.id, req.params.target, req.params.m3u8file);
+    if (fs.existsSync(m3u8filePath)) {
+      res.setHeader('Cache-Control', 'public, max-age=691200');
+      if (req.params.m3u8file.includes('.m3u8')) {
+        // 处理次级m3u8文件
+        res.setHeader('Content-Type', 'application/vnd.apple.mpegurl');
+        let m3u8Content = fs.readFileSync(m3u8filePath, 'utf8');
+        m3u8Content = m3u8Content.split('\n').map(line => {
+          if (line.trim().endsWith('.ts')) {
+            // 避免重复添加参数
+            if (!line.includes('?')) {
+              return createEncryptedTsUrl(line, req.params.id); // Safari浏览器不支持前端videojs的请求拦截，只能后端来处理
+            }
+          }
+          return line;
+        }).join('\n');
+        return res.send(m3u8Content);
+      } else {
+        // 处理次级ts片段
+        res.setHeader('Content-Type', 'video/mp2t');
+        return res.sendFile(m3u8filePath);
+      }
+
+    } else {
+      res.status(404).send('Not found');
+    }
+  })
+});
+
+// ts片段请求,只有单码率的ts片段
 router.get('/media/:id/:segment', (req, res) => {
   validateVideoToken(req, res, false, () => {
     const segmentPath = path.join(HLS_SOURCE_DIR, req.params.id, req.params.segment);
@@ -45,7 +78,7 @@ router.get('/media/:id', (req, res) => {
               let m3u8Content = fs.readFileSync(m3u8FilePath, 'utf8');
 
               m3u8Content = m3u8Content.split('\n').map(line => {
-                if (line.trim().endsWith('.ts')) {
+                if (line.trim().endsWith('.m3u8') || line.trim().endsWith('.ts')) {
                   // 避免重复添加参数
                   if (!line.includes('?')) {
                     return createEncryptedTsUrl(line, fileId); // Safari浏览器不支持前端videojs的请求拦截，只能后端来处理

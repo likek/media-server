@@ -61,7 +61,7 @@ router.post("/convertToHlsBatch", async (req, res) => {
         const page  = req.body.page || 1;
         const pageSize = req.body.pageSize || 10;
         // 优先处理最新的(created_at)的文件
-        const stmt = db.prepare(`SELECT * FROM files WHERE mime_type='video/mp4' AND m3u8_path IS NULL ORDER BY created_at DESC LIMIT ? OFFSET ?`);
+        const stmt = db.prepare(`SELECT * FROM files WHERE mime_type='video/mp4' AND m3u8_path IS NULL AND size< ORDER BY created_at DESC LIMIT ? OFFSET ?`);
         const offset = (page - 1) * pageSize;
         const rows = stmt.all(pageSize, offset);
 
@@ -122,76 +122,99 @@ router.post("/convertToHlsBatch", async (req, res) => {
     }
 })
 
-
 function convertMp4ToHls(id) {
-    return new Promise((resolve, reject) => {
-        if (!id) {
-            console.error("文件ID是必需的");
-            return resolve({ message: "文件ID是必需的", code: 400, success: false })
-        }
-        
-        // 获取文件信息
-        const fileInfo = getFileById(id);
-        if (!fileInfo) {
-            console.error("文件不存在", id);
-            return resolve({ message: "文件不存在", code: 404, success: false })
-        }
-        
-        // 检查文件是否为MP4
-        if (!fileInfo.mime_type || !fileInfo.mime_type.includes("video/mp4")) {
-            console.error("只支持MP4格式的视频文件转换", fileInfo.mime_type, fileInfo.filename);
-            return resolve({ message: "只支持MP4格式的视频文件转换", code: 400, success: false })
-        }
-        
-        // 检查是否已经转换过
-        if (fileInfo.m3u8_path) {
-            console.error("文件已经转换过", fileInfo.m3u8_path);
-            return resolve({ message: "文件已经转换过", code: 200, success: true, m3u8_path: fileInfo.m3u8_path })
-        }
-
-        const m3u8_path = `./${id}/index.m3u8`;
-        
-        // 创建HLS输出目录
-        const hlsOutputDir = path.join(HLS_SOURCE_DIR, id.toString());
-        if (!fs.existsSync(hlsOutputDir)) {
-            fs.mkdirSync(hlsOutputDir, { recursive: true });
-        }
-        
-        // 设置输入和输出路径
-        const inputFilePath = path.join(MEDIA_FULL_PATH, fileInfo.path);
-        const outputFilePath = path.join(hlsOutputDir, "index.m3u8");
-        
-        // 检查输入文件是否存在
-        if (!fs.existsSync(inputFilePath)) {
-            console.error("输入文件不存在", inputFilePath);
-            return resolve({ message: "输入文件不存在", code: 400, success: false  })
-        }
-        
-        console.log(`开始转换文件(HLS): ${id}, ${inputFilePath}`);
-        // 使用ffmpeg转换为HLS格式
-        ffmpeg(inputFilePath)
+    return new Promise(async (resolve, reject) => {
+      if (!id) {
+        return resolve({ message: "文件ID是必需的", code: 400, success: false });
+      }
+  
+      const fileInfo = getFileById(id);
+      const outputBaseDir = path.join(HLS_SOURCE_DIR, id.toString());
+      if (!fileInfo) {
+        return resolve({ message: "文件不存在", code: 404, success: false });
+      }
+  
+      if (!fileInfo.mime_type || !fileInfo.mime_type.includes("video/mp4")) {
+        return resolve({ message: "只支持MP4格式的视频文件转换", code: 400, success: false });
+      }
+  
+      if (fileInfo.m3u8_path && fs.existsSync(outputBaseDir)) {
+        return resolve({ message: "文件已经转换过", code: 200, success: true, m3u8_path: fileInfo.m3u8_path });
+      }
+  
+      const inputFilePath = path.join(MEDIA_FULL_PATH, fileInfo.path);
+      if (!fs.existsSync(inputFilePath)) {
+        return resolve({ message: "输入文件不存在", code: 400, success: false });
+      }
+  
+      const probeData = await new Promise((res, rej) => {
+        ffmpeg.ffprobe(inputFilePath, (err, metadata) => {
+          if (err) return rej(err);
+          res(metadata);
+        });
+      });
+  
+      const videoStream = probeData.streams.find(s => s.codec_type === 'video');
+      const { width, height } = videoStream;
+  
+      if (!fs.existsSync(outputBaseDir)) fs.mkdirSync(outputBaseDir, { recursive: true });
+  
+      const variants = [];
+      const qualities = [
+        { name: "240p", width: 426, height: 240, bitrate: "300k", maxrate: "350k", bufsize: "600k" },
+        { name: "360p", width: 640, height: 360, bitrate: "600k", maxrate: "700k", bufsize: "900k" },
+        { name: "720p", width: 1280, height: 720, bitrate: "1800k", maxrate: "2000k", bufsize: "3000k" }
+      ];
+  
+      await Promise.all(qualities.map(q => {
+        if (width < q.width || height < q.height) return; // 源分辨率不足
+  
+        const variantDir = path.join(outputBaseDir, q.name);
+        if (!fs.existsSync(variantDir)) fs.mkdirSync(variantDir);
+        const outputPath = path.join(variantDir, 'index.m3u8');
+  
+        variants.push({
+          path: `${id}/${q.name}/index.m3u8`,
+          resolution: `${q.width}x${q.height}`,
+          bandwidth: parseInt(q.bitrate) * 8 // 近似值
+        });
+  
+        return new Promise((res, rej) => {
+          console.log(`开始转换 ${id}/${q.name}`);
+          ffmpeg(inputFilePath)
             .outputOptions([
-                "-c:v", "libx264", // 使用H.264编码
-                "-crf", "23", "-preset", "medium", // 设置编码质量
-                "-c:a", "aac", // 使用AAC音频编码
-                "-hls_time", "6", // 每个分片的时长（秒）
-                "-hls_list_size", "0", // 保留所有分片
-                "-hls_segment_filename", path.join(hlsOutputDir, "segment_%03d.ts"), // 分片文件命名格式
-                "-f", "hls" // 输出格式为HLS
+              '-vf', `scale=w=${q.width}:h=${q.height}:force_original_aspect_ratio=decrease`,
+              '-c:v', 'libx264',
+              '-b:v', q.bitrate,
+              '-maxrate', q.maxrate,
+              '-bufsize', q.bufsize,
+              '-c:a', 'aac',
+              '-b:a', '96k',
+              '-hls_time', '6',
+              '-hls_list_size', '0',
+              '-hls_segment_filename', path.join(q.name, 'segment_%03d.ts'),
+              '-f', 'hls'
             ])
-            .output(outputFilePath)
-            .on("end", async () => {
-                // 更新数据库中的m3u8_path字段
-                db.prepare(`UPDATE files SET m3u8_path = ? WHERE id = ?`).run(m3u8_path, id);
-                console.log("转换完成", m3u8_path);
-                resolve({ message: "转换成功", m3u8_path, code: 200, success: true })
+            .output(outputPath)
+            .on('end', () => {
+              console.log(`转换完成 ${id}/${q.name}`);
+              res();
             })
-            .on("error", (err) => {
-                console.error("转换过程中出错:", err);
-                resolve({ message: "转换失败", code: 500, success: false,  error: err.message })
-            })
+            .on('error', rej)
             .run();
-    })
-}
+        });
+      }));
+  
+      // 写主 m3u8
+      const masterM3U8Path = path.join(outputBaseDir, 'index.m3u8');
+      const masterM3U8Content = ['#EXTM3U'].concat(
+        variants.map(v => `#EXT-X-STREAM-INF:BANDWIDTH=${v.bandwidth},RESOLUTION=${v.resolution}\n${v.path}`)
+      ).join('\n');
+      fs.writeFileSync(masterM3U8Path, masterM3U8Content);
+  
+      db.prepare(`UPDATE files SET m3u8_path = ? WHERE id = ?`).run(`./${id}/index.m3u8`, id);
+      return resolve({ message: "转换成功", m3u8_path: `./${id}/index.m3u8`, code: 200, success: true });
+    });
+  }
 
 export default router;
