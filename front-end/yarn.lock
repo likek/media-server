@@ -1279,13 +1279,6 @@ videojs-contrib-quality-levels@4.1.0:
   dependencies:
     global "^4.4.0"
 
-videojs-contrib-quality-levels@^4.1.0:
-  version "4.1.0"
-  resolved "https://registry.yarnpkg.com/videojs-contrib-quality-levels/-/videojs-contrib-quality-levels-4.1.0.tgz#44c2d2167114a5c8418548b10a25cb409d6cba51"
-  integrity sha512-TfrXJJg1Bv4t6TOCMEVMwF/CoS8iENYsWNKip8zfhB5kTcegiFYezEA0eHAJPU64ZC8NQbxQgOwAsYU8VXbOWA==
-  dependencies:
-    global "^4.4.0"
-
 videojs-font@4.2.0:
   version "4.2.0"
   resolved "https://registry.npmjs.org/videojs-font/-/videojs-font-4.2.0.tgz"
