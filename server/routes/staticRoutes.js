@@ -13,10 +13,11 @@ const userId_audioTokenAndRangesMap_Map = new Map();
 // 多码率的ts片段 或 次级m3u8文件
 router.get('/media/:id/:target/:m3u8file', (req, res) => {
   validateVideoToken(req, res, false, () => {
-    const m3u8filePath = path.join(HLS_SOURCE_DIR, req.params.id, req.params.target, req.params.m3u8file);
+    const realM3u8file = req.params.m3u8file.replace(/\.7a1/, '.m3u8').replace(/\.9n4/, '.ts')
+    const m3u8filePath = path.join(HLS_SOURCE_DIR, req.params.id, req.params.target, realM3u8file);
     if (fs.existsSync(m3u8filePath)) {
       res.setHeader('Cache-Control', 'public, max-age=691200');
-      if (req.params.m3u8file.includes('.m3u8')) {
+      if (realM3u8file.includes('.m3u8')) {
         // 处理次级m3u8文件
         res.setHeader('Content-Type', 'application/vnd.apple.mpegurl');
         let m3u8Content = fs.readFileSync(m3u8filePath, 'utf8');
@@ -45,7 +46,8 @@ router.get('/media/:id/:target/:m3u8file', (req, res) => {
 // ts片段请求,只有单码率的ts片段
 router.get('/media/:id/:segment', (req, res) => {
   validateVideoToken(req, res, false, () => {
-    const segmentPath = path.join(HLS_SOURCE_DIR, req.params.id, req.params.segment);
+    const realSegment = req.params.segment.replace(/\.7a1/, '.m3u8').replace(/\.9n4/, '.ts')
+    const segmentPath = path.join(HLS_SOURCE_DIR, req.params.id, realSegment);
     if (fs.existsSync(segmentPath)) {
       res.setHeader('Cache-Control', 'public, max-age=691200');
       res.type('.ts').sendFile(segmentPath);
@@ -223,7 +225,7 @@ function validateVideoToken(req, res, validateRanges, next) {
   }
 }
 
-export function createEncryptedTsUrl(segment, fileId) {
+export function createEncryptedTsUrl(line, fileId) {
   // 获取本周周一的00点时间戳
   const now = new Date();
   const day = now.getDay();
@@ -238,12 +240,12 @@ export function createEncryptedTsUrl(segment, fileId) {
   const salt = `${weekMondayTimestamp}`
   const encryptedSalt = aesEncrypt(salt)
 
-  const path = `/media/${fileId}/${segment}`
+  const path = `/media/${fileId}/${line}`
   const token = `${weekMondayTimestamp}-${path}`;
   // console.log(`[video request] path: ${path}, token: ${token}, salt: ${salt}`)
   const encryptedToken = aesEncrypt(token, salt);
 
   // 构建URL，添加加密令牌和加密盐
-  const separator = segment.includes('?') ? '&' : '?';
-  return `${segment}${separator}vt=${encodeURIComponent(encryptedToken)}&vs=${encodeURIComponent(encryptedSalt)}`;
+  line = line.replace(/\.m3u8$/, '.7a1').replace(/\.ts$/, '.9n4')
+  return `${line}?vt=${encodeURIComponent(encryptedToken)}&vs=${encodeURIComponent(encryptedSalt)}`;
 }
