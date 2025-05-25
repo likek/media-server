@@ -64,10 +64,10 @@
         
         <!-- 文件预览区域 -->
         <div class="file-preview" v-if="isPreviewable">
-          <!-- 视频预览 - 使用自定义播放器组件， src必须以/结尾，否则.ts文件访问路径会变为/media/xxx.ts，应该是/media/:id/xxx.ts -->
+          <!-- 视频预览 - 使用自定义播放器组件， 如果src以/结尾，/media/:id/:id/xxx.ts -->
           <VideoPlayer 
             v-if="isVideo" 
-            :src="`/media/${file.id}/`"
+            :src="`/media/${file.id}`"
             :poster="`/thumbnail/${file.id}`"
             :options="videoOptions"
             :m3u8-path="`${file.m3u8_path || ''}`"

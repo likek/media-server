@@ -166,21 +166,22 @@ function convertMp4ToHls(id) {
         { name: "720p", width: 1280, height: 720, bitrate: "1800k", maxrate: "2000k", bufsize: "3000k" }
       ];
   
-      await Promise.all(qualities.map(q => {
-        if (width < q.width || height < q.height) return; // 源分辨率不足
-  
+      for (const q of qualities) {
+        if (width < q.width || height < q.height) continue;
+      
         const variantDir = path.join(outputBaseDir, q.name);
         if (!fs.existsSync(variantDir)) fs.mkdirSync(variantDir);
+      
         const outputPath = path.join(variantDir, 'index.m3u8');
-  
+      
         variants.push({
           path: `${id}/${q.name}/index.m3u8`,
           resolution: `${q.width}x${q.height}`,
-          bandwidth: parseInt(q.bitrate) * 8 // 近似值
+          bandwidth: parseInt(q.bitrate) * 8
         });
-  
-        return new Promise((res, rej) => {
-          console.log(`开始转换 ${id}/${q.name}`);
+      
+        console.log(`开始转换 ${id}/${q.name}`);
+        await new Promise((res, rej) => {
           ffmpeg(inputFilePath)
             .outputOptions([
               '-vf', `scale=w=${q.width}:h=${q.height}:force_original_aspect_ratio=decrease`,
@@ -192,7 +193,7 @@ function convertMp4ToHls(id) {
               '-b:a', '96k',
               '-hls_time', '6',
               '-hls_list_size', '0',
-              '-hls_segment_filename', path.join(q.name, 'segment_%03d.ts'),
+              '-hls_segment_filename', path.join(variantDir, 'segment_%03d.ts'),
               '-f', 'hls'
             ])
             .output(outputPath)
@@ -203,7 +204,7 @@ function convertMp4ToHls(id) {
             .on('error', rej)
             .run();
         });
-      }));
+      }
   
       // 写主 m3u8
       const masterM3U8Path = path.join(outputBaseDir, 'index.m3u8');
