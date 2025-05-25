@@ -127,47 +127,26 @@ function convertMp4ToHls(id) {
     return new Promise((resolve, reject) => {
         if (!id) {
             console.error("文件ID是必需的");
-            resolve({
-                message: "文件ID是必需的",
-                code: 400,
-                success: false
-            })
-            return;
+            return resolve({ message: "文件ID是必需的", code: 400, success: false })
         }
         
         // 获取文件信息
         const fileInfo = getFileById(id);
         if (!fileInfo) {
             console.error("文件不存在", id);
-            resolve({
-                message: "文件不存在",
-                code: 404,
-                success: false
-            })
-            return;
+            return resolve({ message: "文件不存在", code: 404, success: false })
         }
         
         // 检查文件是否为MP4
         if (!fileInfo.mime_type || !fileInfo.mime_type.includes("video/mp4")) {
             console.error("只支持MP4格式的视频文件转换", fileInfo.mime_type, fileInfo.filename);
-            resolve({
-                message: "只支持MP4格式的视频文件转换",
-                code: 400,
-                success: false
-            })
-            return;
+            return resolve({ message: "只支持MP4格式的视频文件转换", code: 400, success: false })
         }
         
         // 检查是否已经转换过
         if (fileInfo.m3u8_path) {
             console.error("文件已经转换过", fileInfo.m3u8_path);
-            resolve({
-                message: "文件已经转换过",
-                code: 200,
-                success: true,
-                m3u8_path: fileInfo.m3u8_path
-            })
-            return;
+            return resolve({ message: "文件已经转换过", code: 200, success: true, m3u8_path: fileInfo.m3u8_path })
         }
 
         const m3u8_path = `./${id}/index.m3u8`;
@@ -185,12 +164,7 @@ function convertMp4ToHls(id) {
         // 检查输入文件是否存在
         if (!fs.existsSync(inputFilePath)) {
             console.error("输入文件不存在", inputFilePath);
-            resolve({
-                message: "输入文件不存在",
-                code: 400,
-                success: false
-            })
-            return;
+            return resolve({ message: "输入文件不存在", code: 400, success: false  })
         }
         
         console.log(`开始转换文件(HLS): ${id}, ${inputFilePath}`);
@@ -210,21 +184,11 @@ function convertMp4ToHls(id) {
                 // 更新数据库中的m3u8_path字段
                 db.prepare(`UPDATE files SET m3u8_path = ? WHERE id = ?`).run(m3u8_path, id);
                 console.log("转换完成", m3u8_path);
-                resolve({
-                    message: "转换成功", 
-                    m3u8_path,
-                    code: 200,
-                    success: true
-                })
+                resolve({ message: "转换成功", m3u8_path, code: 200, success: true })
             })
             .on("error", (err) => {
                 console.error("转换过程中出错:", err);
-                resolve({
-                    message: "转换失败",
-                    code: 500,
-                    success: false,
-                    error: err.message
-                })
+                resolve({ message: "转换失败", code: 500, success: false,  error: err.message })
             })
             .run();
     })
