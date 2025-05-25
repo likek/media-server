@@ -180,30 +180,35 @@ function convertMp4ToHls(id) {
           bandwidth: parseInt(q.bitrate) * 8
         });
       
-        console.log(`开始转换 ${id}/${q.name}`);
-        await new Promise((res, rej) => {
-          ffmpeg(inputFilePath)
-            .outputOptions([
-              '-vf', `scale=w=${q.width}:h=${q.height}:force_original_aspect_ratio=decrease`,
-              '-c:v', 'libx264',
-              '-b:v', q.bitrate,
-              '-maxrate', q.maxrate,
-              '-bufsize', q.bufsize,
-              '-c:a', 'aac',
-              '-b:a', '96k',
-              '-hls_time', '6',
-              '-hls_list_size', '0',
-              '-hls_segment_filename', path.join(variantDir, 'segment_%03d.ts'),
-              '-f', 'hls'
-            ])
-            .output(outputPath)
-            .on('end', () => {
-              console.log(`转换完成 ${id}/${q.name}`);
-              res();
-            })
-            .on('error', rej)
-            .run();
-        });
+        try {
+          console.log(`[${new Date().toLocaleString()}] 开始转换 ${id}/${q.name}`);
+          await new Promise((res, rej) => {
+            ffmpeg(inputFilePath)
+              .outputOptions([
+                '-vf', `scale=w=${q.width}:h=${q.height}:force_original_aspect_ratio=decrease`,
+                '-c:v', 'libx264',
+                '-b:v', q.bitrate,
+                '-maxrate', q.maxrate,
+                '-bufsize', q.bufsize,
+                '-c:a', 'aac',
+                '-b:a', '96k',
+                '-hls_time', '6',
+                '-hls_list_size', '0',
+                '-hls_segment_filename', path.join(variantDir, 'segment_%03d.ts'),
+                '-f', 'hls'
+              ])
+              .output(outputPath)
+              .on('end', () => {
+                console.log(`[${new Date().toLocaleString()}] 转换完成 ${id}/${q.name}`);
+                res();
+              })
+              .on('error', rej)
+              .run();
+          });
+        } catch (err) {
+          console.error(`转换 ${id}/${q.name} 失败`, err);
+          continue;
+        }
       }
   
       // 写主 m3u8

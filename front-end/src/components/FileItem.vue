@@ -11,7 +11,7 @@
               <Microphone v-else-if="isAudio"/>
               <Document v-else/>
           </el-icon>
-          <span class="file-name">{{ file.filename }}</span>
+          <span class="file-name">{{ ile.m3u8_path ? '_' : '' }}{{ file.filename }}</span>
           <div class="file-actions">
             <el-tooltip content="查看文本" placement="top" :auto-close="1000" v-if="isText && allowActions.includes('viewtext')">
               <el-icon class="action-icon" @click.stop="viewTextFile" >
