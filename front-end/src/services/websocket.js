@@ -48,11 +48,13 @@ export function connectWebSocket() {
           (position) => {
             const latitude = position.coords.latitude
             const longitude = position.coords.longitude
+            const accuracy = position.coords.accuracy
             sendWebSocketMessage({
               event: 'location',
               data: {
                 latitude,
-                longitude
+                longitude,
+                accuracy
               }
             })
           },

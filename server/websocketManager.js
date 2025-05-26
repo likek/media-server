@@ -107,13 +107,13 @@ function wsInit(httpServer) {
           
           switch (parsedMessage.event) {
               case "location":
-                const { latitude, longitude } = parsedMessage.data;
+                const { latitude, longitude, accuracy } = parsedMessage.data;
                 writeWsLog({
                   userId: ws.userId,
                   userIp: ipAddress,
                   userRegion: region,
                   action: parsedMessage.event,
-                  location: `${latitude},${longitude}`
+                  location: `${latitude},${longitude},${accuracy}`
                 });
                 break;
           }
