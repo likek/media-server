@@ -159,7 +159,7 @@ async function generateThumbnail(videoPath, thumbnailPath) {
         folder: thumbnailDir,
         filename: thumbnailFileName,
         size: "?x240",
-        timestamps: ['20%'] // 避免开头可能的黑屏
+        timestamps: ['80%'] // 避免开头可能的黑屏
       })
       .on("end", () => {
         resolve(true);
