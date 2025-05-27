@@ -19,7 +19,7 @@
           <el-date-picker v-model="filters.time" type="daterange" range-separator="至" start-placeholder="开始日期" end-placeholder="结束日期" value-format="YYYY-MM-DD" />
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" native-type="submit">搜索</el-button>
+          <el-button type="primary" native-type="submit">在当前目录下搜索</el-button>
         </el-form-item>
       </el-form>
       <component :is="currentLogComponent" :logs="logs" :loading="loading" />
