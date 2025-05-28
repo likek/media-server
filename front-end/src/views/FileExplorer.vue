@@ -3,7 +3,7 @@
     <div class="top-container">
       <div class="top-form">
         <el-form @submit.prevent="handleSearch">
-          <el-input v-model="searchInput" placeholder="搜索文件" class="search-input" clearable />
+          <el-input v-model="searchInput" placeholder="在当前目录下搜索" class="search-input" clearable />
         </el-form>
         <el-button @click="refreshCache"><el-icon>
             <Refresh />
