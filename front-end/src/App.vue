@@ -4,6 +4,9 @@
       <side-menu v-show="!isMobile || !isSidebarCollapsed" :is-collapsed="isSidebarCollapsed || isMobile" />
       <div class="main-content">
         <el-button size="small" @click="toggleSidebar" class="sidebar-toggle-btn" :icon="isSidebarCollapsed ? Expand : Fold" circle />
+        <UseDark v-slot="{ isDark, toggleDark }">
+          <el-button size="small" @click="toggleDark()" class="sidebar-toggle-dark" :icon="isDark ? Sunny : Moon" circle />
+        </UseDark>
         <router-view v-slot="{ Component }">
           <keep-alive>
             <component :is="Component" />
@@ -18,7 +21,7 @@
 <script setup>
 import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { ElButton } from 'element-plus'
-import { Expand, Fold } from '@element-plus/icons-vue'
+import { Expand, Fold, Sunny, Moon } from '@element-plus/icons-vue'
 import SideMenu from './components/SideMenu.vue'
 import HumanVerification from './components/HumanVerification.vue'
 import { aesDecrypt } from './utils/encrypt'
@@ -26,6 +29,7 @@ import { getFingerprint } from './utils/fingerprint'
 import { registerUser } from './services/userApi'
 import { useRoute } from 'vue-router'
 import { connectWebSocket } from './services/websocket'
+import { UseDark } from '@vueuse/components'
 
 // 验证状态
 const isVerified = ref(false)
@@ -139,6 +143,34 @@ onMounted(() => {
 
 <style>
 /* 全局样式 */
+html {
+  background-color: #fff;
+}
+
+html.dark,
+html.dark .verification-container {
+  background-color: #111;
+  color: #ccc;
+  --el-text-color-regular: #222;
+}
+
+html.dark .path-navigation, 
+html.dark .folder-item, 
+html.dark .side-menu, 
+html.dark .file-item,
+html.dark .verification-box {
+  background-color: #000;
+  border-color: #000;
+}
+
+html.dark .folder-item:hover, 
+html.dark .menu-item.active,
+html.dark .menu-item:hover,
+html.dark .verification-area,
+html.dark .verification-button {
+  background-color: #222;
+}
+
 html, body {
   margin: 0;
   padding: 0;
@@ -173,6 +205,19 @@ html, body {
   position: absolute;
   top: 3px;
   left: 3px;
+  z-index: 1000;
+  padding: 5px 10px;
+  background-color: #409eff;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.sidebar-toggle-dark {
+  position: absolute;
+  top: 6px;
+  right: 10px;
   z-index: 1000;
   padding: 5px 10px;
   background-color: #409eff;

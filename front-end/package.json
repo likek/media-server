@@ -10,6 +10,8 @@
   },
   "dependencies": {
     "@fingerprintjs/fingerprintjs": "^3.4.0",
+    "@vueuse/components": "^13.3.0",
+    "@vueuse/core": "^13.3.0",
     "aes_crypto_wasm": "./wasm/xxx",
     "axios": "^1.8.4",
     "crypto-js": "^4.2.0",
