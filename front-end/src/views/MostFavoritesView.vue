@@ -2,7 +2,7 @@
   <div class="favorites-view" v-loading="loading">
     <div class="media-container" ref="mediaContainer">
       <template v-if="files.length === 0">
-        <el-empty description="你当前暂未收藏任何文件" />
+        <el-empty description="暂无收藏记录" />
       </template>
       <template v-else>
         <div class="media-grid">
@@ -11,8 +11,8 @@
               <folder-item
                 :key="file.id"
                 :folder="file"
-                :favorited="true"
-                :allow-actions="['favorite']" 
+                :favorited="file.favorited"
+                :allow-actions="['favorite']"
                 @navigate="navigateToFolder"
                 @favorite="refreshFavorites"
               />
@@ -23,7 +23,7 @@
                 :file="file"
                 :imageList="imageList"
                 :imageIndex="imageList.findIndex(item => item.id === file.id)"
-                :favorited="true"
+                :favorited="file.favorited"
                 :allow-actions="['favorite', 'viewtext']"
                 @download="downloadFile"
                 @viewText="viewTextFile"
@@ -55,7 +55,7 @@ import { ElMessage } from 'element-plus'
 import FolderItem from '../components/FolderItem.vue'
 import FileItem from '../components/FileItem.vue'
 import TextViewerDialog from '../components/TextViewerDialog.vue'
-import { getFavoritesList } from '../services/favoritesApi'
+import { getMostFavoritesList } from '../services/favoritesApi'
 
 const router = useRouter()
 
@@ -81,7 +81,7 @@ const imageList = computed(() => {
   })
 })
 
-// 加载收藏列表
+// 加载最多收藏列表
 const loadFavorites = async (resetPage = true) => {
   loading.value = true
   try {
@@ -90,7 +90,7 @@ const loadFavorites = async (resetPage = true) => {
       currentPage.value = 0
     }
     
-    const response = await getFavoritesList(currentPage.value, pageSize.value)
+    const response = await getMostFavoritesList(currentPage.value, pageSize.value)
     
     if (resetPage) {
       files.value = response.files || []

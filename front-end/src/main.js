@@ -29,7 +29,8 @@ import {
   Position,
   Delete,
   Loading,
-  Switch
+  Switch,
+  Histogram
 } from '@element-plus/icons-vue'
 
 import { videoMiddlewareInit } from './utils/videoMiddleware.js'
@@ -62,7 +63,8 @@ const icons = [
   Position,
   Delete,
   Loading,
-  Switch
+  Switch,
+  Histogram
 ]
 
 icons.forEach(icon => {

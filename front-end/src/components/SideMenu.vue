@@ -8,12 +8,17 @@
                 </el-icon>
                 <span v-if="!isCollapsed">全部文件</span>
             </div>
-            <div class="menu-item" :class="{ active: activeMenu === 'favorites' }" @click="navigateTo('favorites')"
+            <div class="menu-item" :class="{ active: activeMenu === 'my-favorites' }" @click="navigateTo('my-favorites')"
                 :title="isCollapsed ? '我的收藏' : ''">
                 <el-icon>
                     <Star />
                 </el-icon>
                 <span v-if="!isCollapsed">我的收藏</span>
+            </div>
+            <div class="menu-item" :class="{ active: activeMenu === 'most-favorites' }" @click="navigateTo('most-favorites')"
+                :title="isCollapsed ? '最多收藏' : ''">
+                <el-icon><Histogram /></el-icon>
+                <span v-if="!isCollapsed">最多收藏</span>
             </div>
             <div class="menu-item" :class="{ active: activeMenu === 'admin' }" @click="navigateTo('admin')"
                 :title="isCollapsed ? '用户管理' : ''">
@@ -37,6 +42,7 @@
 <script setup>
 import { ref, watch, defineProps } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
+import { ArrowDown, ArrowUp } from '@element-plus/icons-vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -49,15 +55,25 @@ const props = defineProps({
 })
 
 const activeMenu = ref('files')
+const favoritesExpanded = ref(false)
 
 // 监听路由变化，更新当前激活的菜单项
 watch(() => route.name, (newRouteName) => {
     activeMenu.value = newRouteName
+    // 如果当前路由是收藏相关的，自动展开收藏子菜单
+    if (['favorites', 'my-favorites', 'most-favorites'].includes(newRouteName)) {
+        favoritesExpanded.value = true
+    }
 }, { immediate: true })
 
 // 导航到指定路由
 const navigateTo = (menuType) => {
     router.push({ name: menuType })
+}
+
+// 切换收藏子菜单的展开/折叠状态
+const toggleFavoritesSubmenu = () => {
+    favoritesExpanded.value = !favoritesExpanded.value
 }
 </script>
 
@@ -127,4 +143,10 @@ const navigateTo = (menuType) => {
 .menu-item .el-icon {
     margin-right: 8px;
 }
+
+.menu-item .expand-icon {
+    margin-left: auto;
+    font-size: 12px;
+}
+
 </style>

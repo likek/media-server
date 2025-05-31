@@ -1,5 +1,5 @@
 import express from 'express';
-import { addToFavorites, getUserFavorites, removeFromFavorites } from "../favoritesManager.js";
+import { addToFavorites, getUserFavorites, removeFromFavorites, getMostFavorites } from "../favoritesManager.js";
 import { getUserIdByReq } from "../utils/index.js";
 const router = express.Router();
 
@@ -34,7 +34,7 @@ router.post("/add", async (req, res) => {
   });
   
   // 获取收藏列表
-  router.post("/list", async (req, res) => {
+router.post("/list", async (req, res) => {
     const userId = getUserIdByReq(req);
     const { page = 0, pageSize = 20 } = req.body;
     if (!userId) {
@@ -42,6 +42,21 @@ router.post("/add", async (req, res) => {
     }
     try {
       const result = getUserFavorites(userId, page, pageSize);
+      res.json(result); // 返回包含files和total的结果
+    } catch (err) {
+      res.status(500).json({ message: "请求失败" });
+    }
+});
+
+// 获取最多收藏列表
+router.post("/most", async (req, res) => {
+    const userId = getUserIdByReq(req);
+    const { page = 0, pageSize = 20 } = req.body;
+    if (!userId) {
+      return res.status(401).json({ message: "请求失败" });
+    }
+    try {
+      const result = getMostFavorites(page, pageSize, userId);
       res.json(result); // 返回包含files和total的结果
     } catch (err) {
       res.status(500).json({ message: "请求失败" });

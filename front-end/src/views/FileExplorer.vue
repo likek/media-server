@@ -1,5 +1,5 @@
 <template>
-  <div class="file-explorer">
+  <div class="file-explorer" v-loading="loading">
     <div class="top-container">
       <div class="top-form">
         <el-form @submit.prevent="handleSearch">
@@ -38,10 +38,7 @@
     </div>
 
     <div class="media-container" ref="mediaContainer">
-      <template v-if="loading">
-        <el-skeleton :rows="20" animated :throttle="300" />
-      </template>
-      <template v-else-if="files.length === 0">
+      <template v-if="files.length === 0">
         <el-empty :description="'没有文件'" />
       </template>
       <template v-else>
@@ -232,8 +229,12 @@ const loadFiles = async (resetPage = true) => {
   } finally {
     loading.value = false
 
-    // 检查首屏内容是否填满容器，如果不足且有更多文件，则自动加载更多
-    checkContentHeight()
+    nextTick(() => {
+      // 检查首屏内容是否填满容器，如果不足且有更多文件，则自动加载更多
+      checkContentHeight()
+      const lastScrollTop = getCache(route.params.id, route.query.q)?.scrollTop || 0
+      mediaContainer.value.scrollTop = lastScrollTop
+    })
   }
 }
 
@@ -632,9 +633,6 @@ const loadMoreFiles = async () => {
   loading.value = true
 
   try {
-    const scrollContainer = mediaContainer.value
-    const currScrollTop = scrollContainer ? scrollContainer.scrollTop : 0
-
     // 获取当前文件夹ID（如果有）
     const folderId = route.params.id
     const query = route.query.q
@@ -646,10 +644,13 @@ const loadMoreFiles = async () => {
 
       if (response.files && response.files.length > 0) {
         files.value = [...files.value, ...response.files]
-        setTimeout(() => {
+        nextTick(() => {
           if (mediaContainer.value) {
-            mediaContainer.value.scrollTop = currScrollTop
             checkContentHeight()
+            nextTick(() => {
+              const lastScrollTop = getCache(route.params.id, route.query.q)?.scrollTop || 0
+              mediaContainer.value.scrollTop = lastScrollTop
+            })
           }
         })
         // 判断是否还有更多文件 - 使用total字段
@@ -672,6 +673,9 @@ const loadMoreFiles = async () => {
 
 // 检查滚动位置并加载更多文件
 const checkScrollPosition = () => {
+  setCache(route.params.id, route.query.q, {
+    scrollTop: mediaContainer.value.scrollTop
+  })
   if (!mediaContainer.value || loading.value || !hasMoreFiles.value) {
     return
   }

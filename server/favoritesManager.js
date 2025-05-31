@@ -40,7 +40,7 @@ export const getUserFavorites = (userId, page = 0, pageSize = 20) => {
     
     // 然后获取分页数据
     const query = `
-      SELECT f.id, f.name, f.type, f.mime_type, f.path, f.size, f.last_modified, f.thumbnail, f.parent_id, f.created_at, f.updated_at
+      SELECT f.id, f.name, f.type, f.mime_type, f.path, f.size, f.last_modified, f.thumbnail, f.parent_id, f.created_at, f.updated_at, f.m3u8_path
       FROM files f
       JOIN favorites fav ON f.id = fav.file_id
       WHERE fav.user_id = ?
@@ -76,12 +76,82 @@ export const getUserFavorites = (userId, page = 0, pageSize = 20) => {
       thumbnail: row.thumbnail,
       lastModified: row.last_modified,
       size: row.size,
-      parent_id: row.parent_id
+      parent_id: row.parent_id,
+      m3u8_path: row.m3u8_path,
+      favorited: true // 用户自己的收藏列表，所有文件都是已收藏状态
     }));
     
     return { files, total };
   } catch (err) {
     console.error('Error getting user favorites:', err);
+    throw err;
+  }
+};
+
+// 获取最多收藏的文件列表
+export const getMostFavorites = (page = 0, pageSize = 20, currentUserId = null) => {
+  try {
+    // 首先获取总数
+    const countStmt = db.prepare(`
+      SELECT COUNT(DISTINCT f.id) as total
+      FROM files f
+      JOIN favorites fav ON f.id = fav.file_id
+    `);
+    
+    const countRow = countStmt.get();
+    const total = countRow?.total || 0;
+    
+    // 然后获取分页数据，按收藏数量排序
+    const query = `
+      SELECT 
+        f.id, f.name, f.type, f.mime_type, f.path, f.size, f.last_modified, f.thumbnail, f.parent_id, f.created_at, f.updated_at, f.m3u8_path, 
+        COUNT(fav.id) as favorite_count
+      FROM files f
+      JOIN favorites fav ON f.id = fav.file_id
+      GROUP BY f.id
+      ORDER BY 
+        favorite_count DESC,
+        CASE f.type
+          WHEN 'folder' THEN 1
+          ELSE 2
+        END,
+        f.last_modified DESC
+      ${pageSize > 0 ? `LIMIT ? OFFSET ?` : ''}
+    `;
+    
+    const params = pageSize > 0 
+      ? [pageSize, page * pageSize]
+      : [];
+    
+    const stmt = db.prepare(query);
+    const rows = stmt.all(...params);
+    
+    // 获取文件的收藏状态
+    const fileIds = rows.map(row => row.id);
+    let favoritedStatus = {};
+    
+    if (currentUserId && fileIds.length > 0) {
+      favoritedStatus = getFavoritesStatus(currentUserId, fileIds);
+    }
+    
+    const files = rows.map(row => ({
+      id: row.id,
+      type: row.type,
+      mime_type: row.mime_type,
+      filename: row.name,
+      path: row.path,
+      thumbnail: row.thumbnail,
+      lastModified: row.last_modified,
+      size: row.size,
+      parent_id: row.parent_id,
+      favoriteCount: row.favorite_count,
+      m3u8_path: row.m3u8_path,
+      favorited: favoritedStatus[row.id] || false
+    }));
+    
+    return { files, total };
+  } catch (err) {
+    console.error('Error getting most favorites:', err);
     throw err;
   }
 };

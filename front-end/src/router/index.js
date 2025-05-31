@@ -14,7 +14,19 @@ const routes = [
   {
     path: '/favorites',
     name: 'favorites',
-    component: () => import('../views/FavoritesView.vue')
+    redirect: '/favorites/my',
+    children: [
+      {
+        path: 'my',
+        name: 'my-favorites',
+        component: () => import('../views/FavoritesView.vue')
+      },
+      {
+        path: 'most',
+        name: 'most-favorites',
+        component: () => import('../views/MostFavoritesView.vue')
+      }
+    ]
   },
   {
     path: '/admin',
