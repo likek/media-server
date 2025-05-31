@@ -79,7 +79,7 @@ const toggleFavoritesSubmenu = () => {
 
 <style scoped>
 .side-menu {
-    width: 200px;
+    width: 120px;
     height: 100%;
     background-color: #f5f7fa;
     border-right: 1px solid #e6e6e6;
