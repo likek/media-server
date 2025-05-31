@@ -40,9 +40,8 @@
 </template>
 
 <script setup>
-import { ref, watch, defineProps } from 'vue'
+import { ref, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { ArrowDown, ArrowUp } from '@element-plus/icons-vue'
 
 const router = useRouter()
 const route = useRoute()
