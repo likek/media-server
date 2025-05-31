@@ -13,7 +13,7 @@
 </template>
 
 <script setup>
-import { ref, defineProps, defineEmits, watch } from 'vue'
+import { ref, watch } from 'vue'
 import { ElMessageBox } from 'element-plus'
 import { readTextFile, convertTextEncoding } from '../services/userApi'
 
