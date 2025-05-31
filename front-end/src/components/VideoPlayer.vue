@@ -9,11 +9,7 @@ import { ref, onMounted, onBeforeUnmount, watch } from 'vue';
 import videojs from 'video.js';
 import 'video.js/dist/video-js.css';
 import { createEncryptedUrl } from '../utils/videoMiddleware';
-import httpSourceSelector from '@/lib/videojs-http-source-selector';
-
-if (!videojs.getPlugin('httpSourceSelector')) {
-    videojs.registerPlugin('httpSourceSelector', httpSourceSelector)
-}
+import 'videojs-hls-quality-selector/src/plugin'
 
 const props = defineProps({
     src: {
@@ -83,12 +79,16 @@ const initializePlayer = async () => {
 
     // 初始化Video.js播放器
     player = videojs(videoElement, videoOptions);
-    player.httpSourceSelector({ default: 'auto' })
     player.ready(() => {
         const videoEl = player.el().querySelector('video')
         if (videoEl) {
             videoEl.addEventListener('contextmenu', event => {
                 event.preventDefault()
+            })
+        }
+        if(player.hlsQualitySelector) {
+            player.hlsQualitySelector({
+            displayCurrentQuality: true,
             })
         }
         player.load() // 必须强制发起首次token请求防止token被再次重放

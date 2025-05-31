@@ -181,7 +181,7 @@ async function convertMp4ToHls(id) {
   const variants = []
 
   for (const q of qualities) {
-    if (width < q.width || height < q.height) continue
+    if (width < q.width && height < q.height) continue
 
     const variantDir = path.join(outputBaseDir, q.name)
     fs.mkdirSync(variantDir, { recursive: true })
