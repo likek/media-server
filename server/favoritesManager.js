@@ -111,11 +111,7 @@ export const getMostFavorites = (page = 0, pageSize = 20, currentUserId = null) 
       GROUP BY f.id
       ORDER BY 
         favorite_count DESC,
-        CASE f.type
-          WHEN 'folder' THEN 1
-          ELSE 2
-        END,
-        f.last_modified DESC
+        fav.created_at DESC
       ${pageSize > 0 ? `LIMIT ? OFFSET ?` : ''}
     `;
     
