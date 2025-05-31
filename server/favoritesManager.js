@@ -44,7 +44,8 @@ export const getUserFavorites = (userId, page = 0, pageSize = 20) => {
       FROM files f
       JOIN favorites fav ON f.id = fav.file_id
       WHERE fav.user_id = ?
-      ORDER BY 
+      ORDER BY
+        fav.created_at DESC,
         CASE f.type
           WHEN 'folder' THEN 1
           ELSE 2
@@ -111,7 +112,19 @@ export const getMostFavorites = (page = 0, pageSize = 20, currentUserId = null) 
       GROUP BY f.id
       ORDER BY 
         favorite_count DESC,
-        fav.created_at DESC
+        fav.created_at DESC,
+        CASE f.type
+          WHEN 'folder' THEN 1
+          ELSE 2
+        END,
+        CASE 
+          WHEN f.mime_type LIKE 'video/%' THEN 1
+          WHEN f.mime_type LIKE 'image/%' THEN 2
+          ELSE 3
+        END,
+        f.last_modified DESC,
+        f.updated_at DESC,
+        f.created_at DESC
       ${pageSize > 0 ? `LIMIT ? OFFSET ?` : ''}
     `;
     
