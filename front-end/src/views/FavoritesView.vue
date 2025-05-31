@@ -52,7 +52,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, nextTick, onBeforeUnmount } from 'vue'
+import { ref, computed, onMounted, nextTick, onBeforeUnmount, onActivated } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import FolderItem from '../components/FolderItem.vue'
@@ -141,11 +141,16 @@ const checkContentHeight = () => {
 }
 
 // 加载更多文件
-const loadMoreFiles = () => {
+const loadMoreFiles = async () => {
   if (loading.value || !hasMoreFiles.value) return
   
   currentPage.value++
-  loadFavorites(false)
+  await loadFavorites(false)
+  nextTick(() => {
+    if (lastScrollTop.value > 0) {
+      mediaContainer.value?.scrollTo(0, lastScrollTop.value)
+    }
+  })
 }
 
 // 导航到文件夹
@@ -169,11 +174,7 @@ const viewTextFile = async (file) => {
   }
 }
 
-// 显示操作不允许的消息
-const showNotAllowedMessage = () => {
-  ElMessage.warning('收藏视图中不允许此操作')
-}
-
+const lastScrollTop = ref(0)
 // 监听滚动事件，实现无限滚动
 const setupScrollListener = () => {
   if (!mediaContainer.value) return
@@ -185,6 +186,8 @@ const setupScrollListener = () => {
     if (scrollHeight - scrollTop - clientHeight < 100 && hasMoreFiles.value && !loading.value) {
       loadMoreFiles()
     }
+    // 记录上一次的滚动位置
+    lastScrollTop.value = scrollTop
   }
   
   mediaContainer.value.addEventListener('scroll', handleScroll)
@@ -201,6 +204,12 @@ onMounted(() => {
   onBeforeUnmount(() => {
     cleanup && cleanup()
   })
+})
+
+onActivated(() => {
+  if (lastScrollTop.value > 0) {
+    mediaContainer.value?.scrollTo(0, lastScrollTop.value)
+  }
 })
 </script>
 

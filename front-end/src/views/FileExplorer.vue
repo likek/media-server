@@ -271,7 +271,7 @@ const loadFolderPath = async (folderId, leafId) => {
 const updatePageByCache = (cacheData) => {
   files.value = cacheData.files || []
   currentPage.value = cacheData.currentPage || 0
-  hasMoreFiles.value = cacheData.hasMoreFiles || true
+  hasMoreFiles.value = cacheData.hasMoreFiles ?? true
   nextTick(() => {
     // 检查首屏内容是否填满容器，如果不足且有更多文件，则自动加载更多
     checkContentHeight()
