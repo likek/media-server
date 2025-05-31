@@ -117,24 +117,6 @@ export const convertToHls = async (id) => {
   return response
 }
 
-// 添加到收藏
-export const addToFavorites = async (fileId) => {
-  const response = await request.post('/user/favorites/add', { fileId })
-  return response
-}
-
-// 从收藏中移除
-export const removeFromFavorites = async (fileId) => {
-  const response = await request.post('/user/favorites/remove', { fileId })
-  return response
-}
-
-// 获取收藏列表
-export const getFavoritesList = async (page = 0, pageSize = 20) => {
-  const response = await request.post('/user/favorites/list', { page, pageSize })
-  return response // 现在返回包含files和total的结构
-}
-
 // iv可选
 export const registerUser = async (iv) => {
   const response = await request.post('/user/register', { iv })

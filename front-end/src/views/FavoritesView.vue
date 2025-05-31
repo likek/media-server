@@ -58,7 +58,7 @@ import { ElMessage } from 'element-plus'
 import FolderItem from '../components/FolderItem.vue'
 import FileItem from '../components/FileItem.vue'
 import TextViewerDialog from '../components/TextViewerDialog.vue'
-import { getFavoritesList } from '../services/userApi'
+import { getFavoritesList } from '../services/favoritesApi'
 
 const router = useRouter()
 

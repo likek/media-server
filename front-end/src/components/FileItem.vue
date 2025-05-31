@@ -123,8 +123,9 @@
 <script setup>
 import { computed, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { addToFavorites, removeFromFavorites, unzipFile, convertToHls } from '../services/userApi'
+import { unzipFile, convertToHls } from '../services/userApi'
 import VideoPlayer from './VideoPlayer.vue'
+import { addToFavorites, removeFromFavorites } from '../services/favoritesApi'
 
 const props = defineProps({
   file: {

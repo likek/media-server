@@ -20,6 +20,7 @@ import adminRoutes from "./server/routes/adminRoutes.js";
 import logRoutes from "./server/routes/logRoutes.js";
 import userRoutes from "./server/routes/userRoutes.js";
 import staticRoutes from "./server/routes/staticRoutes.js";
+import favoritesRoutes from "./server/routes/favoritesRoutes.js";
 import mediaHelperRoutes from "./server/routes/mediaHelperRoutes.js";
 import { encryptResponseMiddleware as encryptResponse, decryptRequestMiddleware as decryptRequest } from "./server/middleware/encryptHttp.js";
 import { sqlInjectionProtection, contentSecurityPolicy, csrfProtection, securityHeaders, validateFilePath } from "./server/middleware/security.js";
@@ -111,6 +112,7 @@ app.use(encryptResponse);
 app.use("/i/admin", adminRoutes);
 app.use("/i/logs", logRoutes);
 app.use("/i/user", userRoutes);
+app.use("/i/favorites", favoritesRoutes);
 app.use("/i/media", mediaHelperRoutes);
 
 wsInit(httpServer);

@@ -12,8 +12,7 @@ import { wsBroadcastMessage } from "../websocketManager.js";
 import { convertTxtEncoding } from "../tools/textFileTools.js";
 import { tryRegister } from "../userManager.js";
 import { downloadAllMediaByLinks } from "../downloadManager.js";
-import { addToFavorites, getUserFavorites, removeFromFavorites } from "../favoritesManager.js";
-import { get51PageInfo, getUserIdByReq } from "../utils/index.js";
+import { get51PageInfo } from "../utils/index.js";
 import { validateFingerprint } from "../middleware/fingerprintValidator.js";
 import db from "../dbserialize.js";
 
@@ -38,51 +37,6 @@ const storage = multer.diskStorage({
 });
 
 const upload = multer({ storage });
-
-// 添加收藏
-router.post("/favorites/add", async (req, res) => {
-  const userId = getUserIdByReq(req);
-  const { fileId } = req.body;
-  if (!userId) {
-    return res.status(401).json({ message: "请求失败" });
-  }
-  try {
-    const result = addToFavorites(userId, fileId);
-    res.json(result);
-  } catch (err) {
-    res.status(500).json({ message: "请求失败" });
-  }
-});
-
-// 移除收藏
-router.post("/favorites/remove", async (req, res) => {
-  const userId = getUserIdByReq(req);
-  const { fileId } = req.body;
-  if (!userId) {
-    return res.status(401).json({ message: "请求失败" });
-  }
-  try {
-    const result = removeFromFavorites(userId, fileId);
-    res.json(result);
-  } catch (err) {
-    res.status(500).json({ message: "请求失败" });
-  }
-});
-
-// 获取收藏列表
-router.post("/favorites/list", async (req, res) => {
-  const userId = getUserIdByReq(req);
-  const { page = 0, pageSize = 20 } = req.body;
-  if (!userId) {
-    return res.status(401).json({ message: "请求失败" });
-  }
-  try {
-    const result = getUserFavorites(userId, page, pageSize);
-    res.json(result); // 返回包含files和total的结果
-  } catch (err) {
-    res.status(500).json({ message: "请求失败" });
-  }
-});
 
 router.post("/register", validateFingerprint, async (req, res) => {
   try {
