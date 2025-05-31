@@ -13,6 +13,9 @@
           </el-icon>
           <span class="file-name">{{ file.m3u8_path ? '_' : '' }}{{ file.filename }}</span>
           <div class="file-actions">
+            <el-tooltip content="所在文件夹" placement="top" :auto-close="1000" v-if="allowActions.includes('navigateParent')">
+              <el-icon class="action-icon" @click.stop="$emit('navigate', file.parent_id)"><FolderOpened /></el-icon>
+            </el-tooltip>
             <el-tooltip content="查看文本" placement="top" :auto-close="1000" v-if="isText && allowActions.includes('viewtext')">
               <el-icon class="action-icon" @click.stop="viewTextFile" >
                 <View />
@@ -147,14 +150,14 @@ const props = defineProps({
     default: false
   },
   allowActions: {
-    type: Array, // 'viewtext', 'unzip', 'convertts', 'favorite', 'rename', 'move', 'delete', 'converthls'
+    type: Array, // 'viewtext', 'unzip', 'convertts', 'favorite', 'rename', 'move', 'delete', 'converthls', 'navigateParent'
     default: true
   }
 })
 
 const isFavorited = ref(props.favorited)
 
-const emit = defineEmits(['rename', 'delete', 'move', 'download', 'unzip', 'viewText', 'convertTs', 'favorite'])
+const emit = defineEmits(['rename', 'delete', 'move', 'download', 'unzip', 'viewText', 'convertTs', 'favorite', 'navigate'])
 
 // 视频播放器配置
 const videoOptions = ref({

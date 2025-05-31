@@ -24,10 +24,11 @@
                 :imageList="imageList"
                 :imageIndex="imageList.findIndex(item => item.id === file.id)"
                 :favorited="true"
-                :allow-actions="['favorite', 'viewtext']"
+                :allow-actions="['favorite', 'viewtext', 'navigateParent']"
                 @download="downloadFile"
                 @viewText="viewTextFile"
                 @favorite="refreshFavorites"
+                @navigate="navigateToFolder"
               />
             </template>
           </template>

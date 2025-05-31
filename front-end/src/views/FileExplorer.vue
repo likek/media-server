@@ -52,7 +52,7 @@
               <file-item :allow-actions="['viewtext', 'unzip', 'convertts', 'favorite', 'rename', 'move', 'delete', 'converthls']" :key="file.id" :file="file" :imageList="imageList"
                 :imageIndex="imageList.findIndex(item => item.id === file.id)" :favorited="file.favorited"
                 @rename="showRenameDialog" @move="showMoveDialog" @download="downloadFile" @delete="confirmDelete"
-                @unzip="refreshCache" @viewText="viewTextFile" @convertTs="convertTsFile" @favorite="refreshFavorites" />
+                @unzip="refreshCache" @viewText="viewTextFile" @convertTs="convertTsFile" @favorite="refreshFavorites" @navigate="navigateToFolder"/>
             </template>
           </template>
         </div>
