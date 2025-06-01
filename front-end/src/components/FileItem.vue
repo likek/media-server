@@ -314,9 +314,12 @@ const toggleFavorite = async () => {
   max-height: 400px;
 }
 
-.file-item:hover {
-  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+@media (any-hover: hover) {
+  .file-item:hover {
+    box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+  }
 }
+
 
 .file-content {
   display: flex;
@@ -356,8 +359,10 @@ const toggleFavorite = async () => {
   transition: color 0.3s;
 }
 
-.action-icon:hover {
-  color: #409EFF;
+@media (any-hover: hover) {
+  .action-icon:hover {
+    color: #409EFF;
+  }
 }
 
 .favorite-icon.is-favorited {
@@ -395,8 +400,10 @@ const toggleFavorite = async () => {
   border-radius: 4px;
 }
 
-.pdf-link:hover {
-  background-color: #ecf5ff;
+@media (any-hover: hover) {
+  .pdf-link:hover {
+    background-color: #ecf5ff;
+  }
 }
 
 .file-info {

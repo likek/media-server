@@ -905,6 +905,12 @@ onUnmounted(() => {
   color: #66b1ff;
 }
 
+@media (any-hover: hover) {
+  .el-breadcrumb :deep(.el-breadcrumb__inner):hover {
+    color: #66b1ff;
+  }
+}
+
 .copy-path-btn {
   margin-left: 10px;
 }

@@ -113,10 +113,18 @@ const toggleFavorite = async () => {
   transition: all 0.3s;
 }
 
-.folder-item:hover {
-  background-color: #e6f1fc;
-  transform: translateY(-2px);
-  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+@media (any-hover: hover) {
+  .folder-item:hover {
+    background-color: #e6f1fc;
+    transform: translateY(-2px);
+    box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+  }
+}
+
+.folder-item:active {
+    background-color: #e6f1fc;
+    transform: translateY(-2px);
+    box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
 }
 
 .favorite-icon.is-favorited {
@@ -165,8 +173,10 @@ const toggleFavorite = async () => {
   font-size: 14px;
 }
 
-.action-icon:hover {
-  color: #409eff;
+@media (any-hover: hover) {
+  .action-icon:hover {
+    color: #409eff;
+  }
 }
 
 .file-info {

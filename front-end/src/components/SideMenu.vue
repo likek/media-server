@@ -133,6 +133,12 @@ const toggleFavoritesSubmenu = () => {
     background-color: #e6f1fc;
 }
 
+@media (any-hover: hover) {
+    .menu-item:hover {
+        background-color: #e6f1fc;
+    }
+}
+
 .menu-item.active {
     background-color: #e6f1fc;
     color: #409eff;

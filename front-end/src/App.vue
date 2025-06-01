@@ -164,12 +164,27 @@ html.dark .verification-box {
   border-color: #000;
 }
 
-html.dark .folder-item:hover, 
 html.dark .menu-item.active,
-html.dark .menu-item:hover,
 html.dark .verification-area,
 html.dark .verification-button {
   background-color: #222;
+}
+
+@media (any-hover: hover) {
+  html.dark .folder-item:hover, 
+  html.dark .menu-item:hover {
+    background-color: #333;
+  }
+
+  html.dark .file-item:hover {
+    box-shadow: 0 2px 12px 0 rgba(222, 222, 222, 0.2);
+  }
+}
+
+html.dark .folder-item:active {
+    background-color: #202020;
+    transform: translateY(-2px);
+    box-shadow: 0 2px 12px 0 rgba(200, 100, 200, 0.1);
 }
 
 html, body {
