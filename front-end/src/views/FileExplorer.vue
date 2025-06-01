@@ -5,6 +5,9 @@
         <el-form @submit.prevent="handleSearch">
           <el-input v-model="searchInput" placeholder="在当前目录下搜索" class="search-input" clearable />
         </el-form>
+        <el-button @click="showSearchAdvanceDialog">
+          <el-icon><Filter /></el-icon>
+        </el-button>
         <el-button @click="refreshCache"><el-icon>
             <Refresh />
           </el-icon></el-button>
@@ -128,6 +131,63 @@
 
     <!-- 文本文件查看对话框 -->
     <text-viewer-dialog v-model:visible="txtDialogVisible" :file="currentItem" :num-lines="30" />
+    <el-dialog v-model="dialogSearchAdvanceVisible" title="过滤" width="260px">
+      <el-form :model="advanceSearchForm" label-width="0" ref="advanceSearchFormRef">
+        <el-form-item label="" prop="type">
+          <el-radio-group v-model="advanceSearchForm.type" size="small" style="width: 100%">
+            <el-radio-button value="" label="">不限</el-radio-button>
+            <el-radio-button value="file">文件</el-radio-button>
+            <el-radio-button value="folder">文件夹</el-radio-button>
+          </el-radio-group>
+        </el-form-item>
+
+        <el-form-item label="" prop="space">
+          <el-radio-group v-model="advanceSearchForm.space" size="small" style="width: 100%">
+            <el-radio-button value="">不限</el-radio-button>
+            <el-radio-button value="children">当前目录</el-radio-button>
+            <el-radio-button value="level_1">当前一级</el-radio-button>
+          </el-radio-group>
+        </el-form-item>
+
+        <el-form-item label="" prop="query">
+          <el-input v-model="advanceSearchForm.query" placeholder="请输入关键字" />
+        </el-form-item>
+
+        <el-form-item label="" v-if="advanceSearchForm.type !== 'folder'" prop="mime_type">
+          <el-radio-group v-model="advanceSearchForm.mime_type" size="small" style="width: 100%">
+            <el-radio-button value="">不限</el-radio-button>
+            <el-radio-button value="image/jpeg">图片</el-radio-button>
+            <el-radio-button value="video/mp4">视频</el-radio-button>
+          </el-radio-group>
+        </el-form-item>
+
+        <el-form-item label="" prop="start_date">
+          <el-date-picker
+            style="width: 100%"
+            v-model="advanceSearchForm.start_date"
+            type="date"
+            placeholder="开始日期"
+            value-format="YYYY-MM-DD"
+          />
+        </el-form-item>
+
+        <el-form-item label="" prop="end_date">
+          <el-date-picker
+            style="width: 100%"
+            v-model="advanceSearchForm.end_date"
+            type="date"
+            placeholder="结束日期"
+            value-format="YYYY-MM-DD"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="dialogSearchAdvanceVisible = false">取消</el-button>
+          <el-button type="primary" @click="handleSearchAdvanced">确认</el-button>
+        </span>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -170,6 +230,17 @@ const textLinkDialogVisible = ref(false)
 const linkText = ref('')
 const moveDialogVisible = ref(false)
 const folderTree = ref(null) // Ref for the tree component
+const dialogSearchAdvanceVisible = ref(false)
+const advanceSearchForm = ref({
+  query: '',
+  space: '',
+  type: '',
+  mime_type: '',
+  start_date: '',
+  end_date: ''
+})
+
+const advanceSearchFormRef = ref(null)
 
 // 文本查看对话框状态
 const txtDialogVisible = ref(false)
@@ -180,6 +251,41 @@ const imageList = computed(() => {
     return ['jpg', 'jpeg', 'png', 'gif'].includes(ext)
   })
 })
+
+// 显示高级搜索对话框
+const showSearchAdvanceDialog = () => {
+  // 高级搜索对话框
+  dialogSearchAdvanceVisible.value = true
+  if (searchInput.value) {
+    advanceSearchForm.value.query = searchInput.value
+  }
+  advanceSearchForm.value.end_date = route.query.end_date || ''
+  advanceSearchForm.value.start_date = route.query.start_date || ''
+  advanceSearchForm.value.type = route.query.type || ''
+  advanceSearchForm.value.mime_type = route.query.mime_type || ''
+  advanceSearchForm.value.space = route.query.space || ''
+}
+
+const handleSearchAdvanced = async () => {
+  if (advanceSearchForm.value.type === 'folder') {
+    advanceSearchForm.value.mime_type = ''
+  }
+  const filters = Object.entries(advanceSearchForm.value).reduce((acc, [key, value]) => {
+    if (typeof value !== 'undefined' && value !== '' && value !== null) {
+      acc[key] = value
+    }
+    return acc
+  }, {})
+  router.push({
+    name: 'folder',
+    params: {
+      id: route.params.id
+    },
+    query: filters
+  })
+  dialogSearchAdvanceVisible.value = false
+  // advanceSearchFormRef.value.resetFields()
+}
 
 // 刷新收藏列表
 const refreshFavorites = (file, isFavorited) => {
@@ -208,10 +314,22 @@ const loadFiles = async (resetPage = true) => {
 
     // 获取当前文件夹ID（如果有）
     const folderId = route.params.id
-    const query = route.query.q
+    const query = route.query.query
+    const space = route.query.space
+    const type = route.query.type
+    const mime_type = route.query.mime_type
+    const start_date = route.query.start_date
+    const end_date = route.query.end_date
 
-    const response = await getFiles(folderId, query, currentPage.value, pageSize.value)
-    if (route.params.id !== folderId || route.query.q !== query) {
+    const filters = {
+      space,
+      type,
+      mime_type,
+      start_date,
+      end_date
+    }
+    const response = await getFiles(folderId, query, currentPage.value, pageSize.value, filters)
+    if (route.params.id !== folderId || route.query.query !== query) {
       console.warn(`路由已变更，不更新数据`)
       loading.value = false
       return
@@ -232,7 +350,7 @@ const loadFiles = async (resetPage = true) => {
     nextTick(() => {
       // 检查首屏内容是否填满容器，如果不足且有更多文件，则自动加载更多
       checkContentHeight()
-      const lastScrollTop = getCache(route.params.id, route.query.q)?.scrollTop || 0
+      const lastScrollTop = getCache(route.params.id, route.query)?.scrollTop || 0
       mediaContainer.value.scrollTop = lastScrollTop
     })
   }
@@ -283,6 +401,7 @@ const updatePageByCache = (cacheData) => {
 const setCache = (id, query, value) => {
   id = id || ''
   query = query || ''
+  query = JSON.stringify(query)
   stateCache[id] = stateCache[id] || {}
   stateCache[id][query] = stateCache[id][query] || {}
   Object.assign(stateCache[id][query], value)
@@ -291,12 +410,13 @@ const setCache = (id, query, value) => {
 const getCache = (id, query) => {
   id = id || ''
   query = query || ''
+  query = JSON.stringify(query)
   return stateCache[id]?.[query]
 }
 
 // 监听路由变化
 watch(() => route.params.id, async (newValue, oldValue) => {
-  const cacheData = getCache(route.params.id, route.query.q)
+  const cacheData = getCache(route.params.id, route.query)
   if (cacheData) {
     updatePageByCache(cacheData)
   } else {
@@ -306,8 +426,10 @@ watch(() => route.params.id, async (newValue, oldValue) => {
   loadFolderPath(route.params.id)
 }, { immediate: true })
 
-watch(() => route.query.q, async (newValue, oldValue) => {
-  const cacheData = getCache(route.params.id, route.query.q)
+watch(() => route.query, async (newValue, oldValue) => {
+  searchInput.value = route.query.query
+  const cacheData = getCache(route.params.id, route.query)
+  console.log('cacheData', cacheData)
   if (cacheData) {
     updatePageByCache(cacheData)
   } else {
@@ -316,19 +438,19 @@ watch(() => route.query.q, async (newValue, oldValue) => {
 })
 
 watch(() => files.value, (files) => {
-  setCache(route.params.id, route.query.q, {
+  setCache(route.params.id, route.query, {
     files: [...files]
   })
 })
 
 watch(() => currentPage.value, (newPage) => {
-  setCache(route.params.id, route.query.q, {
+  setCache(route.params.id, route.query, {
     currentPage: newPage
   })
 })
 
 watch(() => hasMoreFiles.value, (hasMore) => {
-  setCache(route.params.id, route.query.q, {
+  setCache(route.params.id, route.query, {
     hasMoreFiles: hasMore
   })
 })
@@ -339,7 +461,7 @@ const handleSearch = async () => {
   router.push({
     name: 'folder',
     params: { id: route.params.id },
-    query: { q: searchInput.value?.trim() || undefined }
+    query: { query: searchInput.value?.trim() || undefined }
   })
 }
 
@@ -635,11 +757,25 @@ const loadMoreFiles = async () => {
   try {
     // 获取当前文件夹ID（如果有）
     const folderId = route.params.id
-    const query = route.query.q
-    const nextPage = currentPage.value + 1
-    const response = await getFiles(folderId, query, nextPage, pageSize.value)
+    const query = route.query.query
+    const space = route.query.space
+    const type = route.query.type
+    const mime_type = route.query.mime_type
+    const start_date = route.query.start_date
+    const end_date = route.query.end_date
 
-    if (route.params.id === folderId && route.query.q === query) {
+    const filters = {
+      space,
+      type,
+      mime_type,
+      start_date,
+      end_date
+    }
+
+    const nextPage = currentPage.value + 1
+    const response = await getFiles(folderId, query, nextPage, pageSize.value, filters)
+
+    if (route.params.id === folderId && route.query.query === query) {
       currentPage.value = nextPage
 
       if (response.files && response.files.length > 0) {
@@ -648,7 +784,7 @@ const loadMoreFiles = async () => {
           if (mediaContainer.value) {
             checkContentHeight()
             nextTick(() => {
-              const lastScrollTop = getCache(route.params.id, route.query.q)?.scrollTop || 0
+              const lastScrollTop = getCache(route.params.id, route.query)?.scrollTop || 0
               mediaContainer.value.scrollTop = lastScrollTop
             })
           }
@@ -673,7 +809,7 @@ const loadMoreFiles = async () => {
 
 // 检查滚动位置并加载更多文件
 const checkScrollPosition = () => {
-  setCache(route.params.id, route.query.q, {
+  setCache(route.params.id, route.query, {
     scrollTop: mediaContainer.value.scrollTop
   })
   if (!mediaContainer.value || loading.value || !hasMoreFiles.value) {
@@ -689,7 +825,7 @@ const checkScrollPosition = () => {
 
 const cacheScrollPosition = () => {
   if (mediaContainer.value) {
-    setCache(route.params.id, route.query.q, {
+    setCache(route.params.id, route.query, {
       scrollTop: mediaContainer.value.scrollTop
     })
   }
@@ -735,7 +871,7 @@ onUnmounted(() => {
 }
 
 .search-input {
-  width: 300px;
+  width: 140px;
 }
 
 .path-navigation {

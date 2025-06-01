@@ -1,5 +1,6 @@
 <template>
-  <div v-if="isVerified">
+   <el-config-provider :locale="zhCn">
+    <div v-if="isVerified">
     <div class="app-container" :class="{ 'sidebar-collapsed': isSidebarCollapsed }">
       <side-menu v-show="!isMobile || !isSidebarCollapsed" :is-collapsed="isSidebarCollapsed || isMobile" />
       <div class="main-content">
@@ -16,6 +17,7 @@
     </div>
   </div>
   <human-verification :loading="loading" v-else-if="!loading" @verification-success="onVerificationSuccess" />
+   </el-config-provider>
 </template>
 
 <script setup>
@@ -30,6 +32,7 @@ import { registerUser } from './services/userApi'
 import { useRoute } from 'vue-router'
 import { connectWebSocket } from './services/websocket'
 import { UseDark } from '@vueuse/components'
+import zhCn from 'element-plus/es/locale/lang/zh-cn'
 
 // 验证状态
 const isVerified = ref(false)

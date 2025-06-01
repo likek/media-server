@@ -241,43 +241,90 @@ const getFolderContentsById = async (folderId, searchQuery, filters, page, pageS
 
   const filter_type = filters?.type
   const filter_mime_type = filters?.mime_type
+  const filter_space = filters?.space || '' // 全局 or 当前目录下
+  const start_date = filters?.start_date
+  const end_date = filters?.end_date
 
   // 构建基础查询条件
   let whereClause = '';
   const params = [];
+  const isEnterFolder = !searchQuery && Object.values(filters).filter(v => typeof v !== 'undefined' && v !== null && String(v).trim() !== '').length === 0
   
-  if (searchQuery) {
-    // 搜索模式
-    whereClause += ` name LIKE ?`
-    params.push(`%${searchQuery}%`);
-    if (folderPath) {
-      whereClause += ` AND (path = ? OR path LIKE ?)`;
-      params.push(folderPath, `${folderPath}/%`);
-    }
-  } else {
-    // 浏览模式
+  if (isEnterFolder) {
+    // 浏览文件夹内容
+    // 添加parent_id过滤
     if (folderId) {
       whereClause += ` parent_id = ?`
       params.push(folderId);
     } else {
       whereClause += ` parent_id IS NULL`
     }
-  }
-  
-  // 添加类型过滤
-  if (filter_type) {
-    whereClause += ` AND type = ?`
-    params.push(filter_type);
-  }
-  
-  // 添加mime_type过滤
-  if (filter_mime_type) {
-    whereClause += ` AND mime_type LIKE ?`
-    params.push(`${filter_mime_type}%`);
+  } else {
+    // 搜索内容
+    //  添加名称过滤
+    if (searchQuery) {
+      whereClause += ` name LIKE ?`
+      params.push(`%${searchQuery}%`);
+    }
+
+    // 添加搜索范围约束
+    if (filter_space === 'children') {
+      // 当前folder及其子目录
+      if (folderId) {
+        whereClause += whereClause ? ' AND' : '' 
+        whereClause += ` (path = ? OR path LIKE ?)`;
+        params.push(folderPath, `${folderPath}/%`); 
+      } else {
+        // 根目录
+        // 相当于全局
+      }
+    } else if (filter_space === 'level_1') {
+      // 当前folder一级
+      whereClause += whereClause ? ' AND' : '' 
+      if (folderId) {
+        whereClause += ` parent_id = ?`;
+        params.push(folderId);
+      } else {
+        // 根目录
+        whereClause += ` parent_id IS NULL`;
+      }
+    } else {
+      // 全局
+      // ...
+    }
+    
+    // 添加类型过滤
+    if (filter_type === 'folder' || filter_type === 'file') {
+      whereClause += whereClause ? ' AND' : '' 
+      whereClause += ` type = ?`
+      params.push(filter_type);
+    }
+    
+    // 添加mime_type过滤
+    if ((filter_mime_type && (filter_mime_type.startsWith('video') || filter_mime_type.startsWith('image'))) && filter_type !== 'folder') {
+      whereClause += whereClause ? ' AND' : '' 
+      whereClause += ` mime_type LIKE ?`
+      params.push(`${filter_mime_type}%`);
+    }
+
+    // 添加起始日期过滤
+    if (start_date && /^\d{4}-\d{2}-\d{2}$/.test(start_date)) {
+      whereClause += whereClause ? ' AND' : ''
+      whereClause += ` last_modified >= ?`
+      params.push(`${start_date}T00:00:00.000Z`)
+    }
+    
+    if (end_date && /^\d{4}-\d{2}-\d{2}$/.test(end_date)) {
+      whereClause += whereClause ? ' AND' : ''
+      whereClause += ` last_modified <= ?`
+      params.push(`${end_date}T23:59:59.999Z`)
+    }
   }
   
   // 先获取总数
-  const countQuery = `SELECT COUNT(*) as total FROM files WHERE ${whereClause}`;
+  const countQuery = `SELECT COUNT(*) as total FROM files WHERE ${whereClause || '1=1'}`;
+  // console.log('countQuery: ', countQuery, params)
+  // console.log('params:', filters, searchQuery, page, pageSize)
   const stmt = db.prepare(countQuery)
   const countRow = stmt.get(...params);
   const totalCount = countRow?.total || 0;
@@ -340,7 +387,7 @@ const getFolderContentsById = async (folderId, searchQuery, filters, page, pageS
   }
   
   // 如果文件夹内容为空，自动刷新缓存
-  if (fileInfos.length === 0 && page === 0 && !searchQuery) {
+  if (fileInfos.length === 0 && page === 0 && isEnterFolder) {
     try {
       // 检查物理文件夹中是否有文件但数据库中没有记录
       const fullPath = path.join(MEDIA_FULL_PATH, folderPath);

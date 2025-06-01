@@ -233,12 +233,15 @@ router.post("/files", async (req, res) => {
     const pageSize = parseInt(req.body.pageSize); // 每页文件数
     const type = req.body.type;
     const mime_type = req.body.mime_type;
+    const space = req.body.space
+    const start_date = req.body.start_date
+    const end_date = req.body.end_date
     
     // 初始化数据库中的文件系统（如果需要）
     await initRootDirectory(req);
     
     // 通过ID获取文件列表，传递req对象以获取用户ID和收藏状态
-    let result = await getFolderContentsById(folderId, searchQuery, { type, mime_type }, page, pageSize, req);
+    let result = await getFolderContentsById(folderId, searchQuery, { type, mime_type, space, start_date, end_date }, page, pageSize, req);
     res.send(result); // 返回包含files和total的结果
   } catch (err) {
     console.error("Error fetching file list:", err);
