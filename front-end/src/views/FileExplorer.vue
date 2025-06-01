@@ -164,6 +164,7 @@
         <el-form-item label="" prop="start_date">
           <el-date-picker
             style="width: 100%"
+            :placement="top"
             v-model="advanceSearchForm.start_date"
             type="date"
             placeholder="开始日期"
@@ -174,6 +175,7 @@
         <el-form-item label="" prop="end_date">
           <el-date-picker
             style="width: 100%"
+            :placement="top"
             v-model="advanceSearchForm.end_date"
             type="date"
             placeholder="结束日期"
