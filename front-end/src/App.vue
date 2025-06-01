@@ -1,7 +1,6 @@
 <template>
    <el-config-provider :locale="zhCn">
-    <div v-if="isVerified">
-    <div class="app-container" :class="{ 'sidebar-collapsed': isSidebarCollapsed }">
+    <div v-if="isVerified" class="app-container" :class="{ 'sidebar-collapsed': isSidebarCollapsed }">
       <side-menu v-show="!isMobile || !isSidebarCollapsed" :is-collapsed="isSidebarCollapsed || isMobile" />
       <div class="main-content">
         <el-button size="small" @click="toggleSidebar" class="sidebar-toggle-btn" :icon="isSidebarCollapsed ? Expand : Fold" circle />
@@ -15,7 +14,6 @@
         </router-view>
       </div>
     </div>
-  </div>
   <human-verification :loading="loading" v-else-if="!loading" @verification-success="onVerificationSuccess" />
    </el-config-provider>
 </template>
@@ -178,17 +176,18 @@ html, body {
   margin: 0;
   padding: 0;
   height: 100%;
+  width: 100%;
   font-family: 'Helvetica Neue', Helvetica, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', Arial, sans-serif;
 }
 
 #app {
-  height: 100vh;
+  height: 100%;
   width: 100%;
 }
 
 .app-container {
   display: flex;
-  height: 100vh;
+  height: 100%;
   width: 100%;
 }
 

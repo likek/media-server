@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "PORT_SERVER=6666 vite",
+    "dev": "PORT_SERVER=6666 vite --host",
     "build": "vite build --emptyOutDir",
     "preview": "vite preview"
   },
