@@ -69,6 +69,7 @@ const mediaContainer = ref(null)
 const currentPage = ref(0)
 const pageSize = ref(5)
 const hasMoreFiles = ref(true)
+const total = ref(0)
 
 // 文本查看对话框状态
 const txtDialogVisible = ref(false)
@@ -102,6 +103,7 @@ const loadFavorites = async (resetPage = true) => {
     // 判断是否还有更多文件 - 使用total字段
     const totalLoaded = resetPage ? response.files?.length || 0 : files.value.length
     hasMoreFiles.value = totalLoaded < response.total
+    total.value = response.total
   } catch (error) {
     ElMessage.error('加载收藏失败')
     console.error('Error loading favorites:', error)
@@ -204,10 +206,27 @@ onMounted(() => {
   })
 })
 
-onActivated(() => {
+const actived = ref(false)
+onActivated(async () => {
   if (lastScrollTop.value > 0) {
     mediaContainer.value?.scrollTo(0, lastScrollTop.value)
   }
+
+  if (actived.value) {
+    try {
+      loading.value = true
+      const response = await getMostFavoritesList(0, 1)
+      if (response.total !== total.value || response.files?.[0]?.id  !== files.value[0]?.id) {
+        //  列表已更新
+        console.log('列表已更新')
+        loadFavorites()
+      }
+    } finally {
+      loading.value = false
+    }
+  }
+
+  actived.value = true
 })
 </script>
 
