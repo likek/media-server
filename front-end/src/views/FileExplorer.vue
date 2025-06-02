@@ -5,7 +5,7 @@
         <el-form @submit.prevent="handleSearch">
           <el-input v-model="searchInput" placeholder="在当前目录下搜索" class="search-input" clearable />
         </el-form>
-        <el-button @click="showSearchAdvanceDialog">
+        <el-button @click="showSearchAdvanceDialog" ref="refBtnFilter">
           <el-icon><Filter /></el-icon>
         </el-button>
         <el-button @click="refreshCache"><el-icon>
@@ -131,7 +131,8 @@
 
     <!-- 文本文件查看对话框 -->
     <text-viewer-dialog v-model:visible="txtDialogVisible" :file="currentItem" :num-lines="30" />
-    <el-dialog v-model="dialogSearchAdvanceVisible" title="过滤" width="260px">
+    <!-- 高级过滤对话框 -->
+    <el-dialog v-model="dialogSearchAdvanceVisible" title="过滤" width="260px" @opened="handleSearchAdvancedOpened">
       <el-form :model="advanceSearchForm" label-width="0" ref="advanceSearchFormRef">
         <el-form-item label="" prop="type">
           <el-radio-group v-model="advanceSearchForm.type" size="small" style="width: 100%">
@@ -154,7 +155,7 @@
         </el-form-item>
 
         <el-form-item label="" v-if="advanceSearchForm.type !== 'folder'" prop="mime_type">
-          <el-radio-group v-model="advanceSearchForm.mime_type" size="small" style="width: 100%">
+          <el-radio-group v-model="advanceSearchForm.mime_type" size="small" style="width: 100%" ref="refRadioFilterType"  @change="handleRadioChange">
             <el-radio-button value="">不限</el-radio-button>
             <el-radio-button value="image/jpeg">图片</el-radio-button>
             <el-radio-button value="video/mp4">视频</el-radio-button>
@@ -192,11 +193,22 @@
         </span>
       </template>
     </el-dialog>
+
+    <el-tour v-model="tourOpenFilterBtn" :show-close="false" 
+      @change="handleTourChange" 
+      :current="tourOpenFilterCurr" 
+      :z-index="3001" :target-area-clickable="true" 
+      :mask="{ color: 'rgba(0, 0, 0, 0.8)' }"
+      :content-style="{ width: '300px' }">
+      <el-tour-step :target="refBtnFilter?.$el" title="更多过滤功能"></el-tour-step>
+      <el-tour-step :target="refRadioFilterType?.$el" title="仅查看图片 或 视频"></el-tour-step>
+      <template #indicators></template>
+    </el-tour>
   </div>
 </template>
 
 <script setup>
-import { ref, watch, onMounted, onUnmounted, nextTick, computed } from 'vue'
+import { ref, watch, onMounted, onUnmounted, nextTick, computed, h } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import FolderItem from '../components/FolderItem.vue'
@@ -246,6 +258,23 @@ const advanceSearchForm = ref({
 
 const advanceSearchFormRef = ref(null)
 
+const refBtnFilter = ref(null)
+const refRadioFilterType = ref(null)
+const tourOpenFilterBtn = ref(false)
+const tourOpenFilterCurr = ref(0)
+const tourLocalName = 't_btn_filter1'
+const handleTourChange = (value) => {
+  if (value === 1 && !dialogSearchAdvanceVisible.value) {
+    tourOpenFilterBtn.value = false
+    tourOpenFilterCurr.value = 1
+    dialogSearchAdvanceVisible.value = true
+  }
+}
+
+const handleRadioChange = () => {
+  tourOpenFilterBtn.value = false
+}
+
 // 文本查看对话框状态
 const txtDialogVisible = ref(false)
 
@@ -268,6 +297,12 @@ const showSearchAdvanceDialog = () => {
   advanceSearchForm.value.type = route.query.type || ''
   advanceSearchForm.value.mime_type = route.query.mime_type || ''
   advanceSearchForm.value.space = route.query.space || ''
+}
+
+const handleSearchAdvancedOpened = () => {
+  tourOpenFilterCurr.value = 1
+  tourOpenFilterBtn.value = !localStorage.getItem(tourLocalName)
+  localStorage.setItem(tourLocalName, "1")
 }
 
 const handleSearchAdvanced = async () => {
@@ -841,6 +876,7 @@ onMounted(() => {
     mediaContainer.value.addEventListener('scroll', checkScrollPosition)
     mediaContainer.value.addEventListener('scroll', cacheScrollPosition)
   }
+  tourOpenFilterBtn.value = !localStorage.getItem(tourLocalName)
 })
 
 // 移除滚动事件监听
