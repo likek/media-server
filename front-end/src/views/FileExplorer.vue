@@ -5,8 +5,9 @@
         <el-form @submit.prevent="handleSearch">
           <el-input v-model="searchInput" placeholder="在当前目录下搜索" class="search-input" clearable />
         </el-form>
-        <el-button @click="showSearchAdvanceDialog" ref="refBtnFilter">
+        <el-button @click="showSearchAdvanceDialog" ref="refBtnFilter" class="filter-btn">
           <el-icon><Filter /></el-icon>
+          <div class="red-dot" v-show="redDotShow"></div>
         </el-button>
         <el-button @click="refreshCache"><el-icon>
             <Refresh />
@@ -263,6 +264,10 @@ const refRadioFilterType = ref(null)
 const tourOpenFilterBtn = ref(false)
 const tourOpenFilterCurr = ref(0)
 const tourLocalName = 't_btn_filter1'
+
+const redDotShow = computed(() => {
+  return route.query.query || route.query.end_date || route.query.start_date || route.query.mime_type || route.query.type || route.query.space
+})
 const handleTourChange = (value) => {
   if (value === 1 && !dialogSearchAdvanceVisible.value) {
     tourOpenFilterBtn.value = false
@@ -985,5 +990,31 @@ onUnmounted(() => {
 
 .folder-tree-node_lavel {
   vertical-align: text-bottom;
+}
+
+.filter-btn {
+  position: relative;
+}
+
+.red-dot {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 8px;
+  height: 8px;
+  background: radial-gradient(circle, #ddddff 0%, #409eff 100%);;
+  border-radius: 50%;
+  z-index: 2;
+  box-shadow: 0 0 8px rgba(0, 0, 255, 0.6);
+}
+
+/* @keyframes pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.15); }
+  100% { transform: scale(1); }
+} */
+
+.red-dot {
+  animation: pulse 1.6s infinite;
 }
 </style>
