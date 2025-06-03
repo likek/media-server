@@ -735,7 +735,7 @@ const showMoveDialog = (item) => {
 const loadNode = async (node, resolve) => {
   if (node.level === 0) {
     try {
-      const response = await getFiles(null, null, 0, 1000, { type: 'folder' }) // Fetch root level items
+      const response = await getFiles(null, null, 0, 1000, { type: 'folder', space: 'level_1' }) // Fetch root level items
       const folders = response.files
         .map(folder => ({ ...folder, isLeaf: false }))
       return resolve([{ id: 0, filename: '根目录', isLeaf: false, children: folders }])
@@ -748,7 +748,7 @@ const loadNode = async (node, resolve) => {
 
   const parentId = node.data.id
   try {
-    const response = await getFiles(parentId, null, 0, 1000, { type: 'folder' })
+    const response = await getFiles(parentId, null, 0, 1000, { type: 'folder', space: 'level_1' })
     const folders = response.files
       .map(folder => ({ ...folder, isLeaf: false }))
 
