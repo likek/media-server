@@ -6,7 +6,7 @@ import { getEncryptedFingerprint } from '../utils/fingerprint';
 const ENCRYPTED_PATHS = ['/']; // "/"代表全部加密
 const urlEncryptMark = '_';
 function shouldEncryptRequest(config) {
-  return ENCRYPTED_PATHS.some(apiPath => config.url.startsWith(apiPath));
+  return ENCRYPTED_PATHS.some(apiPath => config.url.startsWith(apiPath) && !(config.data instanceof FormData));
 }
 
 function shouldDecryptResponse(response) {

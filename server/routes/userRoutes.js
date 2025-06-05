@@ -12,7 +12,7 @@ import { wsBroadcastMessage } from "../websocketManager.js";
 import { convertTxtEncoding } from "../tools/textFileTools.js";
 import { tryRegister } from "../userManager.js";
 import { downloadAllMediaByLinks } from "../downloadManager.js";
-import { get51PageInfo } from "../utils/index.js";
+import { get51PageInfo, generateThumbnail } from "../utils/index.js";
 import { validateFingerprint } from "../middleware/fingerprintValidator.js";
 import db from "../dbserialize.js";
 
@@ -174,7 +174,7 @@ router.post("/upload", upload.single("file"), async (req, res) => {
     const parentId = req.query.parentId;
     
     // 获取父文件夹路径
-    const parentInfo = parentId ? await getFileById(parentId) : null;
+    const parentInfo = parentId ? getFileById(parentId) : null;
     if (parentId && (!parentInfo || parentInfo.type !== 'folder')) {
       return res.status(404).send({ message: "Parent folder not found" });
     }
