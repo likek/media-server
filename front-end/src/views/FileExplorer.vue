@@ -461,6 +461,7 @@ const getCache = (id, query) => {
 // 监听路由变化
 watch(() => route.params.id, async (newValue, oldValue) => {
   const cacheData = getCache(route.params.id, route.query)
+  console.log('cacheData1', cacheData)
   if (cacheData) {
     updatePageByCache(cacheData)
   } else {
@@ -471,9 +472,10 @@ watch(() => route.params.id, async (newValue, oldValue) => {
 }, { immediate: true })
 
 watch(() => route.query, async (newValue, oldValue) => {
+  if (JSON.stringify(newValue) === JSON.stringify(oldValue)) return
   searchInput.value = route.query.query
   const cacheData = getCache(route.params.id, route.query)
-  console.log('cacheData', cacheData)
+  console.log('cacheData', cacheData, newValue, oldValue)
   if (cacheData) {
     updatePageByCache(cacheData)
   } else {
