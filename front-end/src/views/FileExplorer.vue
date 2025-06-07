@@ -152,14 +152,14 @@
         </el-form-item>
 
         <el-form-item label="" prop="query">
-          <el-input v-model="advanceSearchForm.query" placeholder="请输入关键字" />
+          <el-input v-model="advanceSearchForm.query" placeholder="请输入关键字(可选)" />
         </el-form-item>
 
         <el-form-item label="" v-if="advanceSearchForm.type !== 'folder'" prop="mime_type">
           <el-radio-group v-model="advanceSearchForm.mime_type" size="small" style="width: 100%" ref="refRadioFilterType"  @change="handleRadioChange">
             <el-radio-button value="">不限</el-radio-button>
-            <el-radio-button value="image/jpeg">图片</el-radio-button>
-            <el-radio-button value="video/mp4">视频</el-radio-button>
+            <el-radio-button value="image/jpeg">仅看图片</el-radio-button>
+            <el-radio-button value="video/mp4">仅看视频</el-radio-button>
           </el-radio-group>
         </el-form-item>
 
@@ -170,7 +170,7 @@
             :editable="false"
             v-model="advanceSearchForm.start_date"
             type="date"
-            placeholder="开始日期"
+            placeholder="开始日期(可选)"
             value-format="YYYY-MM-DD"
           />
         </el-form-item>
@@ -182,7 +182,7 @@
             :editable="false"
             v-model="advanceSearchForm.end_date"
             type="date"
-            placeholder="结束日期"
+            placeholder="结束日期(可选)"
             value-format="YYYY-MM-DD"
           />
         </el-form-item>
