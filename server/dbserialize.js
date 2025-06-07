@@ -104,10 +104,10 @@ const initAll = () => {
   db.prepare(`
     CREATE TRIGGER IF NOT EXISTS limit_logs_request
     AFTER INSERT ON logs_request
-    WHEN (SELECT COUNT(*) FROM logs_request) > 10000
+    WHEN (SELECT COUNT(*) FROM logs_request) > 100000
     BEGIN
       DELETE FROM logs_request WHERE id IN (
-        SELECT id FROM logs_request ORDER BY timestamp ASC LIMIT (SELECT COUNT(*) - 10000 FROM logs_request)
+        SELECT id FROM logs_request ORDER BY timestamp ASC LIMIT (SELECT COUNT(*) - 100000 FROM logs_request)
       );
     END;
   `).run();
@@ -126,10 +126,10 @@ const initAll = () => {
   db.prepare(`
     CREATE TRIGGER IF NOT EXISTS limit_logs_file_accessed
     AFTER INSERT ON logs_file_accessed
-    WHEN (SELECT COUNT(*) FROM logs_file_accessed) > 10000
+    WHEN (SELECT COUNT(*) FROM logs_file_accessed) > 50000
     BEGIN
       DELETE FROM logs_file_accessed WHERE id IN (
-        SELECT id FROM logs_file_accessed ORDER BY time ASC LIMIT (SELECT COUNT(*) - 10000 FROM logs_file_accessed)
+        SELECT id FROM logs_file_accessed ORDER BY time ASC LIMIT (SELECT COUNT(*) - 50000 FROM logs_file_accessed)
       );
     END;
   `).run();
