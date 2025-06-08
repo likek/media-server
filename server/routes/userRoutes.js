@@ -502,7 +502,7 @@ router.post("/readTextFile", async (req, res) => {
 
 router.post("/convertTxtEncoding", async (req, res) => {
   const { id } = req.body;
-  const { path: filePath  } = await getFileById(id);
+  const { path: filePath  } = getFileById(id);
   const absoluteFilePath = path.join(MEDIA_FULL_PATH, filePath);
 
   if (!fs.existsSync(absoluteFilePath)) {
@@ -510,6 +510,22 @@ router.post("/convertTxtEncoding", async (req, res) => {
   }
 
   convertTxtEncoding(absoluteFilePath, res);
+});
+
+router.post("/updateThumbnail", async (req, res) => {
+  const { id, time } = req.body;
+  const { path: filePath, filename  } = getFileById(id);
+  const folderPath = path.dirname(filePath);
+  const fullFolderPath = path.join(MEDIA_FULL_PATH, path.dirname(filePath));
+
+  if (!fs.existsSync(fullFolderPath)) {
+    return res.status(400).json({ message: "File does not exist" });
+  }
+
+  const videoPath = path.join(fullFolderPath, filename);
+  const thumbnailPath = path.join(THUMB_FULL_PATH, folderPath, filename + ".png");
+  await generateThumbnail(videoPath, thumbnailPath, time);
+  res.json({ success: true, id, time })
 });
 
 export default router;

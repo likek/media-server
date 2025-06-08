@@ -74,6 +74,8 @@
             :poster="`/thumbnail/${file.id}`"
             :options="videoOptions"
             :m3u8-path="`${file.m3u8_path || ''}`"
+            :thumbnail-btn="true"
+            :video-id="file.id"
           />
           
           <!-- 图片预览 -->
@@ -126,7 +128,7 @@
 <script setup>
 import { computed, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { unzipFile, convertToHls } from '../services/userApi'
+import { unzipFile, convertToHls, updateThumbnail } from '../services/userApi'
 import VideoPlayer from './VideoPlayer.vue'
 import { addToFavorites, removeFromFavorites } from '../services/favoritesApi'
 

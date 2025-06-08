@@ -1,5 +1,38 @@
 import videojs from 'video.js';
 import { aesEncrypt } from './encrypt.js';
+import { updateThumbnail } from '../services/userApi.js';
+
+const Button = videojs.getComponent('Button');
+class ThumbnailBtn extends Button {
+    constructor(_player, options) {
+        super(_player, options);
+        this.player_ = _player; // 存当前实例
+        this.addClass('vjs-icon-square');
+        this.controlText("将当前帧设为封面");
+    }
+    handleClick() {
+        if (this.player_.videoId) {
+            const currTime = this.player_.currentTime(); // 使用当前播放器实例
+            console.log(this.player_.videoId, currTime)
+            updateThumbnail(this.player_.videoId, currTime).then(() => {
+                this.player_.trigger('thumbnail:success', {
+                    videoId: this.player_.videoId,
+                    time: currTime
+                })
+            }).catch(() => {
+                this.player_.trigger('thumbnail:error', {
+                    videoId: this.player_.videoId,
+                    time: currTime
+                })
+            });
+        }
+    }
+}
+
+// 避免重复注册
+if (!videojs.getComponent('ThumbnailBtn')) {
+    videojs.registerComponent('ThumbnailBtn', ThumbnailBtn);
+}
 
 // 创建带有加密令牌的URL,⚠️ 需要和后端 createEncryptedTsUrl 一致
 export function createEncryptedUrl(url) {

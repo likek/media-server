@@ -144,7 +144,7 @@ const getUserIdByReq = (req, decrypted = true) => {
   }
 
 // 生成视频文件缩略图
-async function generateThumbnail(videoPath, thumbnailPath) {
+async function generateThumbnail(videoPath, thumbnailPath, time = "80%") {
   // 确保缩略图目录存在
   const thumbnailDir = path.dirname(thumbnailPath);
   const thumbnailFileName = path.basename(thumbnailPath);
@@ -159,7 +159,7 @@ async function generateThumbnail(videoPath, thumbnailPath) {
         folder: thumbnailDir,
         filename: thumbnailFileName,
         size: "?x240",
-        timestamps: ['80%'] // 避免开头可能的黑屏
+        timestamps: [time] // 避免开头可能的黑屏
       })
       .on("end", () => {
         resolve(true);

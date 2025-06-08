@@ -122,3 +122,8 @@ export const registerUser = async (iv) => {
   const response = await request.post('/user/register', { iv })
   return response
 }
+
+export const updateThumbnail = async (id, time) => {
+  const response = await request.post('/user/updateThumbnail', { id, time })
+  return response
+}

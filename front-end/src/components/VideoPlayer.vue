@@ -10,11 +10,20 @@ import videojs from 'video.js';
 import 'video.js/dist/video-js.css';
 import { createEncryptedUrl } from '../utils/videoMiddleware';
 import 'videojs-hls-quality-selector/src/plugin'
+import { ElMessage } from 'element-plus';
 
 const props = defineProps({
     src: {
         type: String,
         required: true
+    },
+    thumbnailBtn: {
+        type: Boolean,
+        default: false
+    },
+    videoId: {
+        type: Number,
+        default: undefined
     },
     poster: {
         type: String,
@@ -79,6 +88,13 @@ const initializePlayer = async () => {
 
     // 初始化Video.js播放器
     player = videojs(videoElement, videoOptions);
+    player.videoId = props.videoId || undefined
+    player.on('thumbnail:success', (e, data) => {
+        ElMessage.success('更改缩略图成功')
+    })
+    player.on('thumbnail:error', (e, data) => {
+        ElMessage.error('更改缩略图失败')
+    })
     player.ready(() => {
         const videoEl = player.el().querySelector('video')
         if (videoEl) {
@@ -88,10 +104,13 @@ const initializePlayer = async () => {
         }
         if(player.hlsQualitySelector) {
             player.hlsQualitySelector({
-            displayCurrentQuality: true,
+                displayCurrentQuality: true,
             })
         }
         player.load() // 必须强制发起首次token请求防止token被再次重放
+        if (props.thumbnailBtn) {
+            player.getChild('controlBar').addChild('ThumbnailBtn', {}, player.controlBar.children().length - 1);
+        }
     })
 
     // 错误处理
