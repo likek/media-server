@@ -107,7 +107,7 @@ const initializePlayer = async () => {
                 displayCurrentQuality: true,
             })
         }
-        player.load() // 必须强制发起首次token请求防止token被再次重放
+        // player.load() // 必须强制发起首次token请求防止token被再次重放
         if (props.thumbnailBtn) {
             player.getChild('controlBar').addChild('ThumbnailBtn', {}, player.controlBar.children().length - 1);
         }
