@@ -184,7 +184,7 @@ const isMp4 = computed(() => {
 })
 
 const isImage = computed(() => {
-  return ['jpg', 'jpeg', 'png', 'gif'].includes(fileExt.value)
+  return ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(fileExt.value)
 })
 
 const isPdf = computed(() => {

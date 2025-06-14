@@ -2,10 +2,20 @@
 import { exec } from "child_process";
 import { v4 as uuidv4 } from "uuid";
 import fs from "fs";
-import path from "path";
+import path, { resolve } from "path";
 import chalk from "chalk";
 import { TEMP_FULL_PATH, MEDIA_FULL_PATH } from "../serverConfig.js";
+import puppeteer from "puppeteer";
+import pLimit from 'p-limit';
+const limit = pLimit(5) // 最多同时5个
 
+let browser
+
+async function initBrowser() {
+  if (!browser) {
+    browser = await puppeteer.launch()
+  }
+}
 
 async function downloadAllMediaByLinks(text, folder, successItemCb, processLog = '') {
     console.log(`${processLog}开始下载：`, text.length > 300 ? `${text.slice(0, 300)}......` : text, folder)
@@ -13,7 +23,7 @@ async function downloadAllMediaByLinks(text, folder, successItemCb, processLog =
     const urlRegex = /https?:\/\/[^\s]+/g;
     const allLinks = text.match(urlRegex) || [];
     const validLinkRegex =
-      /https?:\/\/[^\s]+?\.(m3u8|mp4|ts|avi|mkv|mov|wmv|webm|flv|ogv|mpeg|pdf|png|jpg|mp3|txt|zip|exe|apk)(\?[^\s]*)?/i;
+      /https?:\/\/[^\s]+?\.(m3u8|mp4|ts|avi|mkv|mov|wmv|webm|flv|ogv|mpeg|pdf|png|jpg|mp3|txt|zip|exe|apk|webp)(\?[^\s]*)?/i;
   
     const links = allLinks.filter((link) => validLinkRegex.test(link));
     const ignoreLinks = allLinks.filter((link) => !validLinkRegex.test(link));
@@ -59,54 +69,76 @@ async function downloadAllMediaByLinks(text, folder, successItemCb, processLog =
     const failedLinks = [];
     let completedCount = 0;
   
-    const downloadLink = (link) => {
-      return new Promise((resolve) => {
-        const tempDir = path.join(
-          TEMP_FULL_PATH,
-          "batch_download",
-          `${Date.now()}`
-        );
-        const m3u8Regex = /https?:\/\/[^\s]+?\.m3u8(\?[^\s]*)?/i;
-        const saveName = `${Date.now()}${Math.floor(Math.random() * 100000)}`;
-        const command = m3u8Regex.test(link)
-          ? `N_m3u8DL-RE --auto-select "${link}" --save-dir "${downloadDir}" --save-name ${saveName} --tmp-dir ${tempDir} --ui-language en-US`
-          : `curl -L "${link}" -o "${path.join(downloadDir, saveName)}"`;
+    const downloadLink = async (link) => {    
+      const tempDir = path.join(
+        TEMP_FULL_PATH,
+        'batch_download',
+        `${Date.now()}`
+      )
+      const m3u8Regex = /https?:\/\/[^\s]+?\.m3u8(\?[^\s]*)?/i
+      const saveName = `${Date.now()}${Math.floor(Math.random() * 100000)}`
   
-        console.log(`${processLog}开始执行: ${command}`);
-  
-        const child = exec(command, {
-          env: { ...process.env, LANG: "en-US.UTF-8" },
-        });
-  
-        child.stdout.on("data", (data) => {
-          process.stdout.write(`\n${processLog}stdout: ${data}`);
-        });
-  
-        child.stderr.on("data", (data) => {
-          process.stderr.write(`\n${processLog}stderr: ${data}`);
-        });
-  
-        child.on("close", (code) => {
-          let failed = false;
-          if (code !== 0) {
-            failed = true;
-            console.error(`${chalk.red(`${processLog}下载失败`)}: ${link}`);
-            failedLinks.push(link);
-          } else {
-            console.log(`${chalk.green(`${processLog}下载成功`)}: ${link}`);
-          }
-          completedCount++;
-  
-          successItemCb({
-            link,
-            progress: completedCount,
-            total: links.length + base64Images.length,
-            state: failed ? "failed" : "success",
+      if (m3u8Regex.test(link)) {
+        return new Promise(resolve => {
+          const command = `N_m3u8DL-RE --auto-select "${link}" --save-dir "${downloadDir}" --save-name ${saveName} --tmp-dir ${tempDir} --ui-language en-US`
+          console.log(`${processLog}开始执行: ${command}`)
+    
+          const child = exec(command, {
+            env: { ...process.env, LANG: 'en-US.UTF-8' },
           })
-          resolve();
-        });
-      });
-    };
+    
+          child.stdout.on('data', (data) => {
+            process.stdout.write(`\n${processLog}stdout: ${data}`)
+          })
+    
+          child.stderr.on('data', (data) => {
+            process.stderr.write(`\n${processLog}stderr: ${data}`)
+          })
+    
+          child.on('close', (code) => {
+            let failed = false
+            if (code !== 0) {
+              failed = true
+              console.error(`${chalk.red(`${processLog}下载失败`)}: ${link}`)
+              failedLinks.push(link)
+            } else {
+              console.log(`${chalk.green(`${processLog}下载成功`)}: ${link}`)
+            }
+            completedCount++
+            successItemCb({
+              link,
+              progress: completedCount,
+              total: links.length + base64Images.length,
+              state: failed ? 'failed' : 'success',
+            })
+            resolve()
+          })
+        })
+      } else {
+        try {
+          const urlObj = new URL(link)
+          const pathname = urlObj.pathname
+          const ext = path.extname(pathname) || '.bin' // 没有就默认一个后缀
+          const savePath = path.join(downloadDir, `${saveName}${ext}`)
+
+          const page = await browser.newPage()
+          const response = await page.goto(link, { waitUntil: 'networkidle2' })
+          const buffer = await response.buffer()
+          fs.writeFileSync(savePath, buffer)
+          console.log(`${chalk.green(`${processLog}下载成功`)}: ${link}`)
+        } catch (err) {
+          console.error(`${chalk.red(`${processLog}下载失败`)}: ${link}`, err)
+          failedLinks.push(link)
+        }
+        completedCount++
+        successItemCb({
+          link,
+          progress: completedCount,
+          total: links.length + base64Images.length,
+          state: failedLinks.includes(link) ? 'failed' : 'success',
+        })
+      }
+    }
   
     // Save base64 images
     const saveBase64Image = (image, index) => {
@@ -135,8 +167,12 @@ async function downloadAllMediaByLinks(text, folder, successItemCb, processLog =
       });
     };
   
+    await initBrowser()
     // 并行下载所有 HTTP 链接和保存 base64 图片
-    await Promise.all([...links.map(downloadLink), ...base64Images.map(saveBase64Image)]);
+    await Promise.all([
+      ...links.map(link => limit(() => downloadLink(link))),
+      ...base64Images.map((img, i) => limit(() => saveBase64Image(img, i)))
+    ])
     return Promise.resolve({
       downloadRoot, downloadSub, completedCount, ignoreLinks, failedLinks
     });
