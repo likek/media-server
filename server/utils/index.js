@@ -187,10 +187,12 @@ let page;
 
 async function get51PageInfo(pageUrl) {
   if (!browser) {
-    browser = await puppeteer.launch();
+    browser = await puppeteer.launch({ headless: 'new' });
   }
   if (!page) {
     page = await browser.newPage();
+    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/114 Safari/537.36');
+    await page.setJavaScriptEnabled(true);
   }
   await page.goto(pageUrl, { waitUntil: 'networkidle2' });
 

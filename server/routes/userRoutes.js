@@ -51,7 +51,7 @@ router.post("/register", validateFingerprint, async (req, res) => {
 router.post("/downloadFromText", async (req, res) => { 
   const folderId = req.body.folderId;
   let folderPath = "";
-  const folderInfo = await getFileById(folderId);
+  const folderInfo = getFileById(folderId);
   if (folderInfo) {
     folderPath = folderInfo.path;
   }
