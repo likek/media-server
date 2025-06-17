@@ -7,7 +7,7 @@ import path from "path";
 
 const execAsync = promisify(exec);
 const THRESHOLD = 1024 * 1024;
-const maxSize = 6 * 1024 * 1024 * 1024; // 最大允许处理的文件大小 6 GB
+const maxSize = 10 * 1024 * 1024 * 1024; // 最大允许处理的文件大小
 
 // 支持的文件扩展名
 const videoExtensions = ['mp4', 'mkv', 'avi', 'mov', 'wmv', 'flv', 'webm'];
