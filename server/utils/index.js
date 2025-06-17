@@ -194,10 +194,14 @@ async function get51PageInfo(pageUrl) {
     await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/114 Safari/537.36');
     await page.setJavaScriptEnabled(true);
   }
-  await page.goto(pageUrl, { waitUntil: 'networkidle2' });
+  await page.goto(pageUrl, { waitUntil: 'networkidle2', timeout: 60000 });
 
   // 等待动态内容加载完成
-  await page.waitForSelector('img[data-xuid]', { timeout: 10000 });
+  try {
+    await page.waitForSelector('img[data-xuid]', { timeout: 30000 })
+  } catch {
+    console.warn('img[data-xuid] not found, continuing anyway...')
+  }
 
   const data = await page.evaluate(() => {
     // 获取页面标题
