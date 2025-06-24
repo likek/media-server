@@ -4,6 +4,7 @@
       <side-menu v-show="!isMobile || !isSidebarCollapsed" :is-collapsed="isSidebarCollapsed || isMobile" />
       <div class="main-content">
         <el-button size="small" @click="toggleSidebar" class="sidebar-toggle-btn" :icon="isSidebarCollapsed ? Expand : Fold" circle />
+        <el-button size="small" @click="dialogDonateVisible = true" class="btn-donate">付费</el-button>
         <UseDark v-slot="{ isDark, toggleDark }">
           <el-button size="small" @click="toggleDark()" class="sidebar-toggle-dark" :icon="isDark ? Sunny : Moon" circle />
         </UseDark>
@@ -12,6 +13,11 @@
             <component :is="Component" />
           </keep-alive>
         </router-view>
+        <!-- 自愿捐赠弹窗 -->
+        <el-dialog v-model="dialogDonateVisible" title="自愿付费" width="280px">
+          <div style="font-size: 14px; color: #666;margin-bottom: 6px;">喜欢该网站的人可以自愿付费23元。</div>
+          <img style="border-radius: 4px;" src="./assets/donate.png" alt="Donate">
+        </el-dialog>
       </div>
     </div>
   <human-verification :loading="loading" v-else-if="!loading" @verification-success="onVerificationSuccess" />
@@ -31,6 +37,8 @@ import { useRoute } from 'vue-router'
 import { connectWebSocket } from './services/websocket'
 import { UseDark } from '@vueuse/components'
 import zhCn from 'element-plus/es/locale/lang/zh-cn'
+
+const dialogDonateVisible = ref(false)
 
 // 验证状态
 const isVerified = ref(false)
@@ -233,7 +241,7 @@ html, body {
 
 .sidebar-toggle-dark {
   position: absolute;
-  top: 6px;
+  top: 4px;
   right: 10px;
   z-index: 1000;
   padding: 5px 10px;
@@ -241,6 +249,14 @@ html, body {
   color: white;
   border: none;
   border-radius: 4px;
+  cursor: pointer;
+}
+
+.btn-donate {
+  position: absolute;
+  top: 4px;
+  right: 50px;
+  z-index: 1000;
   cursor: pointer;
 }
 
