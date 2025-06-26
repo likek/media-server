@@ -11,7 +11,6 @@
               <Microphone v-else-if="isAudio"/>
               <Document v-else/>
           </el-icon>
-          <span class="file-name">{{ file.m3u8_path ? '_' : '' }}{{ file.filename }}</span>
           <div class="file-actions">
             <el-tooltip content="所在文件夹" placement="top" :auto-close="1000" v-if="allowActions.includes('navigateParent')">
               <el-icon class="action-icon" @click.stop="$emit('navigate', file.parent_id)"><FolderOpened /></el-icon>
@@ -64,7 +63,9 @@
             </el-tooltip>
           </div>
         </div>
-        
+        <div>
+          <span class="file-name">{{ file.m3u8_path ? '_' : '' }}{{ file.filename }}</span>
+        </div>
         <!-- 文件预览区域 -->
         <div class="file-preview" v-if="isPreviewable">
           <!-- 视频预览 - 使用自定义播放器组件， 如果src以/结尾，/media/:id/:id/xxx.ts -->
@@ -313,7 +314,6 @@ const toggleFavorite = async () => {
   color: #303133;
   transition: 0.3s;
   margin-bottom: 15px;
-  max-height: 400px;
 }
 
 @media (any-hover: hover) {
@@ -334,6 +334,7 @@ const toggleFavorite = async () => {
   display: flex;
   align-items: center;
   margin-bottom: 10px;
+  justify-content: space-between;
 }
 
 .file-icon {
@@ -343,10 +344,17 @@ const toggleFavorite = async () => {
 }
 
 .file-name {
-  flex: 1;
+  /*flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: nowrap;*/
+
+  font-size: 16px;
+  font-weight: 500;
+  flex: 1;
+  word-break: break-all;  /* 在任意字符间断行 */
+  word-wrap: break-word;  /* 对长单词进行换行 */
+  white-space: pre-wrap; /* 保留空格和换行，允许文本换行 */
 }
 
 .file-actions {
