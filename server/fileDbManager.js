@@ -5,6 +5,7 @@ import { MEDIA_FULL_PATH, THUMB_FULL_PATH } from "../serverConfig.js";
 import { isVideoByName, generateThumbnail, getUserIdByReq } from "./utils/index.js";
 import db from "./dbserialize.js";
 import { getFavoritesStatus } from "./favoritesManager.js";
+import { generateSegmentedWhereClause, rankResultsByRelevance } from "./utils/segmentUtils.js"; 
 
 // 获取文件夹的ID
 const getFolderId = (folderPath) => {
@@ -261,10 +262,12 @@ const getFolderContentsById = async (folderId, searchQuery, filters, page, pageS
     }
   } else {
     // 搜索内容
-    //  添加名称过滤
+    // 添加名称过滤，使用分词搜索
     if (searchQuery) {
-      whereClause += ` name LIKE ?`
-      params.push(`%${searchQuery}%`);
+      // 使用分词工具生成查询条件
+      const segmentedSearch = generateSegmentedWhereClause(searchQuery, 'name');
+      whereClause += segmentedSearch.whereClause;
+      params.push(...segmentedSearch.params);
     }
 
     // 添加搜索范围约束
@@ -353,7 +356,7 @@ const getFolderContentsById = async (folderId, searchQuery, filters, page, pageS
   const rows = stmt2.all(...params);
   
   // 转换数据库记录为前端期望的格式
-  const fileInfos = rows.map(row => ({
+  let fileInfos = rows.map(row => ({
     id: row.id,
     type: row.type,
     filename: row.name,
@@ -406,6 +409,11 @@ const getFolderContentsById = async (folderId, searchQuery, filters, page, pageS
       console.error("自动刷新缓存出错:", error);
       // 出错时继续使用原始数据
     }
+  }
+
+  // 在返回结果前，对结果进行相关性排序
+  if (searchQuery && fileInfos.length > 0) {
+    fileInfos = rankResultsByRelevance(fileInfos, searchQuery, 'filename');
   }
   
   // 返回文件列表和总数
