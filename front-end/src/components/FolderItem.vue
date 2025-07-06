@@ -1,5 +1,5 @@
 <template>
-  <div class="folder-item" @click="$emit('navigate', folder.id)">
+  <div :class='["folder-item", { "newest": isNew }]' @click="$emit('navigate', folder.id)">
     <div class="folder-content">
       <div>
         <div class="folder-header">
@@ -37,7 +37,7 @@
         <span>
           <!-- {{ formatFileSize(folder.size) }} -->
         </span>
-        <span>{{ formatDate(folder.lastModified) }}</span>
+        <span>{{ formatLastModified }}</span>
       </div>
     </div>
   </div>
@@ -63,14 +63,17 @@ const props = defineProps({
   }
 })
 
-const isFavorited = ref(props.favorited)
-
-const emit = defineEmits(['navigate', 'rename', 'move', 'delete', 'favorite'])
 // 格式化日期
 const formatDate = (timestamp) => {
   const date = new Date(timestamp)
   return date.toLocaleDateString()
 }
+
+const formatLastModified = ref(formatDate(props.folder.lastModified))
+const isFavorited = ref(props.favorited)
+const isNew = ref(Date.now() - new Date(props.folder.lastModified).getTime() < 1000 * 60 * 60 * 24 * 2)
+
+const emit = defineEmits(['navigate', 'rename', 'move', 'delete', 'favorite'])
 
 // // 格式化文件大小
 // const formatFileSize = (size) => {

@@ -286,4 +286,27 @@ html, body {
 ::-webkit-scrollbar-thumb:hover {
   background: #555;
 }
+
+.newest {
+  position: relative;
+  overflow: hidden;
+}
+.newest::after {
+    content: 'new';
+    position: absolute;
+    top: 2px;
+    right: -38px;
+    z-index: 9;
+    text-align: center;
+    color: #fff;
+    font-size: 14px;
+    font-weight: 500;
+    transform: rotate(45deg);
+    background-color: #409eff;
+    width: 100px;
+    height: 20px;
+    line-height: 20px;
+    opacity: 0.5;
+}
+
 </style>
