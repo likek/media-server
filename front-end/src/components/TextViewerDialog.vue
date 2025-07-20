@@ -1,10 +1,10 @@
 <template>
-  <el-dialog v-model="dialogVisible" :title="file?.fileName" width="80%" class="txt-dialog">
+  <el-dialog v-model="dialogVisible" :title="file?.fileName" class="txt-dialog" fullscreen>
     <div class="txt-content-wrapper">
       <pre class="txt-content">{{ content }}</pre>
     </div>
     <div class="txt-dialog-footer">
-      <span>当前页: {{ currentPage }}</span>
+      <span>当前在第{{ currentPage }}页</span>
       <el-button v-if="!isLastPage" @click="loadNextPage" type="primary">下一页</el-button>
       <el-button @click="jumpToPage" type="info">跳转</el-button>
       <el-button @click="convertEncoding" type="warning">转换编码</el-button>
@@ -55,7 +55,7 @@ watch(() => dialogVisible.value, (newValue) => {
 })
 
 // 加载文本内容
-const loadTextContent = async (start = 0) => {
+async function loadTextContent (start = 0) {
   try {
     const response = await readTextFile(props.file.id, start, props.numLines)
     
@@ -160,11 +160,11 @@ const convertEncoding = async () => {
 }
 
 .txt-content-wrapper {
-  max-height: 60vh;
   overflow-y: auto;
   background-color: #f5f7fa;
   border-radius: 4px;
   padding: 10px;
+  height: 100%;
 }
 
 .txt-content {
@@ -172,6 +172,8 @@ const convertEncoding = async () => {
   word-break: break-all;
   font-family: monospace;
   margin: 0;
+  height: calc(100vh - 120px);
+  overflow: auto;
 }
 
 .txt-dialog-footer {

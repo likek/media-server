@@ -170,6 +170,11 @@ html.dark .file-item,
 html.dark .verification-box {
   background-color: #000;
   border-color: #000;
+  color: #999;
+}
+
+html.dark .txt-content-wrapper {
+  background-color: #111;
 }
 
 html.dark .menu-item.active,

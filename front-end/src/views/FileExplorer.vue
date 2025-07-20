@@ -131,7 +131,7 @@
     </el-dialog>
 
     <!-- 文本文件查看对话框 -->
-    <text-viewer-dialog v-model:visible="txtDialogVisible" :file="currentItem" :num-lines="30" />
+    <text-viewer-dialog v-model:visible="txtDialogVisible" :file="currentItem" v-if="currentItem" :num-lines="30" />
     <!-- 高级过滤对话框 -->
     <el-dialog v-model="dialogSearchAdvanceVisible" title="过滤" width="260px" @opened="handleSearchAdvancedOpened">
       <el-form :model="advanceSearchForm" label-width="0" ref="advanceSearchFormRef">

@@ -64,7 +64,8 @@
           </div>
         </div>
         <div>
-          <span class="file-name">{{ file.m3u8_path ? '_' : '' }}{{ file.filename }}</span>
+          <span class="file-name" v-if="isText && allowActions.includes('viewtext')" @click.stop="viewTextFile">{{ file.filename }}</span>
+          <span class="file-name" v-else>{{ file.m3u8_path ? '_' : '' }}{{ file.filename }}</span>
         </div>
         <!-- 文件预览区域 -->
         <div class="file-preview" v-if="isPreviewable">
