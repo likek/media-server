@@ -1,4 +1,20 @@
 {
     "/delete": ["192.168.1.xxx", "这里可以配用户ip，也可以配用户的cookie,cookie从userInfo表里可以查看"],
-    "upload": ["192.168.1.xxx"]
+    "/user/delete": ["FP-bf0b28c7c30227fc9d20b0d6341c2761"],
+    "/user/move": ["FP-bf0b28c7c30227fc9d20b0d6341c2761"],
+    "/user/upload": ["FP-bf0b28c7c30227fc9d20b0d6341c2761"],
+    "/user/createFolder": ["FP-bf0b28c7c30227fc9d20b0d6341c2761"],
+    "/user/downloadFromText": ["FP-bf0b28c7c30227fc9d20b0d6341c2761"],
+    "/user/rename": ["FP-bf0b28c7c30227fc9d20b0d6341c2761"],
+    "/user/updateCache": ["FP-bf0b28c7c30227fc9d20b0d6341c2761"],
+    "/user/convert": ["FP-bf0b28c7c30227fc9d20b0d6341c2761"],
+    "/user/unzip": ["FP-bf0b28c7c30227fc9d20b0d6341c2761"],
+    "/user/updateThumbnail": ["FP-bf0b28c7c30227fc9d20b0d6341c2761"],
+
+    "/admin/users": ["FP-bf0b28c7c30227fc9d20b0d6341c2761"],
+    
+    "/logs/request": ["FP-bf0b28c7c30227fc9d20b0d6341c2761"],
+    "/logs/file": ["FP-bf0b28c7c30227fc9d20b0d6341c2761"],
+    "/logs/ws": ["FP-bf0b28c7c30227fc9d20b0d6341c2761"],
+    "/media/convertToHls": ["FP-bf0b28c7c30227fc9d20b0d6341c2761"]
 }
