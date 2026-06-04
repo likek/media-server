@@ -6,8 +6,8 @@ import path from "path";
 import { fileURLToPath } from "url";
 import useragent from "useragent";
 import ffmpeg from "fluent-ffmpeg";
-import puppeteer from 'puppeteer';
 import { aesDecrypt } from "./encrypt.js";
+import { launchBrowser } from "./browser.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -187,7 +187,7 @@ let page;
 
 async function get51PageInfo(pageUrl) {
   if (!browser) {
-    browser = await puppeteer.launch({ headless: 'new' });
+    browser = await launchBrowser({ headless: "new" });
   }
   if (!page) {
     page = await browser.newPage();

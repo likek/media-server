@@ -2,18 +2,18 @@
   <div class="verification-container">
     <div class="verification-box">
       <h2>人机验证</h2>
-      <p>请完成以下验证以继续访问</p>
+      <p>长按下方按钮以继续访问</p>
       
-      <div class="verification-area" 
-           ref="verificationArea"
-           @mousemove="trackMouseMovement"
-           @mousedown="startVerification"
-           @mouseup="completeVerification"
-           @touchstart="startTouchVerification"
-           @touchmove="trackTouchMovement"
-           @touchend="completeTouchVerification">
-        <div class="verification-button" :class="{ 'active': isVerifying }">
-          {{ isVerifying ? '松开完成验证' : '按住并左右滑动' }}
+      <div
+        class="verification-area"
+        @pointerdown="startVerification"
+        @pointerup="cancelVerification"
+        @pointerleave="cancelVerification"
+        @pointercancel="cancelVerification"
+      >
+        <div class="verification-progress" :style="{ width: `${progress}%` }"></div>
+        <div class="verification-button" :class="{ active: isVerifying, success: isSubmitting }">
+          {{ buttonText }}
         </div>
       </div>
       
@@ -25,7 +25,7 @@
 </template>
 
 <script setup>
-import { ref, reactive } from 'vue'
+import { computed, onBeforeUnmount, ref } from 'vue'
 import { registerUser } from '../services/userApi'
 import { connectWebSocket } from '../services/websocket'
 import { useRoute } from 'vue-router'
@@ -33,97 +33,68 @@ import { useRoute } from 'vue-router'
 const emit = defineEmits(['verification-success'])
 const route = useRoute()
 
-const verificationArea = ref(null)
 const isVerifying = ref(false)
+const isSubmitting = ref(false)
 const verificationMessage = ref('')
-const verificationStartTime = ref(0)
+const progress = ref(0)
+const HOLD_DURATION = 1200
+const PROGRESS_INTERVAL = 16
 
-// 鼠标移动轨迹数据
-const mouseTrack = reactive({
-  points: [],
-  startTime: 0,
-  endTime: 0
+let holdStartTime = 0
+let progressTimer = null
+let holdTimer = null
+
+const buttonText = computed(() => {
+  if (isSubmitting.value) return '验证中...'
+  if (isVerifying.value) return '继续长按即可通过'
+  return '按住 1.2 秒完成验证'
 })
 
-// 开始验证
-const startVerification = (event) => {
-  isVerifying.value = true
-  verificationMessage.value = ''
-  mouseTrack.points = []
-  mouseTrack.startTime = Date.now()
-  verificationStartTime.value = Date.now()
-  trackMouseMovement(event)
-}
-
-// 跟踪鼠标移动
-const trackMouseMovement = (event) => {
-  if (!isVerifying.value) return
-  
-  mouseTrack.points.push({
-    x: event.clientX,
-    y: event.clientY,
-    t: Date.now() - mouseTrack.startTime
-  })
-}
-
-// 完成验证
-const completeVerification = () => {
-  if (!isVerifying.value) return
-  
-  mouseTrack.endTime = Date.now()
+const resetHoldState = () => {
   isVerifying.value = false
-  
-  // 验证时间太短，可能是机器人
-  const verificationTime = Date.now() - verificationStartTime.value
-  if (verificationTime < 500) {
-    verificationMessage.value = '验证失败，请重试'
-    return
+  progress.value = 0
+  if (progressTimer) {
+    clearInterval(progressTimer)
+    progressTimer = null
   }
-  
-  // 检查轨迹点数量，太少可能是机器人
-  if (mouseTrack.points.length < 5) {
-    verificationMessage.value = '验证失败，请重试'
-    return
+  if (holdTimer) {
+    clearTimeout(holdTimer)
+    holdTimer = null
   }
-  
-  // 计算轨迹复杂度，太简单可能是机器人
-  const complexity = calculateTrackComplexity(mouseTrack.points)
-  if (complexity < 0.1) {
-    verificationMessage.value = '验证失败，请重试'
-    return
-  }
-  
-  // 验证通过，调用注册接口
-  verificationMessage.value = '验证中...'
-  submitVerification()
 }
 
-// 计算轨迹复杂度
-const calculateTrackComplexity = (points) => {
-  if (points.length < 3) return 0
-  
-  // 简单计算轨迹的变化程度
-  let changes = 0
-  for (let i = 2; i < points.length; i++) {
-    const dx1 = points[i-1].x - points[i-2].x
-    const dy1 = points[i-1].y - points[i-2].y
-    const dx2 = points[i].x - points[i-1].x
-    const dy2 = points[i].y - points[i-1].y
-    
-    // 方向变化
-    if (Math.sign(dx1) !== Math.sign(dx2) || Math.sign(dy1) !== Math.sign(dy2)) {
-      changes++
-    }
-  }
-  
-  return changes / (points.length - 2)
+const startVerification = (event) => {
+  if (isSubmitting.value || isVerifying.value) return
+
+  event.preventDefault()
+  verificationMessage.value = ''
+  isVerifying.value = true
+  holdStartTime = Date.now()
+
+  progressTimer = setInterval(() => {
+    const elapsed = Date.now() - holdStartTime
+    progress.value = Math.min(100, Math.round((elapsed / HOLD_DURATION) * 100))
+  }, PROGRESS_INTERVAL)
+
+  holdTimer = setTimeout(() => {
+    resetHoldState()
+    progress.value = 100
+    submitVerification()
+  }, HOLD_DURATION)
+}
+
+const cancelVerification = () => {
+  if (!isVerifying.value || isSubmitting.value) return
+  resetHoldState()
 }
 
 // 提交验证
 const submitVerification = async () => {
   try {
+    isSubmitting.value = true
+    verificationMessage.value = '验证中...'
+
     // 调用注册接口, 传入url上的参数iv
-    // 获取iv参数
     const iv = route.query.iv
     await registerUser(iv)
     
@@ -135,32 +106,15 @@ const submitVerification = async () => {
   } catch (error) {
     console.error('验证失败:', error)
     verificationMessage.value = '验证失败，请重试'
+    progress.value = 0
+  } finally {
+    isSubmitting.value = false
   }
 }
 
-// 触摸事件处理
-const startTouchVerification = (event) => {
-  isVerifying.value = true
-  verificationMessage.value = ''
-  mouseTrack.points = []
-  mouseTrack.startTime = Date.now()
-  verificationStartTime.value = Date.now()
-  trackTouchMovement(event)
-}
-
-const trackTouchMovement = (event) => {
-  if (!isVerifying.value || !event.touches[0]) return
-  
-  mouseTrack.points.push({
-    x: event.touches[0].clientX,
-    y: event.touches[0].clientY,
-    t: Date.now() - mouseTrack.startTime
-  })
-}
-
-const completeTouchVerification = () => {
-  completeVerification()
-}
+onBeforeUnmount(() => {
+  resetHoldState()
+})
 </script>
 
 <style scoped>
@@ -195,9 +149,22 @@ const completeTouchVerification = () => {
   position: relative;
   overflow: hidden;
   cursor: pointer;
+  user-select: none;
+  touch-action: none;
+}
+
+.verification-progress {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 0;
+  background: linear-gradient(90deg, #67c23a, #95d475);
+  transition: width 0.05s linear;
 }
 
 .verification-button {
+  position: relative;
   height: 100%;
   display: flex;
   align-items: center;
@@ -210,6 +177,11 @@ const completeTouchVerification = () => {
 
 .verification-button.active {
   background-color: #409eff;
+  color: white;
+}
+
+.verification-button.success {
+  background-color: #67c23a;
   color: white;
 }
 

@@ -2,18 +2,18 @@
 import { exec } from "child_process";
 import { v4 as uuidv4 } from "uuid";
 import fs from "fs";
-import path, { resolve } from "path";
+import path from "path";
 import chalk from "chalk";
 import { TEMP_FULL_PATH, MEDIA_FULL_PATH } from "../serverConfig.js";
-import puppeteer from "puppeteer";
 import pLimit from 'p-limit';
+import { launchBrowser } from "./utils/browser.js";
 const limit = pLimit(5) // 最多同时5个
 
 let browser
 
 async function initBrowser() {
   if (!browser) {
-    browser = await puppeteer.launch()
+    browser = await launchBrowser()
   }
 }
 
