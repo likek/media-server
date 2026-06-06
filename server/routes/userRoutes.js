@@ -1004,7 +1004,27 @@ router.post("/updateThumbnail", async (req, res) => {
   const thumbnailPath = path.join(THUMB_FULL_PATH, folderPath, filename + ".png");
   try {
     await generateThumbnail(videoPath, thumbnailPath, time);
-    res.json({ success: true, id, time })
+    const warnings = [];
+
+    try {
+      const dhash = await computeDHashFromFile(thumbnailPath);
+      upsertImageDHash(id, dhash);
+    } catch (e) {
+      const message = e?.message || String(e);
+      warnings.push({ stage: "hash", message });
+      console.error(chalk.red(`[updateThumbnail] hash_failed fileId=${id} path=${filePath} thumbnail=${thumbnailPath} err=${message}`), e);
+    }
+
+    try {
+      const { modelId, dim, vector } = await computeClipEmbeddingFromFile(thumbnailPath);
+      upsertImageEmbedding(id, modelId, dim, vector);
+    } catch (e) {
+      const message = e?.message || String(e);
+      warnings.push({ stage: "embedding", message });
+      console.error(chalk.red(`[updateThumbnail] embedding_failed fileId=${id} path=${filePath} thumbnail=${thumbnailPath} err=${message}`), e);
+    }
+
+    res.json({ success: true, id, time, warnings })
   } catch (e) {
     console.error("Error generating thumbnail:", e);
     res.status(500).json({ success: false, id, time, message: e?.message || String(e) })
