@@ -89,6 +89,7 @@ const initAll = () => {
 
   db.prepare('CREATE INDEX IF NOT EXISTS idx_files_parent_id ON files (parent_id)').run();
   db.prepare('CREATE INDEX IF NOT EXISTS idx_files_parent_name ON files (parent_id, name)').run();
+  db.prepare(`DELETE FROM files WHERE name = '.DS_Store' OR path = '.DS_Store' OR path LIKE '%/.DS_Store'`).run();
 
   db.prepare(`
     CREATE TABLE IF NOT EXISTS favorites (
@@ -100,6 +101,30 @@ const initAll = () => {
       UNIQUE(user_id, file_id)
     )
   `).run();
+
+  db.prepare(`
+    CREATE TABLE IF NOT EXISTS image_features (
+      file_id INTEGER PRIMARY KEY,
+      dhash TEXT NOT NULL,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (file_id) REFERENCES files(id) ON DELETE CASCADE
+    )
+  `).run();
+
+  db.prepare('CREATE INDEX IF NOT EXISTS idx_image_features_dhash ON image_features (dhash)').run();
+
+  db.prepare(`
+    CREATE TABLE IF NOT EXISTS image_embeddings (
+      file_id INTEGER PRIMARY KEY,
+      model TEXT NOT NULL,
+      dim INTEGER NOT NULL,
+      vector BLOB NOT NULL,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (file_id) REFERENCES files(id) ON DELETE CASCADE
+    )
+  `).run();
+
+  db.prepare('CREATE INDEX IF NOT EXISTS idx_image_embeddings_model ON image_embeddings (model)').run();
 
   db.prepare(`
     CREATE TRIGGER IF NOT EXISTS limit_logs_request
@@ -139,6 +164,7 @@ const initAll = () => {
 
 export function serializeDb() {
   db.pragma('journal_mode = WAL')
+  db.pragma('foreign_keys = ON')
   initAll();
 }
 

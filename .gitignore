@@ -13,3 +13,5 @@ static
 *.db-wal
 
 .hls_source
+/.cache
+/temp

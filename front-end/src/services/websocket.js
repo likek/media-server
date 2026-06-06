@@ -88,6 +88,31 @@ export function connectWebSocket() {
             type: data.data.state === 'failed' ? 'warning' : 'success'
           })
           break
+
+        case 'rebuildImageIndexProgress':
+          console.log('重建图片索引:', data)
+          if (data.data?.state === 'start') {
+            ElMessage({
+              message: `开始重建图片索引，共${data.data.total}张`,
+              type: 'info'
+            })
+          } else if (data.data?.state === 'progress') {
+            ElMessage({
+              message: `重建图片索引进度 ${data.data.progress}/${data.data.total}`,
+              type: 'info'
+            })
+          } else if (data.data?.state === 'item' && data.data?.level === 'warning') {
+            ElMessage({
+              message: `索引警告: ${data.data.message}`,
+              type: 'warning'
+            })
+          } else if (data.data?.state === 'done') {
+            ElMessage({
+              message: `重建图片索引完成，共${data.data.total}张`,
+              type: 'success'
+            })
+          }
+          break
           
         case 'updateCache':
           // 发布更新缓存事件，让组件自行处理

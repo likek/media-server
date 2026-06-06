@@ -81,7 +81,7 @@ const updateFolderContents = async (folderId, folderPath) => {
   
   try {
     // 读取文件夹内容
-    const files = await fs.promises.readdir(fullPath);
+    const files = (await fs.promises.readdir(fullPath)).filter(name => name !== '.DS_Store');
     
     // 获取当前数据库中的文件列表
     let existingFiles;
@@ -148,17 +148,27 @@ const updateFolderContents = async (folderId, folderPath) => {
           const thumbnailPath = path.join(THUMB_FULL_PATH, folderPath, fileName + ".png");
           const isVideo = isVideoByName(fileName);
           const mimeType = mime.lookup(fileName) || 'application/octet-stream'; // Determine mime type
-          if (isVideo && !fs.existsSync(thumbnailPath)) {
-            await generateThumbnail(filePath, thumbnailPath);
+          let thumbnail;
+          if (isVideo) {
+            const thumbnailRel = path.join(folderPath, fileName + ".png").replace(/^\//, '');
+            if (!fs.existsSync(thumbnailPath)) {
+              try {
+                await generateThumbnail(filePath, thumbnailPath);
+              } catch (e) {
+                console.warn(`[updateFolderContents] thumbnail_failed file=${filePath} thumbnail=${thumbnailPath} err=${e?.message || String(e)}`);
+              }
+            }
+            if (fs.existsSync(thumbnailPath)) {
+              thumbnail = thumbnailRel;
+            }
           }
-          const thumbnail = isVideo ? path.join(folderPath, fileName + ".png").replace(/^\//, '') : undefined;
           
           const fileInfo = {
             type: "file",
             mime_type: mimeType, // Add mime_type for file
             filename: fileName,
             path: path.join(folderPath, fileName).replace(/\\/g, "/").replace(/^\//, ''),
-            thumbnail: isVideo ? thumbnail : undefined,
+            thumbnail,
             lastModified: stats.mtime,
             size: stats.size,
           };
@@ -223,6 +233,214 @@ const updateFolderByPath = async (folderPath) => {
     console.error("Error updating folder by path:", err);
     throw err;
   }
+};
+
+const updateFolderTreeByPath = async (rootFolderPath, options = {}) => {
+  const maxFolders = Number(options.maxFolders || 20000);
+  const root = (rootFolderPath || "").replace(/\\/g, "/").replace(/^\//, "");
+  const queue = [root];
+  const visited = new Set();
+  let processedFolders = 0;
+  let errors = 0;
+  let truncated = false;
+
+  while (queue.length > 0) {
+    const current = (queue.shift() || "").replace(/\\/g, "/").replace(/^\//, "");
+    if (visited.has(current)) continue;
+    visited.add(current);
+
+    processedFolders += 1;
+    if (processedFolders > maxFolders) {
+      truncated = true;
+      break;
+    }
+
+    let result;
+    try {
+      result = await updateFolderByPath(current);
+    } catch (e) {
+      errors += 1;
+      continue;
+    }
+
+    const children = (result?.fileInfos || [])
+      .filter((x) => x && x.type === "folder" && typeof x.path === "string")
+      .map((x) => x.path.replace(/\\/g, "/").replace(/^\//, ""));
+
+    for (const child of children) {
+      if (!visited.has(child)) queue.push(child);
+    }
+  }
+
+  return {
+    processedFolders: visited.size,
+    errors,
+    truncated,
+    maxFolders,
+  };
+};
+
+const cleanDbTreeByPath = async (rootFolderPath, options = {}) => {
+  const maxFolders = Number(options.maxFolders || 20000);
+  const dryRun = options.dryRun === true;
+  const fixThumbnails = options.fixThumbnails === true;
+
+  const root = (rootFolderPath || "").replace(/\\/g, "/").replace(/^\//, "");
+  const queue = [root];
+  const visited = new Set();
+  let scannedFolders = 0;
+  let deleted = 0;
+  let deletedFolders = 0;
+  let deletedFiles = 0;
+  let clearedThumbnails = 0;
+  let regeneratedThumbnails = 0;
+  let errors = 0;
+  let truncated = false;
+
+  const selectFolderIdByPath = db.prepare(`SELECT id FROM files WHERE type = 'folder' AND path = ?`);
+  const selectChildrenByParent = db.prepare(`SELECT id, name, type, path, mime_type, thumbnail FROM files WHERE parent_id = ?`);
+  const selectChildrenRoot = db.prepare(`SELECT id, name, type, path, mime_type, thumbnail FROM files WHERE parent_id IS NULL`);
+  const deleteById = db.prepare(`DELETE FROM files WHERE id = ?`);
+  const clearThumbnailById = db.prepare(`UPDATE files SET thumbnail = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?`);
+  const selectOrphans = root
+    ? db.prepare(`
+        SELECT c.id, c.type, c.path
+        FROM files c
+        LEFT JOIN files p ON c.parent_id = p.id
+        WHERE c.parent_id IS NOT NULL
+          AND p.id IS NULL
+          AND (c.path = ? OR c.path LIKE ?)
+      `)
+    : db.prepare(`
+        SELECT c.id, c.type, c.path
+        FROM files c
+        LEFT JOIN files p ON c.parent_id = p.id
+        WHERE c.parent_id IS NOT NULL
+          AND p.id IS NULL
+      `);
+
+  while (queue.length > 0) {
+    const current = (queue.shift() || "").replace(/\\/g, "/").replace(/^\//, "");
+    if (visited.has(current)) continue;
+    visited.add(current);
+    scannedFolders += 1;
+    if (scannedFolders > maxFolders) {
+      truncated = true;
+      break;
+    }
+
+    const fullFolderPath = path.join(MEDIA_FULL_PATH, current);
+    let folderEntries;
+    try {
+      folderEntries = (await fs.promises.readdir(fullFolderPath)).filter(name => name !== '.DS_Store');
+    } catch (e) {
+      errors += 1;
+      continue;
+    }
+    const folderEntrySet = new Set(folderEntries);
+
+    let parentId;
+    if (!current) {
+      parentId = null;
+    } else {
+      const row = selectFolderIdByPath.get(current);
+      parentId = row ? row.id : null;
+    }
+
+    let dbChildren;
+    try {
+      dbChildren = parentId === null ? selectChildrenRoot.all() : selectChildrenByParent.all(parentId);
+    } catch (e) {
+      errors += 1;
+      continue;
+    }
+
+    for (const child of dbChildren) {
+      const existsInFs = folderEntrySet.has(child.name);
+      const childRelPath = (child.path || "").replace(/\\/g, "/").replace(/^\//, "");
+      const childFullPath = path.join(MEDIA_FULL_PATH, childRelPath);
+      if (!existsInFs || !fs.existsSync(childFullPath)) {
+        if (!dryRun) {
+          try {
+            deleteById.run(child.id);
+          } catch (e) {
+            errors += 1;
+            continue;
+          }
+        }
+        deleted += 1;
+        if (child.type === "folder") deletedFolders += 1;
+        else deletedFiles += 1;
+        continue;
+      }
+
+      if (child.type === "folder") {
+        queue.push(childRelPath);
+        continue;
+      }
+
+      const isVideo = (child.mime_type || "").startsWith("video/") || isVideoByName(child.name || "");
+      if (!isVideo) continue;
+
+      const thumbnailRel = child.thumbnail ? String(child.thumbnail).replace(/^\//, "") : "";
+      const thumbFullPath = thumbnailRel ? path.join(THUMB_FULL_PATH, thumbnailRel) : "";
+      const thumbOk = thumbnailRel && fs.existsSync(thumbFullPath);
+
+      if (!thumbOk && thumbnailRel) {
+        if (fixThumbnails) {
+          try {
+            fs.mkdirSync(path.dirname(thumbFullPath), { recursive: true });
+            await generateThumbnail(childFullPath, thumbFullPath);
+          } catch {}
+        }
+
+        const afterOk = thumbnailRel && fs.existsSync(thumbFullPath);
+        if (afterOk) {
+          regeneratedThumbnails += 1;
+        } else {
+          if (!dryRun) {
+            try {
+              clearThumbnailById.run(child.id);
+            } catch (e) {
+              errors += 1;
+              continue;
+            }
+          }
+          clearedThumbnails += 1;
+        }
+      }
+    }
+  }
+
+  const orphans = root ? selectOrphans.all(root, `${root}/%`) : selectOrphans.all();
+  for (const orphan of orphans) {
+    if (!dryRun) {
+      try {
+        deleteById.run(orphan.id);
+      } catch (e) {
+        errors += 1;
+        continue;
+      }
+    }
+    deleted += 1;
+    if (orphan.type === "folder") deletedFolders += 1;
+    else deletedFiles += 1;
+  }
+
+  return {
+    dryRun,
+    fixThumbnails,
+    root,
+    scannedFolders,
+    deleted,
+    deletedFolders,
+    deletedFiles,
+    clearedThumbnails,
+    regeneratedThumbnails,
+    errors,
+    truncated,
+    maxFolders
+  };
 };
 
 // 根据ID获取文件夹内容
@@ -395,7 +613,7 @@ const getFolderContentsById = async (folderId, searchQuery, filters, page, pageS
       // 检查物理文件夹中是否有文件但数据库中没有记录
       const fullPath = path.join(MEDIA_FULL_PATH, folderPath);
       if (fs.existsSync(fullPath)) {
-        const files = await fs.promises.readdir(fullPath);
+        const files = (await fs.promises.readdir(fullPath)).filter(name => name !== '.DS_Store');
         // 如果物理文件夹中有文件但数据库中没有记录，则更新缓存
         if (files.length > 0 && files.length > fileInfos.length) {
           console.log(`自动刷新文件夹缓存: ${folderPath}`);
@@ -613,7 +831,7 @@ const initRootDirectory = async () => {
     // 递归扫描整个目录结构
     async function scanDirectory(currentPath = "", parentId = null) {
       const fullPath = path.join(MEDIA_FULL_PATH, currentPath);
-      const files = await fs.promises.readdir(fullPath);
+      const files = (await fs.promises.readdir(fullPath)).filter(name => name !== '.DS_Store');
       
       for (const fileName of files) {
         const filePath = path.join(fullPath, fileName);
@@ -631,10 +849,20 @@ const initRootDirectory = async () => {
           const isVideo = isVideoByName(fileName);
           const mimeType = mime.lookup(fileName) || 'application/octet-stream'; // Determine mime type
           const thumbnailPath = path.join(THUMB_FULL_PATH, currentPath, fileName + ".png");
-          if (isVideo && !fs.existsSync(thumbnailPath)) {
-            await generateThumbnail(filePath, thumbnailPath);
+          let thumbnail;
+          if (isVideo) {
+            const thumbnailRel = path.join(currentPath, fileName + ".png");
+            if (!fs.existsSync(thumbnailPath)) {
+              try {
+                await generateThumbnail(filePath, thumbnailPath);
+              } catch (e) {
+                console.warn(`[initRootDirectory] thumbnail_failed file=${filePath} thumbnail=${thumbnailPath} err=${e?.message || String(e)}`);
+              }
+            }
+            if (fs.existsSync(thumbnailPath)) {
+              thumbnail = thumbnailRel;
+            }
           }
-          const thumbnail = isVideo ? path.join(currentPath, fileName + ".png") : undefined;
           
           // 插入文件记录
           db.prepare(`INSERT INTO files (name, type, mime_type, parent_id, path, size, last_modified, thumbnail) VALUES (?, 'file', ?, ?, ?, ?, ?, ?)`).run(fileName, mimeType, parentId, relativePath, stats.size, stats.mtime.toISOString(), thumbnail);
@@ -653,6 +881,8 @@ const initRootDirectory = async () => {
 // 导出函数
 export {
   updateFolderByPath,
+  updateFolderTreeByPath,
+  cleanDbTreeByPath,
   getFolderContentsById,
   getFileById,
   getFileByPath,

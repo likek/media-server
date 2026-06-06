@@ -152,33 +152,92 @@ async function generateThumbnail(videoPath, thumbnailPath, time = "80%") {
     fs.mkdirSync(thumbnailDir, { recursive: true });
   }
 
-  return new Promise((resolve, reject) => {
-    ffmpeg(videoPath)
-      .screenshots({
-        count: 1,
-        folder: thumbnailDir,
-        filename: thumbnailFileName,
-        size: "?x240",
-        timestamps: [time] // 避免开头可能的黑屏
-      })
-      .on("end", () => {
-        resolve(true);
-      })
-      .on("error", (err) => {
-        console.error("Error generating thumbnail:", err);
-        resolve(false);
-      });
+  const assertThumbnail = () => {
+    if (!fs.existsSync(thumbnailPath)) {
+      throw new Error("thumbnail file not created");
+    }
+    const stat = fs.statSync(thumbnailPath);
+    if (!stat.isFile() || stat.size <= 0) {
+      throw new Error("thumbnail file empty");
+    }
+  };
 
-    // 下面是强制取第1帧
-    // .on('end', () => resolve(true))
-    // .on('error', err => {
-    //     console.error('Error generating thumbnail:', err);
-    //     resolve(false);
-    // })
-    // .output(path.join(thumbnailDir, path.basename(thumbnailPath)))
-    // .outputOptions('-vf', 'thumbnail', '-frames:v', '1', '-s', '320x240')
-    // .run();
-  });
+  const safeCleanup = () => {
+    try {
+      if (fs.existsSync(thumbnailPath)) fs.unlinkSync(thumbnailPath);
+    } catch {}
+  };
+
+  const captureByScreenshots = async (timestamps) => {
+    safeCleanup();
+    return new Promise((resolve, reject) => {
+      ffmpeg(videoPath)
+        .screenshots({
+          count: 1,
+          folder: thumbnailDir,
+          filename: thumbnailFileName,
+          size: "?x240",
+          timestamps,
+        })
+        .on("end", () => {
+          try {
+            assertThumbnail();
+            resolve(true);
+          } catch (e) {
+            reject(e);
+          }
+        })
+        .on("error", reject);
+    });
+  };
+
+  const captureFirstFrame = async () => {
+    safeCleanup();
+    return new Promise((resolve, reject) => {
+      ffmpeg(videoPath)
+        .output(thumbnailPath)
+        .outputOptions([
+          "-frames:v 1",
+          "-vf scale=-1:240",
+          "-q:v 2",
+        ])
+        .on("end", () => {
+          try {
+            assertThumbnail();
+            resolve(true);
+          } catch (e) {
+            reject(e);
+          }
+        })
+        .on("error", reject)
+        .run();
+    });
+  };
+
+  const attempts = [
+    { kind: "screenshots", timestamps: [time] },
+    { kind: "screenshots", timestamps: ["50%"] },
+    { kind: "screenshots", timestamps: ["10%"] },
+    { kind: "screenshots", timestamps: ["0%"] },
+    { kind: "screenshots", timestamps: ["0"] },
+    { kind: "first_frame" },
+  ];
+
+  let lastError;
+  for (const attempt of attempts) {
+    try {
+      if (attempt.kind === "screenshots") {
+        await captureByScreenshots(attempt.timestamps);
+      } else {
+        await captureFirstFrame();
+      }
+      return true;
+    } catch (e) {
+      lastError = e;
+    }
+  }
+
+  throw lastError || new Error("failed to generate thumbnail");
 }
 
 

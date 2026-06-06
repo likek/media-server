@@ -23,8 +23,16 @@ export const getFolderInfo = async (id) => {
 
 // 更新缓存
 export const updateCache = async (id = null) => {
-  const params = { id };
+  const params = { id, recursive: true };
   const response = await request.post('/user/updateCache', params)
+  return response
+}
+
+export const cleanDb = async (id = null, options = {}) => {
+  const params = { id, ...options };
+  const response = await request.post('/user/cleanDb', params, {
+    timeout: 30 * 60 * 1000
+  })
   return response
 }
 
@@ -54,7 +62,8 @@ export const uploadFileToServer = async (file, parentId, onProgress) => {
   const formData = new FormData()
   formData.append('file', file)
   
-  const url = `/user/upload?parentId=${encodeURIComponent(parentId)}`;
+  const hasParentId = parentId !== null && parentId !== undefined && parentId !== ''
+  const url = hasParentId ? `/user/upload?parentId=${encodeURIComponent(parentId)}` : `/user/upload`;
     
   const response = await request.post(url, formData, {
     headers: {
@@ -125,5 +134,29 @@ export const registerUser = async (iv) => {
 
 export const updateThumbnail = async (id, time) => {
   const response = await request.post('/user/updateThumbnail', { id, time })
+  return response
+}
+
+export const searchByImage = async (file, folderId = null, topK = 50) => {
+  const formData = new FormData()
+  formData.append('file', file)
+  if (folderId !== null && folderId !== undefined) {
+    formData.append('folderId', folderId)
+  }
+  formData.append('topK', topK)
+
+  const response = await request.post('/user/searchByImage', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data'
+    },
+    timeout: 5 * 60 * 1000
+  })
+  return response
+}
+
+export const rebuildImageHash = async (max = 200) => {
+  const response = await request.post('/user/rebuildImageHash', { max }, {
+    timeout: 30 * 60 * 1000
+  })
   return response
 }

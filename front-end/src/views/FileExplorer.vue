@@ -5,25 +5,51 @@
         <el-form @submit.prevent="handleSearch">
           <el-input v-model="searchInput" placeholder="在当前目录下搜索" class="search-input" clearable />
         </el-form>
-        <el-button @click="showSearchAdvanceDialog" ref="refBtnFilter" class="filter-btn">
-          <el-icon><Filter /></el-icon>
-          <div class="red-dot" v-show="redDotShow"></div>
-        </el-button>
-        <el-button @click="refreshCache"><el-icon>
-            <Refresh />
-          </el-icon></el-button>
-        <el-button @click="showCreateFolderDialog"><el-icon>
-            <FolderAdd />
-          </el-icon></el-button>
-        <el-button @click="triggerFileUpload"><el-icon>
-            <UploadFilled />
-          </el-icon></el-button>
-        <el-button @click="showTextLinkUploadDialog">
-          <el-icon>
-            <Link />
-          </el-icon>
-        </el-button>
+        <el-tooltip content="高级筛选" placement="bottom">
+          <el-button @click="showSearchAdvanceDialog" ref="refBtnFilter" class="filter-btn">
+            <el-icon><Filter /></el-icon>
+            <div class="red-dot" v-show="redDotShow"></div>
+          </el-button>
+        </el-tooltip>
+        <el-tooltip content="递归刷新当前目录" placement="bottom">
+          <el-button @click="refreshCache"><el-icon>
+              <Refresh />
+            </el-icon></el-button>
+        </el-tooltip>
+        <el-tooltip content="数据库清洗" placement="bottom">
+          <el-button @click="confirmCleanDb"><el-icon>
+              <Delete />
+            </el-icon></el-button>
+        </el-tooltip>
+        <el-tooltip content="重建图片索引" placement="bottom">
+          <el-button @click="confirmRebuildImageHash"><el-icon>
+              <RefreshRight />
+            </el-icon></el-button>
+        </el-tooltip>
+        <el-tooltip content="新建文件夹" placement="bottom">
+          <el-button @click="showCreateFolderDialog"><el-icon>
+              <FolderAdd />
+            </el-icon></el-button>
+        </el-tooltip>
+        <el-tooltip content="上传文件" placement="bottom">
+          <el-button @click="triggerFileUpload"><el-icon>
+              <UploadFilled />
+            </el-icon></el-button>
+        </el-tooltip>
+        <el-tooltip content="以图搜图" placement="bottom">
+          <el-button @click="triggerImageSearch"><el-icon style="font-size: 28px;">
+              <Picture /><Search />
+            </el-icon></el-button>
+        </el-tooltip>
+        <el-tooltip content="文本链接下载" placement="bottom">
+          <el-button @click="showTextLinkUploadDialog">
+            <el-icon>
+              <Link />
+            </el-icon>
+          </el-button>
+        </el-tooltip>
         <input ref="fileInput" type="file" style="display: none" @change="uploadFile" />
+        <input ref="imageSearchInput" type="file" accept="image/*" style="display: none" @change="searchByImageFile" />
         <el-progress v-if="uploading" :percentage="uploadProgress" />
       </div>
       <!-- 面包屑导航 -->
@@ -215,7 +241,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import FolderItem from '../components/FolderItem.vue'
 import FileItem from '../components/FileItem.vue'
 import TextViewerDialog from '../components/TextViewerDialog.vue'
-import { getFiles, updateCache, createNewFolder, renameFile, deleteFileOrFolder, uploadFileToServer, downloadFromText, moveFile, convertFileToMp4, getFolderInfo } from '../services/userApi'
+import { getFiles, updateCache, cleanDb, createNewFolder, renameFile, deleteFileOrFolder, uploadFileToServer, downloadFromText, moveFile, convertFileToMp4, getFolderInfo, searchByImage, rebuildImageHash } from '../services/userApi'
 
 const stateCache = {}
 
@@ -229,6 +255,13 @@ const loading = ref(false)
 const uploading = ref(false)
 const uploadProgress = ref(0)
 const fileInput = ref(null)
+const imageSearchInput = ref(null)
+const isImageSearchRoute = (query) => {
+  return Boolean(query?.img_search)
+}
+const imageSearchActive = computed(() => {
+  return isImageSearchRoute(route.query)
+})
 const mediaContainer = ref(null) // 添加滚动容器的ref
 const breadcrumbPath = ref([]) // 存储面包屑导航路径
 
@@ -479,6 +512,9 @@ watch(() => route.query, async (newValue, oldValue) => {
   if (cacheData) {
     updatePageByCache(cacheData)
   } else {
+    if (isImageSearchRoute(newValue)) {
+      return
+    }
     loadFiles()
   }
 })
@@ -526,6 +562,27 @@ const refreshCache = async () => {
   }
 }
 
+const confirmCleanDb = async () => {
+  try {
+    await ElMessageBox.confirm('将以当前目录为根清理数据库：删除本地已不存在的条目，并清空不存在的缩略图引用。是否继续？', '数据库清洗', {
+      type: 'warning'
+    })
+    loading.value = true
+    const folderId = route.params.id
+    const resp = await cleanDb(folderId, { dryRun: false, fixThumbnails: false, maxFolders: 20000 })
+    const r = resp.result || {}
+    ElMessage.success(`扫描文件夹 ${r.scannedFolders || 0}，删除 ${r.deleted || 0}（文件 ${r.deletedFiles || 0} / 文件夹 ${r.deletedFolders || 0}），清空缩略图 ${r.clearedThumbnails || 0}`)
+    await loadFiles()
+  } catch (error) {
+    if (error !== 'cancel') {
+      ElMessage.error('数据库清洗失败')
+      console.error('Error cleaning db:', error)
+    }
+  } finally {
+    loading.value = false
+  }
+}
+
 // 导航到文件夹
 const navigateToFolder = (folderId) => {
   router.push({ name: 'folder', params: { id: folderId } })
@@ -539,6 +596,64 @@ const navigateToRoot = () => {
 // 触发文件上传
 const triggerFileUpload = () => {
   fileInput.value.click()
+}
+
+const triggerImageSearch = () => {
+  imageSearchInput.value.click()
+}
+
+const searchByImageFile = async (event) => {
+  const file = event.target.files[0]
+  if (!file) return
+
+  loading.value = true
+  try {
+    const folderId = route.params.id || null
+    const imgSearchToken = Date.now().toString()
+    const nav = {
+      name: route.name,
+      params: route.params,
+      query: { ...route.query, img_search: imgSearchToken }
+    }
+    if (imageSearchActive.value) {
+      router.replace(nav)
+    } else {
+      router.push(nav)
+    }
+    const response = await searchByImage(file, folderId, 80)
+    files.value = response.files || []
+    currentPage.value = 0
+    hasMoreFiles.value = false
+    ElMessage.success(`找到 ${files.value.length} 个相似结果`)
+  } catch (error) {
+    ElMessage.error('以图搜图失败')
+    console.error('Error search by image:', error)
+  } finally {
+    loading.value = false
+    if (imageSearchInput.value) {
+      imageSearchInput.value.value = ''
+    }
+  }
+}
+
+const confirmRebuildImageHash = async () => {
+  try {
+    await ElMessageBox.confirm('将为未建立索引的图片生成特征，用于以图搜图。是否继续？', '重建图片索引', {
+      type: 'warning'
+    })
+    loading.value = true
+    const result = await rebuildImageHash(2000)
+    const hash = result.hash || {}
+    const embedding = result.embedding || {}
+    ElMessage.success(`扫描 ${result.scanned}，哈希成功 ${hash.success || 0} 失败 ${hash.failed || 0}，向量成功 ${embedding.success || 0} 失败 ${embedding.failed || 0}`)
+  } catch (error) {
+    if (error !== 'cancel') {
+      console.error('Error rebuild image hash:', error)
+      ElMessage.error('重建图片索引失败')
+    }
+  } finally {
+    loading.value = false
+  }
 }
 
 // 上传文件
@@ -797,6 +912,7 @@ const convertTsFile = async (file) => {
 
 // 加载更多文件
 const loadMoreFiles = async () => {
+  if (imageSearchActive.value) return
   if (loading.value || !hasMoreFiles.value) return
   loading.value = true
 
@@ -855,6 +971,7 @@ const loadMoreFiles = async () => {
 
 // 检查滚动位置并加载更多文件
 const checkScrollPosition = () => {
+  if (imageSearchActive.value) return
   setCache(route.params.id, route.query, {
     scrollTop: mediaContainer.value.scrollTop
   })
