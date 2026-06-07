@@ -6,7 +6,7 @@ import ffmpeg from "fluent-ffmpeg";
 import extract from "extract-zip";
 import readline from "readline";
 import multer from "multer";
-import { updateFolderByPath, updateFolderTreeByPath, cleanDbTreeByPath, getFolderContentsById, getFileById, getFileByPath, setFolderCoverByFileId, deleteFileById, renameFileById, moveFileById, initRootDirectory } from "../fileDbManager.js";
+import { updateFolderByPath, updateFolderTreeByPath, checkFilesTreeByPath, cleanDbTreeByPath, getFolderContentsById, getFileById, getFileByPath, setFolderCoverByFileId, deleteFileById, renameFileById, moveFileById, initRootDirectory } from "../fileDbManager.js";
 import { MEDIA_FULL_PATH, THUMB_FULL_PATH, TEMP_FULL_PATH } from "../../serverConfig.js";
 import { wsBroadcastMessage } from "../websocketManager.js";
 import { convertTxtEncoding } from "../tools/textFileTools.js";
@@ -1028,6 +1028,26 @@ router.post("/updateThumbnail", async (req, res) => {
   } catch (e) {
     console.error("Error generating thumbnail:", e);
     res.status(500).json({ success: false, id, time, message: e?.message || String(e) })
+  }
+});
+
+router.post("/checkFiles", async (req, res) => {
+  try {
+    await initRootDirectory(req);
+    const folderId = req.body.id;
+    const maxFolders = req.body.maxFolders;
+
+    const folderInfo = folderId ? await getFileById(folderId) : null;
+    if (folderId && (!folderInfo || folderInfo.type !== 'folder')) {
+      return res.status(404).send({ message: "Folder not found" });
+    }
+
+    const folderPath = folderInfo ? folderInfo.path : "";
+    const result = await checkFilesTreeByPath(folderPath, { maxFolders });
+    res.send({ message: "Check files successfully", result });
+  } catch (error) {
+    console.error("Error checking files:", error);
+    res.status(500).send({ message: "Failed to check files", error: error?.message || String(error) });
   }
 });
 

@@ -36,6 +36,14 @@ export const cleanDb = async (id = null, options = {}) => {
   return response
 }
 
+export const checkFiles = async (id = null, options = {}) => {
+  const params = { id, ...options };
+  const response = await request.post('/user/checkFiles', params, {
+    timeout: 30 * 60 * 1000
+  })
+  return response
+}
+
 // 创建文件夹
 export const createNewFolder = async (folderName, parentId = null) => {
   const params = { folderName, parentId };

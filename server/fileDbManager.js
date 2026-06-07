@@ -1,6 +1,8 @@
 import fs from "fs";
 import path from "path";
 import mime from 'mime-types';
+import sharp from "sharp";
+import ffmpeg from "fluent-ffmpeg";
 import { MEDIA_FULL_PATH, THUMB_FULL_PATH } from "../serverConfig.js";
 import { isVideoByName, generateThumbnail, getUserIdByReq } from "./utils/index.js";
 import db from "./dbserialize.js";
@@ -56,6 +58,142 @@ const chooseFirstImageChild = (fileInfos = []) => {
   return imageCandidates[0] || null;
 };
 
+const IMAGE_FORMAT_EXT_MAP = {
+  jpeg: "jpg",
+  png: "png",
+  webp: "webp",
+  gif: "gif",
+  tiff: "tif",
+  svg: "svg",
+  avif: "avif",
+  heif: "heic"
+};
+
+const readFileHeader = async (filePath, length = 64) => {
+  const handle = await fs.promises.open(filePath, "r");
+  try {
+    const buffer = Buffer.alloc(length);
+    const { bytesRead } = await handle.read(buffer, 0, length, 0);
+    return buffer.subarray(0, bytesRead);
+  } finally {
+    await handle.close();
+  }
+};
+
+const detectExtensionByHeader = async (filePath) => {
+  const header = await readFileHeader(filePath, 64);
+  if (header.length >= 8 && header[0] === 0x89 && header[1] === 0x50 && header[2] === 0x4e && header[3] === 0x47) {
+    return { ext: "png", compatibleExts: ["png"] };
+  }
+  if (header.length >= 3 && header[0] === 0xff && header[1] === 0xd8 && header[2] === 0xff) {
+    return { ext: "jpg", compatibleExts: ["jpg", "jpeg"] };
+  }
+  if (header.length >= 6) {
+    const gifSig = header.subarray(0, 6).toString("ascii");
+    if (gifSig === "GIF87a" || gifSig === "GIF89a") {
+      return { ext: "gif", compatibleExts: ["gif"] };
+    }
+  }
+  if (header.length >= 12) {
+    const riff = header.subarray(0, 4).toString("ascii");
+    const webp = header.subarray(8, 12).toString("ascii");
+    if (riff === "RIFF" && webp === "WEBP") {
+      return { ext: "webp", compatibleExts: ["webp"] };
+    }
+  }
+  if (header.length >= 5 && header.subarray(0, 5).toString("ascii") === "%PDF-") {
+    return { ext: "pdf", compatibleExts: ["pdf"] };
+  }
+  if (header.length >= 4 && header[0] === 0x50 && header[1] === 0x4b) {
+    return { ext: "zip", compatibleExts: ["zip"] };
+  }
+  if (header.length >= 7 && header.subarray(0, 7).toString("ascii") === "Rar!\x1a\x07") {
+    return { ext: "rar", compatibleExts: ["rar"] };
+  }
+  if (header.length >= 6 && header[0] === 0x37 && header[1] === 0x7a && header[2] === 0xbc && header[3] === 0xaf && header[4] === 0x27 && header[5] === 0x1c) {
+    return { ext: "7z", compatibleExts: ["7z"] };
+  }
+  if (header.length >= 2 && header[0] === 0x1f && header[1] === 0x8b) {
+    return { ext: "gz", compatibleExts: ["gz", "tgz"] };
+  }
+  return null;
+};
+
+const detectImageExtension = async (filePath) => {
+  try {
+    const metadata = await sharp(filePath, { failOn: "none" }).metadata();
+    const ext = IMAGE_FORMAT_EXT_MAP[metadata?.format];
+    if (!ext) return null;
+    const compatibleExts = ext === "jpg" ? ["jpg", "jpeg"] : [ext];
+    return { ext, compatibleExts };
+  } catch {
+    return null;
+  }
+};
+
+const ffprobeAsync = (filePath) =>
+  new Promise((resolve, reject) => {
+    ffmpeg.ffprobe(filePath, (err, metadata) => {
+      if (err) return reject(err);
+      resolve(metadata);
+    });
+  });
+
+const detectMediaExtension = async (filePath, currentExt) => {
+  try {
+    const metadata = await ffprobeAsync(filePath);
+    const formatName = String(metadata?.format?.format_name || "");
+    const formatNames = formatName.split(",").map(item => item.trim()).filter(Boolean);
+    const hasVideo = Array.isArray(metadata?.streams) && metadata.streams.some(stream => stream.codec_type === "video");
+    const hasAudio = Array.isArray(metadata?.streams) && metadata.streams.some(stream => stream.codec_type === "audio");
+
+    if (formatNames.includes("mp3")) return { ext: "mp3", compatibleExts: ["mp3"] };
+    if (formatNames.includes("flac")) return { ext: "flac", compatibleExts: ["flac"] };
+    if (formatNames.includes("wav")) return { ext: "wav", compatibleExts: ["wav"] };
+    if (formatNames.includes("aac") && !hasVideo) return { ext: "aac", compatibleExts: ["aac", "m4a"] };
+    if (formatNames.includes("ogg")) return { ext: "ogg", compatibleExts: ["ogg", "oga"] };
+    if (formatNames.includes("mpegts")) return { ext: "ts", compatibleExts: ["ts", "m2ts"] };
+    if (formatNames.includes("avi")) return { ext: "avi", compatibleExts: ["avi"] };
+    if (formatNames.includes("asf")) return { ext: "wmv", compatibleExts: ["wmv", "asf"] };
+    if (formatNames.includes("flv")) return { ext: "flv", compatibleExts: ["flv"] };
+    if (formatNames.includes("matroska") || formatNames.includes("webm")) {
+      if (formatNames.includes("webm")) return { ext: "webm", compatibleExts: ["webm"] };
+      return { ext: "mkv", compatibleExts: ["mkv"] };
+    }
+    if (formatNames.includes("mov") || formatNames.includes("mp4") || formatNames.includes("m4a") || formatNames.includes("3gp") || formatNames.includes("3g2") || formatNames.includes("mj2")) {
+      if (["mp4", "m4v", "mov"].includes(currentExt)) {
+        return { ext: currentExt, compatibleExts: ["mp4", "m4v", "mov"] };
+      }
+      if (!hasVideo && hasAudio) {
+        return { ext: "m4a", compatibleExts: ["m4a", "aac", "mp4"] };
+      }
+      return { ext: "mp4", compatibleExts: ["mp4", "m4v", "mov"] };
+    }
+  } catch {}
+  return null;
+};
+
+const detectActualExtension = async (filePath, currentExt) => {
+  const byHeader = await detectExtensionByHeader(filePath);
+  if (byHeader) return byHeader;
+  const byImage = await detectImageExtension(filePath);
+  if (byImage) return byImage;
+  const byMedia = await detectMediaExtension(filePath, currentExt);
+  if (byMedia) return byMedia;
+  return null;
+};
+
+const renameWithCaseCompatibility = async (oldPath, newPath) => {
+  if (oldPath === newPath) return;
+  if (oldPath.toLowerCase() === newPath.toLowerCase() && oldPath !== newPath) {
+    const tempPath = `${oldPath}.rename-tmp-${Date.now()}`;
+    await fs.promises.rename(oldPath, tempPath);
+    await fs.promises.rename(tempPath, newPath);
+    return;
+  }
+  await fs.promises.rename(oldPath, newPath);
+};
+
 const ensureFolderCoverForFolder = (folderPath, fileInfos, options = {}) => {
   const { upsert, deleteByFolderId, selectByFolderId } = getFolderCoverStatements();
   const normalizedPath = normalizeRelPath(folderPath);
@@ -95,6 +233,115 @@ const ensureFolderCoverForFolder = (folderPath, fileInfos, options = {}) => {
   }
 
   return { skippedRoot: false, autoSet: false, missingImage: true, clearedInvalid, folderId: folderInfo.id };
+};
+
+const checkFilesTreeByPath = async (rootFolderPath, options = {}) => {
+  const maxFolders = Number(options.maxFolders || 20000);
+  const root = normalizeRelPath(rootFolderPath);
+  const queue = [root];
+  const visited = new Set();
+  let scannedFolders = 0;
+  let scannedFiles = 0;
+  let renamed = 0;
+  let conflicts = 0;
+  let unsupported = 0;
+  let errors = 0;
+  let truncated = false;
+
+  while (queue.length > 0) {
+    const current = normalizeRelPath(queue.shift() || "");
+    if (visited.has(current)) continue;
+    visited.add(current);
+    scannedFolders += 1;
+    if (scannedFolders > maxFolders) {
+      truncated = true;
+      break;
+    }
+
+    const fullFolderPath = path.join(MEDIA_FULL_PATH, current);
+    let entries;
+    try {
+      entries = (await fs.promises.readdir(fullFolderPath)).filter(name => name !== ".DS_Store");
+    } catch (e) {
+      errors += 1;
+      continue;
+    }
+
+    let changed = false;
+    for (const entryName of entries) {
+      const fullEntryPath = path.join(fullFolderPath, entryName);
+      let stats;
+      try {
+        stats = await fs.promises.stat(fullEntryPath);
+      } catch {
+        errors += 1;
+        continue;
+      }
+
+      if (stats.isDirectory()) {
+        queue.push(normalizeRelPath(path.join(current, entryName)));
+        continue;
+      }
+
+      scannedFiles += 1;
+      const parsed = path.parse(entryName);
+      const currentExt = parsed.ext.replace(/^\./, "").toLowerCase();
+      let detected;
+      try {
+        detected = await detectActualExtension(fullEntryPath, currentExt);
+      } catch {
+        detected = null;
+      }
+
+      if (!detected || !detected.ext) {
+        unsupported += 1;
+        continue;
+      }
+
+      if (detected.compatibleExts.includes(currentExt)) {
+        continue;
+      }
+
+      const targetName = `${parsed.name}.${detected.ext}`;
+      const targetPath = path.join(fullFolderPath, targetName);
+      if (fullEntryPath !== targetPath && fs.existsSync(targetPath) && fullEntryPath.toLowerCase() !== targetPath.toLowerCase()) {
+        conflicts += 1;
+        console.warn(`[checkFiles] rename_conflict from=${fullEntryPath} to=${targetPath}`);
+        continue;
+      }
+
+      try {
+        await renameWithCaseCompatibility(fullEntryPath, targetPath);
+        renamed += 1;
+        changed = true;
+        console.log(`[checkFiles] renamed from=${fullEntryPath} to=${targetPath}`);
+      } catch (e) {
+        errors += 1;
+        console.error(`[checkFiles] rename_failed from=${fullEntryPath} to=${targetPath} err=${e?.message || String(e)}`);
+      }
+    }
+
+    if (changed) {
+      try {
+        await updateFolderByPath(current);
+      } catch (e) {
+        errors += 1;
+        console.error(`[checkFiles] update_db_failed folder=${current} err=${e?.message || String(e)}`);
+      }
+    }
+  }
+
+  return {
+    root,
+    scannedFolders,
+    scannedFiles,
+    renamed,
+    conflicts,
+    unsupported,
+    errors,
+    truncated,
+    maxFolders
+  };
 };
 
 // 获取文件夹的ID
@@ -1021,6 +1268,7 @@ const initRootDirectory = async () => {
 export {
   updateFolderByPath,
   updateFolderTreeByPath,
+  checkFilesTreeByPath,
   cleanDbTreeByPath,
   getFolderContentsById,
   getFileById,

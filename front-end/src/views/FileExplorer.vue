@@ -16,9 +16,9 @@
               <Refresh />
             </el-icon></el-button>
         </el-tooltip>
-        <el-tooltip content="数据库清洗" placement="bottom">
+        <el-tooltip content="数据检查" placement="bottom">
           <el-button @click="confirmCleanDb"><el-icon>
-              <Delete />
+              <List />
             </el-icon></el-button>
         </el-tooltip>
         <el-tooltip content="重建图片索引" placement="bottom">
@@ -241,7 +241,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import FolderItem from '../components/FolderItem.vue'
 import FileItem from '../components/FileItem.vue'
 import TextViewerDialog from '../components/TextViewerDialog.vue'
-import { getFiles, updateCache, cleanDb, createNewFolder, renameFile, deleteFileOrFolder, uploadFileToServer, downloadFromText, moveFile, convertFileToMp4, getFolderInfo, searchByImage, rebuildImageHash } from '../services/userApi'
+import { getFiles, updateCache, checkFiles, cleanDb, createNewFolder, renameFile, deleteFileOrFolder, uploadFileToServer, downloadFromText, moveFile, convertFileToMp4, getFolderInfo, searchByImage, rebuildImageHash } from '../services/userApi'
 
 const stateCache = {}
 
@@ -564,19 +564,21 @@ const refreshCache = async () => {
 
 const confirmCleanDb = async () => {
   try {
-    await ElMessageBox.confirm('将以当前目录为根清理数据库：删除本地已不存在的条目，并清空不存在的缩略图引用。是否继续？', '数据库清洗', {
+    await ElMessageBox.confirm('将先检查当前目录树中文件的实际格式与后缀名是否匹配，不匹配时会直接原地修正；随后再进行数据库清洗。是否继续？', '数据检查', {
       type: 'warning'
     })
     loading.value = true
     const folderId = route.params.id
+    const checkResp = await checkFiles(folderId, { maxFolders: 20000 })
+    const checkResult = checkResp.result || {}
     const resp = await cleanDb(folderId, { dryRun: false, fixThumbnails: false, maxFolders: 20000 })
     const r = resp.result || {}
-    ElMessage.success(`扫描文件夹 ${r.scannedFolders || 0}，删除 ${r.deleted || 0}（文件 ${r.deletedFiles || 0} / 文件夹 ${r.deletedFolders || 0}），清空缩略图 ${r.clearedThumbnails || 0}`)
+    ElMessage.success(`文件检查：扫描文件夹 ${checkResult.scannedFolders || 0} / 文件 ${checkResult.scannedFiles || 0}，修正后缀 ${checkResult.renamed || 0}；数据库清洗：删除 ${r.deleted || 0}（文件 ${r.deletedFiles || 0} / 文件夹 ${r.deletedFolders || 0}），清空缩略图 ${r.clearedThumbnails || 0}`)
     await loadFiles()
   } catch (error) {
     if (error !== 'cancel') {
-      ElMessage.error('数据库清洗失败')
-      console.error('Error cleaning db:', error)
+      ElMessage.error('数据检查失败')
+      console.error('Error checking data:', error)
     }
   } finally {
     loading.value = false

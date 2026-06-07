@@ -169,12 +169,14 @@ onBeforeUnmount(() => {
     background-color: #000;
 }
 
+:deep(.vjs-thumbnail-btn),
 :deep(.vjs-save-frame-btn) {
     width: auto;
     min-width: 3.6em;
     padding: 0 0.6em;
 }
 
+:deep(.vjs-thumbnail-btn .vjs-thumbnail-btn__label),
 :deep(.vjs-save-frame-btn .vjs-save-frame-btn__label) {
     display: inline-block;
     line-height: 3em;

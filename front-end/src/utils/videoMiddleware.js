@@ -7,8 +7,9 @@ class ThumbnailBtn extends Button {
     constructor(_player, options) {
         super(_player, options);
         this.player_ = _player; // 存当前实例
-        this.addClass('vjs-icon-square');
+        this.addClass('vjs-thumbnail-btn');
         this.el().setAttribute('title', '将当前帧设为视频封面');
+        this.el().innerHTML = '<span class="vjs-thumbnail-btn__label" aria-hidden="true">设封面</span>';
         this.controlText("将当前帧设为视频封面");
     }
     handleClick() {

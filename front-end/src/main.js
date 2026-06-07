@@ -35,7 +35,8 @@ import {
   Filter,
   RefreshRight,
   Search,
-  FolderChecked
+  FolderChecked,
+  List
 } from '@element-plus/icons-vue'
 
 import { videoMiddlewareInit } from './utils/videoMiddleware.js'
@@ -73,7 +74,8 @@ const icons = [
   Filter,
   RefreshRight,
   Search,
-  FolderChecked
+  FolderChecked,
+  List
 ]
 
 icons.forEach(icon => {
