@@ -73,6 +73,34 @@ const upsertImageEmbedding = (fileId, model, dim, vector) => {
   ).run(fileId, model, dim, buffer);
 };
 
+let availableEncodersPromise = null;
+const getAvailableEncoders = async () => {
+  if (!availableEncodersPromise) {
+    availableEncodersPromise = new Promise((resolve) => {
+      ffmpeg.getAvailableEncoders((err, encoders) => {
+        if (err) {
+          console.warn("Failed to query ffmpeg encoders:", err);
+          resolve({});
+          return;
+        }
+        resolve(encoders || {});
+      });
+    });
+  }
+  return availableEncodersPromise;
+};
+
+const pickH264Encoder = async () => {
+  const encoders = await getAvailableEncoders();
+  const candidates = [
+    "h264_videotoolbox",
+    "h264_nvenc",
+    "libx264",
+    "h264"
+  ];
+  return candidates.find((name) => encoders[name]) || "libx264";
+};
+
 router.post("/register", validateFingerprint, async (req, res) => {
   try {
     await tryRegister(req, res);
@@ -861,50 +889,71 @@ router.post("/move", async (req, res) => {
 });
 
 router.post("/convert", async (req, res) => {
-  const inputFileId = req.body.inputFileId;
-  const outputFileSuffix = req.body.outputFileSuffix;
-  if (!inputFileId) {
-    return res.status(400).json({ message: "inputFileId is required" });
-  }
-  const inputFileInfo = await getFileById(inputFileId);
-  if (!inputFileInfo) {
-    return res.status(404).json({ message: "File not found" });
-  }
-  const inputFilePath = inputFileInfo.path;
-  const outputFilePath = `${inputFilePath}.${outputFileSuffix}`;
+  try {
+    const inputFileId = req.body.inputFileId;
+    const outputFileSuffix = req.body.outputFileSuffix;
+    if (!inputFileId) {
+      return res.status(400).json({ message: "inputFileId is required" });
+    }
+    const inputFileInfo = await getFileById(inputFileId);
+    if (!inputFileInfo) {
+      return res.status(404).json({ message: "File not found" });
+    }
+    const inputFilePath = inputFileInfo.path;
+    const outputFilePath = `${inputFilePath}.${outputFileSuffix}`;
 
-  const absoluteInputPath = path.join(MEDIA_FULL_PATH, inputFilePath);
-  const absoluteOutputPath = path.join(MEDIA_FULL_PATH, outputFilePath);
+    const absoluteInputPath = path.join(MEDIA_FULL_PATH, inputFilePath);
+    const absoluteOutputPath = path.join(MEDIA_FULL_PATH, outputFilePath);
 
-  if (!fs.existsSync(absoluteInputPath)) {
-    return res.status(400).json({ message: "Input file does not exist" });
-  }
+    if (!fs.existsSync(absoluteInputPath)) {
+      return res.status(400).json({ message: "Input file does not exist" });
+    }
 
-  if (fs.existsSync(absoluteOutputPath)) {
-    return res.status(400).json({ message: "Output file already exists" });
-  }
+    if (fs.existsSync(absoluteOutputPath)) {
+      return res.status(400).json({ message: "Output file already exists" });
+    }
 
-  ffmpeg(absoluteInputPath)
-    .outputOptions(
+    const videoEncoder = await pickH264Encoder();
+    const outputOptions = [
       "-c:v",
-      "h264_nvenc",
+      videoEncoder,
       "-preset",
       "fast",
       "-b:v",
       "2M",
+      "-c:a",
+      "aac",
+      "-movflags",
+      "faststart",
       "-threads",
       "8"
-    )
-    .save(absoluteOutputPath)
-    .on("end", async () => {
-      const currentPath = path.dirname(inputFilePath);
-      await updateFolderByPath(currentPath); // 更新数据库
-      res.json({ outputFilePath: outputFilePath });
-    })
-    .on("error", (err) => {
-      console.error("Error during conversion:", err);
-      res.status(500).json({ message: "Conversion failed" });
-    });
+    ];
+
+    if (videoEncoder === "h264_videotoolbox") {
+      const presetIndex = outputOptions.indexOf("-preset");
+      if (presetIndex !== -1) {
+        outputOptions.splice(presetIndex, 2);
+      }
+    }
+
+    console.log(`[convert] input=${absoluteInputPath} output=${absoluteOutputPath} encoder=${videoEncoder}`);
+
+    ffmpeg(absoluteInputPath)
+      .outputOptions(outputOptions)
+      .save(absoluteOutputPath)
+      .on("end", async () => {
+        const currentPath = path.dirname(inputFilePath);
+        await updateFolderByPath(currentPath);
+        res.json({ outputFilePath: outputFilePath, encoder: videoEncoder });
+      })
+      .on("error", (err) => {
+        console.error("Error during conversion:", err);
+        res.status(500).json({ message: "Conversion failed", error: err?.message || String(err), encoder: videoEncoder });
+      });
+  } catch (err) {
+    console.error("Error preparing conversion:", err);
+    res.status(500).json({ message: "Conversion failed", error: err?.message || String(err) });
+  }
 });
 
 router.post("/unzip", async (req, res) => {
