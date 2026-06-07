@@ -35,6 +35,11 @@
                 <Switch />
               </el-icon>
             </el-tooltip>
+            <el-tooltip content="设为文件夹封面" placement="top" :auto-close="1000" v-if="canSetFolderCover && allowActions.includes('setFolderCover')">
+              <el-icon class="action-icon" @click.stop="handleSetFolderCover">
+                <FolderChecked />
+              </el-icon>
+            </el-tooltip>
             <el-tooltip :content="isFavorited ? '取消收藏' : '收藏'" placement="top" :auto-close="1000" v-if="allowActions.includes('favorite')">
               <el-icon class="action-icon favorite-icon" @click.stop="toggleFavorite" :class="{ 'is-favorited': isFavorited }">
                 <Star v-if="!isFavorited" />
@@ -130,7 +135,7 @@
 <script setup>
 import { computed, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { unzipFile, convertToHls, updateThumbnail } from '../services/userApi'
+import { unzipFile, convertToHls, setFolderCover } from '../services/userApi'
 import VideoPlayer from './VideoPlayer.vue'
 import { addToFavorites, removeFromFavorites } from '../services/favoritesApi'
 
@@ -154,14 +159,14 @@ const props = defineProps({
     default: false
   },
   allowActions: {
-    type: Array, // 'viewtext', 'unzip', 'convertts', 'favorite', 'rename', 'move', 'delete', 'converthls', 'navigateParent'
+    type: Array, // 'viewtext', 'unzip', 'convertts', 'favorite', 'rename', 'move', 'delete', 'converthls', 'navigateParent', 'setFolderCover'
     default: true
   }
 })
 
 const isFavorited = ref(props.favorited)
 
-const emit = defineEmits(['rename', 'delete', 'move', 'download', 'unzip', 'viewText', 'convertTs', 'favorite', 'navigate'])
+const emit = defineEmits(['rename', 'delete', 'move', 'download', 'unzip', 'viewText', 'convertTs', 'favorite', 'navigate', 'folderCoverUpdated'])
 
 // 视频播放器配置
 const videoOptions = ref({
@@ -187,6 +192,10 @@ const isMp4 = computed(() => {
 
 const isImage = computed(() => {
   return ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(fileExt.value)
+})
+
+const canSetFolderCover = computed(() => {
+  return isImage.value && props.file.parent_id !== null && props.file.parent_id !== undefined
 })
 
 const isPdf = computed(() => {
@@ -220,6 +229,21 @@ const handleConvertToHls = async () => {
   } catch (e) {
     console.error('转换失败', e)
     ElMessage.error(`转换失败`)
+  }
+}
+
+const handleSetFolderCover = async () => {
+  try {
+    const res = await setFolderCover(props.file.id)
+    if (res.success) {
+      ElMessage.success('已设为文件夹封面')
+      emit('folderCoverUpdated', props.file, res)
+    } else {
+      ElMessage.error(res.message || '设置文件夹封面失败')
+    }
+  } catch (e) {
+    console.error('设置文件夹封面失败', e)
+    ElMessage.error('设置文件夹封面失败')
   }
 }
 

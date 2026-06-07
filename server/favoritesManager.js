@@ -1,5 +1,16 @@
 import db from "./dbserialize.js";
 
+const getFolderCoverMap = (folderIds = []) => {
+  const validFolderIds = Array.from(new Set(folderIds.filter(id => id !== null && id !== undefined)));
+  if (validFolderIds.length === 0) return {};
+  const placeholders = validFolderIds.map(() => '?').join(',');
+  const rows = db.prepare(`SELECT folder_id, cover_file_id FROM folder_covers WHERE folder_id IN (${placeholders})`).all(...validFolderIds);
+  return rows.reduce((acc, row) => {
+    acc[row.folder_id] = row.cover_file_id;
+    return acc;
+  }, {});
+};
+
 // 添加收藏
 export const addToFavorites = (userId, fileId) => {
   try {
@@ -67,6 +78,7 @@ export const getUserFavorites = (userId, page = 0, pageSize = 20) => {
     
     const stmt = db.prepare(query);
     const rows = stmt.all(...params);
+    const folderCoverMap = getFolderCoverMap(rows.filter(row => row.type === 'folder').map(row => row.id));
     
     const files = rows.map(row => ({
       id: row.id,
@@ -79,6 +91,7 @@ export const getUserFavorites = (userId, page = 0, pageSize = 20) => {
       size: row.size,
       parent_id: row.parent_id,
       m3u8_path: row.m3u8_path,
+      cover_file_id: row.type === 'folder' ? (folderCoverMap[row.id] || null) : null,
       favorited: true // 用户自己的收藏列表，所有文件都是已收藏状态
     }));
     
@@ -134,6 +147,7 @@ export const getMostFavorites = (page = 0, pageSize = 20, currentUserId = null) 
     
     const stmt = db.prepare(query);
     const rows = stmt.all(...params);
+    const folderCoverMap = getFolderCoverMap(rows.filter(row => row.type === 'folder').map(row => row.id));
     
     // 获取文件的收藏状态
     const fileIds = rows.map(row => row.id);
@@ -155,6 +169,7 @@ export const getMostFavorites = (page = 0, pageSize = 20, currentUserId = null) 
       parent_id: row.parent_id,
       favoriteCount: row.favorite_count,
       m3u8_path: row.m3u8_path,
+      cover_file_id: row.type === 'folder' ? (folderCoverMap[row.id] || null) : null,
       favorited: favoritedStatus[row.id] || false
     }));
     

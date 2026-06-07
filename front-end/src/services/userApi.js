@@ -142,6 +142,11 @@ export const saveVideoFrame = async (id, time) => {
   return response
 }
 
+export const setFolderCover = async (fileId) => {
+  const response = await request.post('/user/setFolderCover', { fileId })
+  return response
+}
+
 export const searchByImage = async (file, folderId = null, topK = 50) => {
   const formData = new FormData()
   formData.append('file', file)

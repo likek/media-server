@@ -7,6 +7,96 @@ import db from "./dbserialize.js";
 import { getFavoritesStatus } from "./favoritesManager.js";
 import { generateSegmentedWhereClause, rankResultsByRelevance } from "./utils/segmentUtils.js"; 
 
+const normalizeRelPath = (input = "") => String(input || "").replace(/\\/g, "/").replace(/^\//, "");
+const isImageMimeType = (mimeType = "") => typeof mimeType === "string" && mimeType.startsWith("image/");
+
+let folderCoverStatements;
+const getFolderCoverStatements = () => {
+  if (!folderCoverStatements) {
+    folderCoverStatements = {
+      upsert: db.prepare(`
+        INSERT INTO folder_covers (folder_id, cover_file_id, updated_at)
+        VALUES (?, ?, CURRENT_TIMESTAMP)
+        ON CONFLICT(folder_id) DO UPDATE SET
+          cover_file_id = excluded.cover_file_id,
+          updated_at = CURRENT_TIMESTAMP
+      `),
+      deleteByFolderId: db.prepare(`DELETE FROM folder_covers WHERE folder_id = ?`),
+      deleteByCoverFileId: db.prepare(`DELETE FROM folder_covers WHERE cover_file_id = ?`),
+      selectByFolderId: db.prepare(`
+        SELECT
+          fc.folder_id,
+          fc.cover_file_id,
+          f.parent_id AS cover_parent_id,
+          f.mime_type AS cover_mime_type
+        FROM folder_covers fc
+        LEFT JOIN files f ON f.id = fc.cover_file_id
+        WHERE fc.folder_id = ?
+      `)
+    };
+  }
+  return folderCoverStatements;
+};
+
+const getFolderCoverMap = (folderIds = []) => {
+  const validFolderIds = Array.from(new Set(folderIds.filter(id => id !== null && id !== undefined)));
+  if (validFolderIds.length === 0) return {};
+  const placeholders = validFolderIds.map(() => "?").join(",");
+  const rows = db.prepare(`SELECT folder_id, cover_file_id FROM folder_covers WHERE folder_id IN (${placeholders})`).all(...validFolderIds);
+  return rows.reduce((acc, row) => {
+    acc[row.folder_id] = row.cover_file_id;
+    return acc;
+  }, {});
+};
+
+const chooseFirstImageChild = (fileInfos = []) => {
+  const imageCandidates = fileInfos
+    .filter(item => item && item.type === "file" && isImageMimeType(item.mime_type))
+    .sort((a, b) => String(a.filename || "").localeCompare(String(b.filename || "")));
+  return imageCandidates[0] || null;
+};
+
+const ensureFolderCoverForFolder = (folderPath, fileInfos, options = {}) => {
+  const { upsert, deleteByFolderId, selectByFolderId } = getFolderCoverStatements();
+  const normalizedPath = normalizeRelPath(folderPath);
+  if (!normalizedPath) {
+    return { skippedRoot: true, autoSet: false, missingImage: false, clearedInvalid: false };
+  }
+
+  const folderInfo = getFileByPath(normalizedPath);
+  if (!folderInfo || folderInfo.type !== "folder") {
+    return { skippedRoot: false, autoSet: false, missingImage: false, clearedInvalid: false };
+  }
+
+  const currentCover = selectByFolderId.get(folderInfo.id);
+  const hasValidCover =
+    !!currentCover &&
+    Number(currentCover.cover_parent_id) === Number(folderInfo.id) &&
+    isImageMimeType(currentCover.cover_mime_type);
+
+  let clearedInvalid = false;
+  if (currentCover && !hasValidCover) {
+    deleteByFolderId.run(folderInfo.id);
+    clearedInvalid = true;
+  }
+
+  if (hasValidCover) {
+    return { skippedRoot: false, autoSet: false, missingImage: false, clearedInvalid };
+  }
+
+  const firstImage = chooseFirstImageChild(fileInfos);
+  if (firstImage) {
+    upsert.run(folderInfo.id, firstImage.id);
+    return { skippedRoot: false, autoSet: true, missingImage: false, clearedInvalid, folderId: folderInfo.id, coverFileId: firstImage.id };
+  }
+
+  if (options.logMissing) {
+    console.warn(`[folder_cover] missing_image folderId=${folderInfo.id} path=${normalizedPath}`);
+  }
+
+  return { skippedRoot: false, autoSet: false, missingImage: true, clearedInvalid, folderId: folderInfo.id };
+};
+
 // 获取文件夹的ID
 const getFolderId = (folderPath) => {
   if (!folderPath || folderPath === "/" || folderPath === "") {
@@ -243,6 +333,9 @@ const updateFolderTreeByPath = async (rootFolderPath, options = {}) => {
   let processedFolders = 0;
   let errors = 0;
   let truncated = false;
+  let autoSetFolderCovers = 0;
+  let missingFolderCoverImages = 0;
+  let clearedInvalidFolderCovers = 0;
 
   while (queue.length > 0) {
     const current = (queue.shift() || "").replace(/\\/g, "/").replace(/^\//, "");
@@ -267,6 +360,13 @@ const updateFolderTreeByPath = async (rootFolderPath, options = {}) => {
       .filter((x) => x && x.type === "folder" && typeof x.path === "string")
       .map((x) => x.path.replace(/\\/g, "/").replace(/^\//, ""));
 
+    const coverResult = ensureFolderCoverForFolder(current, result?.fileInfos || [], {
+      logMissing: options.logMissingFolderCover === true
+    });
+    if (coverResult.autoSet) autoSetFolderCovers += 1;
+    if (coverResult.missingImage) missingFolderCoverImages += 1;
+    if (coverResult.clearedInvalid) clearedInvalidFolderCovers += 1;
+
     for (const child of children) {
       if (!visited.has(child)) queue.push(child);
     }
@@ -277,6 +377,9 @@ const updateFolderTreeByPath = async (rootFolderPath, options = {}) => {
     errors,
     truncated,
     maxFolders,
+    autoSetFolderCovers,
+    missingFolderCoverImages,
+    clearedInvalidFolderCovers,
   };
 };
 
@@ -572,6 +675,7 @@ const getFolderContentsById = async (folderId, searchQuery, filters, page, pageS
 
   const stmt2 = db.prepare(query);
   const rows = stmt2.all(...params);
+  const folderCoverMap = getFolderCoverMap(rows.filter(row => row.type === "folder").map(row => row.id));
   
   // 转换数据库记录为前端期望的格式
   let fileInfos = rows.map(row => ({
@@ -585,7 +689,8 @@ const getFolderContentsById = async (folderId, searchQuery, filters, page, pageS
     parent_id: row.parent_id,
     favorited: false, // 默认为未收藏状态，后续会更新
     m3u8_path: row.m3u8_path,
-    mime_type: row.mime_type
+    mime_type: row.mime_type,
+    cover_file_id: row.type === "folder" ? (folderCoverMap[row.id] || null) : null
   }));
   
   // 获取用户ID
@@ -662,6 +767,7 @@ const getFileById = (fileId) => {
     parent_id: row.parent_id,
     mime_type: row.mime_type,
     m3u8_path: row.m3u8_path,
+    cover_file_id: row.type === "folder" ? (getFolderCoverMap([row.id])[row.id] || null) : null,
   }
   return fileInfo;
 };
@@ -690,8 +796,37 @@ const getFileByPath = (filePath) => {
     parent_id: row.parent_id,
     mime_type: row.mime_type,
     m3u8_path: row.m3u8_path,
+    cover_file_id: row.type === "folder" ? (getFolderCoverMap([row.id])[row.id] || null) : null,
   };
   return fileInfo;
+};
+
+const setFolderCoverByFileId = (fileId) => {
+  const { upsert } = getFolderCoverStatements();
+  const fileInfo = getFileById(fileId);
+  if (!fileInfo) {
+    throw new Error("Image file not found");
+  }
+  if (fileInfo.type !== "file" || !isImageMimeType(fileInfo.mime_type)) {
+    throw new Error("Only image files can be used as folder cover");
+  }
+  if (fileInfo.parent_id === null || fileInfo.parent_id === undefined) {
+    throw new Error("Root folder images cannot be used as folder cover");
+  }
+
+  const folderInfo = getFileById(fileInfo.parent_id);
+  if (!folderInfo || folderInfo.type !== "folder") {
+    throw new Error("Parent folder not found");
+  }
+
+  upsert.run(folderInfo.id, fileInfo.id);
+  return {
+    success: true,
+    folderId: folderInfo.id,
+    folderPath: folderInfo.path,
+    coverFileId: fileInfo.id,
+    coverFilePath: fileInfo.path
+  };
 };
 
 // 删除文件或文件夹
@@ -771,6 +906,7 @@ const renameFileById = (fileId, newName) => {
 
 // 移动文件或文件夹
 const moveFileById = (fileId, targetFolderId) => {
+  const { deleteByCoverFileId } = getFolderCoverStatements();
   const fileInfo = getFileById(fileId);
   const targetFolderInfo = targetFolderId ? getFileById(targetFolderId) : { type: 'folder', path: '' };
   if (!fileInfo) {
@@ -801,6 +937,9 @@ const moveFileById = (fileId, targetFolderId) => {
     
   const stmt = db.prepare(`UPDATE files SET parent_id =?, path =?, updated_at = CURRENT_TIMESTAMP WHERE id =?`);
   stmt.run(targetFolderId, newFilePath, fileId);
+  if (fileInfo.type === "file" && isImageMimeType(fileInfo.mime_type) && Number(fileInfo.parent_id) !== Number(targetFolderId)) {
+    deleteByCoverFileId.run(fileId);
+  }
   // 如果是文件夹，还需要更新所有子文件和文件夹的路径
   if (fileInfo.type === 'folder') {
     const oldPathPrefix = fileInfo.path + '/';
@@ -886,6 +1025,7 @@ export {
   getFolderContentsById,
   getFileById,
   getFileByPath,
+  setFolderCoverByFileId,
   deleteFileById,
   renameFileById,
   moveFileById,

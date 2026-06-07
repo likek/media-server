@@ -24,11 +24,12 @@
                 :imageList="imageList"
                 :imageIndex="imageList.findIndex(item => item.id === file.id)"
                 :favorited="true"
-                :allow-actions="['favorite', 'viewtext', 'navigateParent']"
+                :allow-actions="['favorite', 'viewtext', 'navigateParent', 'setFolderCover']"
                 @download="downloadFile"
                 @viewText="viewTextFile"
                 @favorite="refreshFavorites"
                 @navigate="navigateToFolder"
+                @folderCoverUpdated="handleFolderCoverUpdated"
               />
             </template>
           </template>
@@ -127,6 +128,10 @@ const refreshFavorites = (file, isFavorited) => {
       files.value.splice(index, 1)
     }
   }
+}
+
+const handleFolderCoverUpdated = async () => {
+  await loadFavorites(true)
 }
 
 // 检查内容高度是否填满容器，如果不足且有更多文件，则自动加载更多

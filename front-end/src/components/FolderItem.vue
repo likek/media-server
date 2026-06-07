@@ -28,6 +28,9 @@
             </el-tooltip>
           </div>
         </div>
+        <div v-if="coverSrc" class="folder-cover-wrap">
+          <el-image :src="coverSrc" fit="cover" class="folder-cover" />
+        </div>
         <div>
           <span class="folder-name">{{ folder.filename }}</span>
         </div>
@@ -44,7 +47,7 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { addToFavorites, removeFromFavorites } from '../services/favoritesApi'
 
@@ -72,6 +75,7 @@ const formatDate = (timestamp) => {
 const formatLastModified = ref(formatDate(props.folder.lastModified))
 const isFavorited = ref(props.favorited)
 const isNew = ref(Date.now() - new Date(props.folder.lastModified).getTime() < 1000 * 60 * 60 * 24 * 2)
+const coverSrc = computed(() => props.folder.cover_file_id ? `/media/${props.folder.cover_file_id}` : '')
 
 const emit = defineEmits(['navigate', 'rename', 'move', 'delete', 'favorite'])
 
@@ -146,6 +150,18 @@ const toggleFavorite = async () => {
   align-items: center;
   justify-content: space-between;
   margin-bottom: 8px;
+}
+
+.folder-cover-wrap {
+  margin-bottom: 12px;
+}
+
+.folder-cover {
+  display: block;
+  width: 100%;
+  height: 180px;
+  border-radius: 6px;
+  background-color: #e4e7ed;
 }
 
 .folder-icon {

@@ -79,10 +79,10 @@
                 @rename="showRenameDialog" @move="showMoveDialog" @delete="confirmDelete" @favorite="refreshFavorites" />
             </template>
             <template v-else>
-              <file-item :allow-actions="['viewtext', 'unzip', 'convertts', 'favorite', 'rename', 'move', 'delete', 'converthls', Number(file.parent_id) !== Number(route.params.id) && 'navigateParent' || '' ]" :key="file.id" :file="file" :imageList="imageList"
+              <file-item :allow-actions="['viewtext', 'unzip', 'convertts', 'favorite', 'rename', 'move', 'delete', 'converthls', 'setFolderCover', Number(file.parent_id) !== Number(route.params.id) && 'navigateParent' || '' ]" :key="file.id" :file="file" :imageList="imageList"
                 :imageIndex="imageList.findIndex(item => item.id === file.id)" :favorited="file.favorited"
                 @rename="showRenameDialog" @move="showMoveDialog" @download="downloadFile" @delete="confirmDelete"
-                @unzip="refreshCache" @viewText="viewTextFile" @convertTs="convertTsFile" @favorite="refreshFavorites" @navigate="navigateToFolder"/>
+                @unzip="refreshCache" @viewText="viewTextFile" @convertTs="convertTsFile" @favorite="refreshFavorites" @navigate="navigateToFolder" @folderCoverUpdated="handleFolderCoverUpdated"/>
             </template>
           </template>
         </div>
@@ -581,6 +581,10 @@ const confirmCleanDb = async () => {
   } finally {
     loading.value = false
   }
+}
+
+const handleFolderCoverUpdated = async () => {
+  await loadFiles()
 }
 
 // 导航到文件夹

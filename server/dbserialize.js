@@ -92,6 +92,23 @@ const initAll = () => {
   db.prepare(`DELETE FROM files WHERE name = '.DS_Store' OR path = '.DS_Store' OR path LIKE '%/.DS_Store'`).run();
 
   db.prepare(`
+    CREATE TABLE IF NOT EXISTS folder_covers (
+      folder_id INTEGER PRIMARY KEY,
+      cover_file_id INTEGER NOT NULL,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (folder_id) REFERENCES files(id) ON DELETE CASCADE,
+      FOREIGN KEY (cover_file_id) REFERENCES files(id) ON DELETE CASCADE
+    )
+  `).run();
+  db.prepare('CREATE INDEX IF NOT EXISTS idx_folder_covers_cover_file_id ON folder_covers (cover_file_id)').run();
+  db.prepare(`
+    DELETE FROM folder_covers
+    WHERE folder_id NOT IN (SELECT id FROM files WHERE type = 'folder')
+       OR cover_file_id NOT IN (SELECT id FROM files WHERE type = 'file' AND mime_type LIKE 'image/%')
+  `).run();
+
+  db.prepare(`
     CREATE TABLE IF NOT EXISTS favorites (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id TEXT NOT NULL,

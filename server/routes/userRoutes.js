@@ -6,7 +6,7 @@ import ffmpeg from "fluent-ffmpeg";
 import extract from "extract-zip";
 import readline from "readline";
 import multer from "multer";
-import { updateFolderByPath, updateFolderTreeByPath, cleanDbTreeByPath, getFolderContentsById, getFileById, getFileByPath, deleteFileById, renameFileById, moveFileById, initRootDirectory } from "../fileDbManager.js";
+import { updateFolderByPath, updateFolderTreeByPath, cleanDbTreeByPath, getFolderContentsById, getFileById, getFileByPath, setFolderCoverByFileId, deleteFileById, renameFileById, moveFileById, initRootDirectory } from "../fileDbManager.js";
 import { MEDIA_FULL_PATH, THUMB_FULL_PATH, TEMP_FULL_PATH } from "../../serverConfig.js";
 import { wsBroadcastMessage } from "../websocketManager.js";
 import { convertTxtEncoding } from "../tools/textFileTools.js";
@@ -808,7 +808,7 @@ router.post("/updateCache", async (req, res) => {
     // 更新文件夹内容
     const folderPath = folderInfo ? folderInfo.path : "";
     const result = recursive
-      ? await updateFolderTreeByPath(folderPath, { maxFolders })
+      ? await updateFolderTreeByPath(folderPath, { maxFolders, logMissingFolderCover: true })
       : await updateFolderByPath(folderPath);
     
     res.send({ message: "Update cache successfully", result });
@@ -1074,6 +1074,17 @@ router.post("/saveVideoFrame", async (req, res) => {
   } catch (e) {
     console.error("Error saving video frame:", e);
     res.status(500).json({ success: false, id, time, message: e?.message || String(e) });
+  }
+});
+
+router.post("/setFolderCover", async (req, res) => {
+  try {
+    const { fileId } = req.body;
+    const result = setFolderCoverByFileId(fileId);
+    res.json(result);
+  } catch (error) {
+    console.error("Error setting folder cover:", error);
+    res.status(400).json({ success: false, message: error?.message || String(error) });
   }
 });
 
