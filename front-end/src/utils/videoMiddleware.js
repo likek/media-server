@@ -1,6 +1,6 @@
 import videojs from 'video.js';
 import { aesEncrypt } from './encrypt.js';
-import { updateThumbnail } from '../services/userApi.js';
+import { saveVideoFrame, updateThumbnail } from '../services/userApi.js';
 
 const Button = videojs.getComponent('Button');
 class ThumbnailBtn extends Button {
@@ -8,7 +8,8 @@ class ThumbnailBtn extends Button {
         super(_player, options);
         this.player_ = _player; // 存当前实例
         this.addClass('vjs-icon-square');
-        this.controlText("将当前帧设为封面");
+        this.el().setAttribute('title', '将当前帧设为视频封面');
+        this.controlText("将当前帧设为视频封面");
     }
     handleClick() {
         if (this.player_.videoId) {
@@ -29,9 +30,40 @@ class ThumbnailBtn extends Button {
     }
 }
 
+class SaveFrameBtn extends Button {
+    constructor(_player, options) {
+        super(_player, options);
+        this.player_ = _player;
+        this.addClass('vjs-save-frame-btn');
+        this.el().setAttribute('title', '将当前帧保存到当前视频所在的文件夹');
+        this.el().innerHTML = '<span class="vjs-save-frame-btn__label" aria-hidden="true">存帧</span>';
+        this.controlText("将当前帧保存到当前视频所在的文件夹");
+    }
+    handleClick() {
+        if (this.player_.videoId) {
+            const currTime = this.player_.currentTime();
+            saveVideoFrame(this.player_.videoId, currTime).then((resp) => {
+                this.player_.trigger('saveframe:success', {
+                    videoId: this.player_.videoId,
+                    time: currTime,
+                    savedPath: resp?.savedPath
+                })
+            }).catch(() => {
+                this.player_.trigger('saveframe:error', {
+                    videoId: this.player_.videoId,
+                    time: currTime
+                })
+            });
+        }
+    }
+}
+
 // 避免重复注册
 if (!videojs.getComponent('ThumbnailBtn')) {
     videojs.registerComponent('ThumbnailBtn', ThumbnailBtn);
+}
+if (!videojs.getComponent('SaveFrameBtn')) {
+    videojs.registerComponent('SaveFrameBtn', SaveFrameBtn);
 }
 
 // 创建带有加密令牌的URL,⚠️ 需要和后端 createEncryptedTsUrl 一致

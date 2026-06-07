@@ -1031,4 +1031,50 @@ router.post("/updateThumbnail", async (req, res) => {
   }
 });
 
+router.post("/saveVideoFrame", async (req, res) => {
+  const { id, time } = req.body;
+  const fileInfo = getFileById(id);
+  if (!fileInfo) {
+    return res.status(404).json({ success: false, id, time, message: "File not found" });
+  }
+
+  const { path: filePath, filename } = fileInfo;
+  const folderPath = path.dirname(filePath);
+  const fullFolderPath = path.join(MEDIA_FULL_PATH, folderPath);
+  if (!fs.existsSync(fullFolderPath)) {
+    return res.status(400).json({ success: false, id, time, message: "File does not exist" });
+  }
+
+  const videoPath = path.join(fullFolderPath, filename);
+  if (!fs.existsSync(videoPath)) {
+    return res.status(400).json({ success: false, id, time, message: "Video does not exist" });
+  }
+
+  const parsed = path.parse(filename);
+  const timeSec = Number(time);
+  const timeTag = Number.isFinite(timeSec) && timeSec >= 0
+    ? `${Math.round(timeSec * 1000)}ms`
+    : `${Date.now()}`;
+
+  let saveName = `${parsed.name}.frame-${timeTag}.png`;
+  let savePath = path.join(fullFolderPath, saveName);
+  let index = 1;
+  while (fs.existsSync(savePath)) {
+    saveName = `${parsed.name}.frame-${timeTag}-${index}.png`;
+    savePath = path.join(fullFolderPath, saveName);
+    index += 1;
+  }
+
+  try {
+    await generateThumbnail(videoPath, savePath, time);
+    await updateFolderByPath(folderPath === "." ? "" : folderPath);
+
+    const savedPath = path.join(folderPath, saveName).replace(/\\/g, "/").replace(/^\.\//, "");
+    res.json({ success: true, id, time, savedPath });
+  } catch (e) {
+    console.error("Error saving video frame:", e);
+    res.status(500).json({ success: false, id, time, message: e?.message || String(e) });
+  }
+});
+
 export default router;

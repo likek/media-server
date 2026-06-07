@@ -95,6 +95,12 @@ const initializePlayer = async () => {
     player.on('thumbnail:error', (e, data) => {
         ElMessage.error('更改缩略图失败')
     })
+    player.on('saveframe:success', (e, data) => {
+        ElMessage.success(data?.savedPath ? `保存当前帧成功：${data.savedPath}` : '保存当前帧成功')
+    })
+    player.on('saveframe:error', (e, data) => {
+        ElMessage.error('保存当前帧失败')
+    })
     player.ready(() => {
         const videoEl = player.el().querySelector('video')
         if (videoEl) {
@@ -110,6 +116,7 @@ const initializePlayer = async () => {
         // player.load() // 必须强制发起首次token请求防止token被再次重放
         if (props.thumbnailBtn) {
             player.getChild('controlBar').addChild('ThumbnailBtn', {}, player.controlBar.children().length - 1);
+            player.getChild('controlBar').addChild('SaveFrameBtn', {}, player.controlBar.children().length - 1);
         }
     })
 
@@ -160,5 +167,17 @@ onBeforeUnmount(() => {
     height: 100%;
     text-align: center;
     background-color: #000;
+}
+
+:deep(.vjs-save-frame-btn) {
+    width: auto;
+    min-width: 3.6em;
+    padding: 0 0.6em;
+}
+
+:deep(.vjs-save-frame-btn .vjs-save-frame-btn__label) {
+    display: inline-block;
+    line-height: 3em;
+    font-size: 12px;
 }
 </style>
