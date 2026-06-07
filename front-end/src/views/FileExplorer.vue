@@ -184,8 +184,8 @@
         <el-form-item label="" v-if="advanceSearchForm.type !== 'folder'" prop="mime_type">
           <el-radio-group v-model="advanceSearchForm.mime_type" size="small" style="width: 100%" ref="refRadioFilterType"  @change="handleRadioChange">
             <el-radio-button value="">不限</el-radio-button>
-            <el-radio-button value="image/jpeg">仅看图片</el-radio-button>
-            <el-radio-button value="video/mp4">仅看视频</el-radio-button>
+            <el-radio-button value="image/">仅看图片</el-radio-button>
+            <el-radio-button value="video/">仅看视频</el-radio-button>
           </el-radio-group>
         </el-form-item>
 
