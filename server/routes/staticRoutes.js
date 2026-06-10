@@ -5,9 +5,11 @@ import fs from "fs";
 import { HLS_SOURCE_DIR, MEDIA_FULL_PATH, THUMB_FULL_PATH } from "../../serverConfig.js";
 import { aesDecrypt, aesEncrypt } from "../utils/encrypt.js";
 import { getUserIdByReq } from "../utils/index.js";
+import { ensureCachedPreviewImage, isHeifLikeFile } from "../utils/imageLoader.js";
 
 const router = express.Router();
 const userId_audioTokenAndRangesMap_Map = new Map();
+const IMAGE_PREVIEW_CACHE_DIR = path.join(THUMB_FULL_PATH, ".image-preview");
 
 // /media/10119/240p/index.m3u8
 // 多码率的ts片段 或 次级m3u8文件
@@ -108,6 +110,40 @@ router.get('/media/:id', (req, res) => {
       console.error('Error serving file by ID:', err);
       res.status(500).send('Server error');
     }
+});
+
+router.get('/preview/:id', async (req, res) => {
+  try {
+    const fileId = req.params.id;
+    const fileInfo = getFileById(fileId);
+
+    if (!fileInfo || fileInfo.type !== 'file') {
+      return res.status(404).send('File not found');
+    }
+    if (!fileInfo.mime_type?.startsWith('image/')) {
+      return res.status(400).send('Preview is only supported for images');
+    }
+
+    const filePath = path.join(MEDIA_FULL_PATH, fileInfo.path);
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).send('File not found');
+    }
+
+    res.setHeader('Cache-Control', 'public, max-age=691200');
+
+    if (!isHeifLikeFile(fileInfo.path, fileInfo.mime_type)) {
+      return res.sendFile(filePath);
+    }
+
+    const stat = fs.statSync(filePath);
+    const cacheKey = `${fileInfo.id}-${Math.trunc(stat.mtimeMs)}-${stat.size}`;
+    const cachePath = await ensureCachedPreviewImage(filePath, IMAGE_PREVIEW_CACHE_DIR, cacheKey);
+    res.type('jpg');
+    return res.sendFile(cachePath);
+  } catch (err) {
+    console.error('Error serving preview by ID:', err);
+    res.status(500).send('Server error');
+  }
 });
 
 // 基于ID的缩略图访问路由

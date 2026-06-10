@@ -75,7 +75,7 @@ const formatDate = (timestamp) => {
 const formatLastModified = ref(formatDate(props.folder.lastModified))
 const isFavorited = ref(props.favorited)
 const isNew = ref(Date.now() - new Date(props.folder.lastModified).getTime() < 1000 * 60 * 60 * 24 * 2)
-const coverSrc = computed(() => props.folder.cover_file_id ? `/media/${props.folder.cover_file_id}` : '')
+const coverSrc = computed(() => props.folder.cover_file_id ? `/preview/${props.folder.cover_file_id}` : '')
 
 const emit = defineEmits(['navigate', 'rename', 'move', 'delete', 'favorite'])
 

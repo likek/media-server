@@ -1,8 +1,9 @@
 import sharp from "sharp";
+import { loadImageAsPngBuffer } from "./imageLoader.js";
 
 export async function computeDHashFromFile(filePath) {
-  const { data } = await sharp(filePath, { failOn: "none" })
-    .rotate()
+  const normalizedBuffer = await loadImageAsPngBuffer(filePath);
+  const { data } = await sharp(normalizedBuffer, { failOn: "none" })
     .resize(9, 8, { fit: "fill" })
     .grayscale()
     .raw()

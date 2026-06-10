@@ -1,6 +1,6 @@
 import path from "path";
 import { fileURLToPath } from "url";
-import sharp from "sharp";
+import { loadImageAsPngBuffer } from "./imageLoader.js";
 
 const MODEL_ID = "Xenova/clip-vit-base-patch16";
 let instance;
@@ -23,10 +23,7 @@ export const IMAGE_EMBEDDING_MODEL_ID = MODEL_ID;
 
 export async function computeClipEmbeddingFromFile(filePath) {
   const { processor, vision_model, RawImage, modelId } = await getModel();
-  const buffer = await sharp(filePath, { failOn: "none" })
-    .rotate()
-    .png()
-    .toBuffer();
+  const buffer = await loadImageAsPngBuffer(filePath);
   const image = await RawImage.fromBlob(new Blob([buffer], { type: "image/png" }));
   const inputs = await processor(image);
   const { image_embeds } = await vision_model(inputs);

@@ -80,7 +80,7 @@ const currentItem = ref(null)
 const imageList = computed(() => {
   return files.value.filter(file => {
     const ext = file.filename.split('.').pop().toLowerCase()
-    return ['jpg', 'jpeg', 'png', 'gif'].includes(ext)
+    return ['jpg', 'jpeg', 'png', 'gif', 'webp', 'heic', 'heif'].includes(ext)
   })
 })
 

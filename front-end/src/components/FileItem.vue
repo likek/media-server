@@ -89,13 +89,13 @@
           <el-image
             v-else-if="isImage"
             class="preview-content image-preview"
-            :src="`/media/${file.id}`"
+            :src="`/preview/${file.id}`"
             :zoom-rate="1.02"
             :max-scale="7"
             :min-scale="0.2"
             show-progress
             fit="contain"
-            :preview-src-list="imageList.map(item => `/media/${item.id}`)"
+            :preview-src-list="imageList.map(item => `/preview/${item.id}`)"
             :initial-index="imageIndex"
             :hide-on-click-modal="true"
             :preview-teleported="true"
@@ -191,7 +191,7 @@ const isMp4 = computed(() => {
 })
 
 const isImage = computed(() => {
-  return ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(fileExt.value)
+  return ['jpg', 'jpeg', 'png', 'gif', 'webp', 'heic', 'heif'].includes(fileExt.value)
 })
 
 const canSetFolderCover = computed(() => {
