@@ -10,6 +10,7 @@ import { ensureCachedPreviewImage, isHeifLikeFile } from "../utils/imageLoader.j
 const router = express.Router();
 const userId_audioTokenAndRangesMap_Map = new Map();
 const IMAGE_PREVIEW_CACHE_DIR = path.join(THUMB_FULL_PATH, ".image-preview");
+const SEND_FILE_OPTIONS = { dotfiles: "allow" };
 
 // /media/10119/240p/index.m3u8
 // 多码率的ts片段 或 次级m3u8文件
@@ -36,7 +37,7 @@ router.get('/media/:id/:target/:m3u8file', (req, res) => {
       } else {
         // 处理次级ts片段
         res.setHeader('Content-Type', 'video/mp2t');
-        return res.sendFile(m3u8filePath);
+        return res.sendFile(m3u8filePath, SEND_FILE_OPTIONS);
       }
 
     } else {
@@ -52,7 +53,7 @@ router.get('/media/:id/:segment', (req, res) => {
     const segmentPath = path.join(HLS_SOURCE_DIR, req.params.id, realSegment);
     if (fs.existsSync(segmentPath)) {
       res.setHeader('Cache-Control', 'public, max-age=691200');
-      res.type('.ts').sendFile(segmentPath);
+      res.type('.ts').sendFile(segmentPath, SEND_FILE_OPTIONS);
     } else {
       res.status(404).send('Not found');
     }
@@ -100,12 +101,12 @@ router.get('/media/:id', (req, res) => {
           }
           // 如果m3u8文件不存在，回退到原始MP4文件
           const filePath = path.join(MEDIA_FULL_PATH, fileInfo.path);
-          res.sendFile(filePath);
+          res.sendFile(filePath, SEND_FILE_OPTIONS);
         });
       }
       
       const filePath = path.join(MEDIA_FULL_PATH, fileInfo.path);
-      res.sendFile(filePath);
+      res.sendFile(filePath, SEND_FILE_OPTIONS);
     } catch (err) {
       console.error('Error serving file by ID:', err);
       res.status(500).send('Server error');
@@ -132,14 +133,14 @@ router.get('/preview/:id', async (req, res) => {
     res.setHeader('Cache-Control', 'public, max-age=691200');
 
     if (!isHeifLikeFile(fileInfo.path, fileInfo.mime_type)) {
-      return res.sendFile(filePath);
+      return res.sendFile(filePath, SEND_FILE_OPTIONS);
     }
 
     const stat = fs.statSync(filePath);
     const cacheKey = `${fileInfo.id}-${Math.trunc(stat.mtimeMs)}-${stat.size}`;
     const cachePath = await ensureCachedPreviewImage(filePath, IMAGE_PREVIEW_CACHE_DIR, cacheKey);
     res.type('jpg');
-    return res.sendFile(cachePath);
+    return res.sendFile(cachePath, SEND_FILE_OPTIONS);
   } catch (err) {
     console.error('Error serving preview by ID:', err);
     res.status(500).send('Server error');
@@ -162,7 +163,7 @@ router.get('/thumbnail/:id', async (req, res) => {
     
     // 检查缩略图是否存在
     if (fs.existsSync(thumbnailPath)) {
-      return res.sendFile(thumbnailPath);
+      return res.sendFile(thumbnailPath, SEND_FILE_OPTIONS);
     }
     
     // 如果缩略图不存在，返回404
