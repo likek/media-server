@@ -159,7 +159,7 @@ const toggleFavorite = async () => {
 .folder-cover {
   display: block;
   width: 100%;
-  height: 180px;
+  height: 300px;
   border-radius: 6px;
   background-color: #e4e7ed;
 }
