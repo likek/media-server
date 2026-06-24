@@ -19,17 +19,40 @@ import { validateFingerprint } from "../middleware/fingerprintValidator.js";
 import db from "../dbserialize.js";
 
 const router = express.Router();
+
+const normalizeRelativePath = (inputPath = "") => {
+  const normalizedPath = path.posix.normalize(`/${String(inputPath).replace(/\\/g, "/")}`);
+  return normalizedPath.replace(/^\/+/, "").replace(/^(\.\.(\/|$))+/, "");
+};
+
+const resolveUploadFolderPath = (req) => {
+  const parentId = req.query.parentId;
+  if (parentId !== undefined && parentId !== null && parentId !== "") {
+    const parentInfo = getFileById(parentId);
+    if (!parentInfo || parentInfo.type !== "folder") {
+      throw new Error("Parent folder not found");
+    }
+    return parentInfo.path || "";
+  }
+
+  return normalizeRelativePath(req.query.path || "");
+};
+
 // 配置 multer
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    const currentPath = req.query.path || "";
-    const uploadPath = path.join(MEDIA_FULL_PATH, currentPath);
+    try {
+      const currentPath = resolveUploadFolderPath(req);
+      const uploadPath = path.join(MEDIA_FULL_PATH, currentPath);
 
-    if (!fs.existsSync(uploadPath)) {
-      fs.mkdirSync(uploadPath, { recursive: true });
+      if (!fs.existsSync(uploadPath)) {
+        fs.mkdirSync(uploadPath, { recursive: true });
+      }
+
+      cb(null, uploadPath);
+    } catch (error) {
+      cb(error);
     }
-
-    cb(null, uploadPath);
   },
   filename: (req, file, cb) => {
     const filename = Buffer.from(file.originalname, "latin1").toString("utf-8");
@@ -234,14 +257,7 @@ router.post("/downloadFromText", async (req, res) => {
 // 上传文件并生成缩略图
 router.post("/upload", upload.single("file"), async (req, res) => {
   try {
-    const parentId = req.query.parentId;
-    
-    // 获取父文件夹路径
-    const parentInfo = parentId ? getFileById(parentId) : null;
-    if (parentId && (!parentInfo || parentInfo.type !== 'folder')) {
-      return res.status(404).send({ message: "Parent folder not found" });
-    }
-    const folderPath = parentInfo ? parentInfo.path : "";
+    const folderPath = resolveUploadFolderPath(req);
     
     const filename = Buffer.from(req.file.filename, "latin1").toString("utf-8");
     const filePath = path.join(MEDIA_FULL_PATH, folderPath, filename);
