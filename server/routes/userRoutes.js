@@ -6,7 +6,7 @@ import ffmpeg from "fluent-ffmpeg";
 import extract from "extract-zip";
 import readline from "readline";
 import multer from "multer";
-import { updateFolderByPath, updateFolderTreeByPath, checkFilesTreeByPath, cleanDbTreeByPath, getFolderContentsById, getFileById, getFileByPath, setFolderCoverByFileId, deleteFileById, renameFileById, moveFileById, initRootDirectory } from "../fileDbManager.js";
+import { updateFolderByPath, updateFolderTreeByPath, checkFilesTreeByPath, cleanDbTreeByPath, getFolderContentsById, getNextVideoById, getFileById, getFileByPath, setFolderCoverByFileId, deleteFileById, renameFileById, moveFileById, initRootDirectory } from "../fileDbManager.js";
 import { MEDIA_FULL_PATH, THUMB_FULL_PATH, TEMP_FULL_PATH } from "../../serverConfig.js";
 import { wsBroadcastMessage } from "../websocketManager.js";
 import { convertTxtEncoding } from "../tools/textFileTools.js";
@@ -742,6 +742,28 @@ router.post("/files", async (req, res) => {
   } catch (err) {
     console.error("Error fetching file list:", err);
     res.status(500).send({ message: "Failed to fetch file list." });
+  }
+});
+
+router.post("/nextVideo", async (req, res) => {
+  try {
+    await initRootDirectory(req);
+    const { id } = req.body;
+    if (!id) {
+      return res.status(400).json({ message: "id must be provided" });
+    }
+
+    const nextVideo = getNextVideoById(id, req);
+    if (!nextVideo) {
+      return res.status(404).json({ message: "Next video not found" });
+    }
+
+    res.json(nextVideo);
+  } catch (err) {
+    const message = err?.message || "Failed to get next video";
+    const status = /not found/i.test(message) ? 404 : 400;
+    console.error("Error getting next video:", err);
+    res.status(status).json({ message });
   }
 });
 

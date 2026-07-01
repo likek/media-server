@@ -9,6 +9,11 @@ export const getFiles = async (id = null, query = null, page = 0, pageSize = -1,
   return response
 }
 
+export const getNextVideo = async (id) => {
+  const response = await request.post('/user/nextVideo', { id })
+  return response
+}
+
 // 获取文件夹详细信息
 export const getFolderInfo = async (id) => {
   if (!id) return null;

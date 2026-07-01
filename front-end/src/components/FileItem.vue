@@ -13,7 +13,7 @@
           </el-icon>
           <div class="file-actions">
             <el-tooltip content="所在文件夹" placement="top" :auto-close="1000" v-if="allowActions.includes('navigateParent')">
-              <el-icon class="action-icon" @click.stop="$emit('navigate', file.parent_id)"><FolderOpened /></el-icon>
+              <el-icon class="action-icon" @click.stop="$emit('navigate', displayFile.parent_id)"><FolderOpened /></el-icon>
             </el-tooltip>
             <el-tooltip content="查看文本" placement="top" :auto-close="1000" v-if="isText && allowActions.includes('viewtext')">
               <el-icon class="action-icon" @click.stop="viewTextFile" >
@@ -26,7 +26,7 @@
               </el-icon>
             </el-tooltip>
             <el-tooltip content="转换为MP4" placement="top" :auto-close="1000" v-if="isTs && allowActions.includes('convertts')">
-              <el-icon class="action-icon" @click.stop="$emit('convertTs', file)">
+              <el-icon class="action-icon" @click.stop="$emit('convertTs', displayFile)">
                 <VideoPlay />
               </el-icon>
             </el-tooltip>
@@ -47,12 +47,12 @@
               </el-icon>
             </el-tooltip>
             <el-tooltip content="重命名" placement="top" :auto-close="1000" v-if="allowActions.includes('rename')">
-              <el-icon class="action-icon" @click.stop="$emit('rename', file)">
+              <el-icon class="action-icon" @click.stop="$emit('rename', displayFile)">
                 <Edit />
               </el-icon>
             </el-tooltip>
             <el-tooltip content="移动" placement="top" :auto-close="1000" v-if="allowActions.includes('move')">
-              <el-icon class="action-icon" @click.stop="$emit('move', file)">
+              <el-icon class="action-icon" @click.stop="$emit('move', displayFile)">
                 <Position />
               </el-icon>
             </el-tooltip>
@@ -62,34 +62,35 @@
               </el-icon>
             </el-tooltip> -->
             <el-tooltip content="删除" placement="top" :auto-close="1000" v-if="allowActions.includes('delete')">
-              <el-icon class="action-icon" @click.stop="$emit('delete', file)">
+              <el-icon class="action-icon" @click.stop="$emit('delete', displayFile)">
                 <Delete />
               </el-icon>
             </el-tooltip>
           </div>
         </div>
         <div>
-          <span class="file-name" v-if="isText && allowActions.includes('viewtext')" @click.stop="viewTextFile">{{ file.filename }}</span>
-          <span class="file-name" v-else>{{ file.m3u8_path ? '_' : '' }}{{ file.filename }}</span>
+          <span class="file-name" v-if="isText && allowActions.includes('viewtext')" @click.stop="viewTextFile">{{ displayFile.filename }}</span>
+          <span class="file-name" v-else>{{ displayFile.m3u8_path ? '_' : '' }}{{ displayFile.filename }}</span>
         </div>
         <!-- 文件预览区域 -->
         <div class="file-preview" v-if="isPreviewable">
           <!-- 视频预览 - 使用自定义播放器组件， 如果src以/结尾，/media/:id/:id/xxx.ts -->
           <VideoPlayer 
             v-if="isVideo" 
-            :src="`/media/${file.id}`"
-            :poster="`/thumbnail/${file.id}`"
+            :src="`/media/${displayFile.id}`"
+            :poster="`/thumbnail/${displayFile.id}`"
             :options="videoOptions"
-            :m3u8-path="`${file.m3u8_path || ''}`"
+            :m3u8-path="`${displayFile.m3u8_path || ''}`"
             :thumbnail-btn="true"
-            :video-id="file.id"
+            :video-id="displayFile.id"
+            @active-file-change="handlePlayerActiveFileChange"
           />
           
           <!-- 图片预览 -->
           <el-image
             v-else-if="isImage"
             class="preview-content image-preview"
-            :src="`/preview/${file.id}`"
+            :src="`/preview/${displayFile.id}`"
             :zoom-rate="1.02"
             :max-scale="7"
             :min-scale="0.2"
@@ -106,7 +107,7 @@
           <!-- PDF链接 -->
           <a 
             v-else-if="isPdf" 
-            :href="`/media/${file.id}`" 
+            :href="`/media/${displayFile.id}`" 
             target="_blank"
             class="pdf-link"
           >
@@ -118,26 +119,32 @@
             v-else-if="isAudio" 
             controls 
             class="preview-content audio-preview"
-            :src="`/media/${file.id}`"
+            :src="`/media/${displayFile.id}`"
           ></audio>
         </div>
       </div>
       
       <!-- 文件信息 -->
       <div class="file-info">
-        <span>{{ formatFileSize(file.size) }}</span>
-        <span>{{ formatDate(file.lastModified) }}</span>
+        <span>{{ formatFileSize(displayFile.size) }}</span>
+        <span>{{ formatDate(displayFile.lastModified) }}</span>
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { unzipFile, convertToHls, setFolderCover } from '../services/userApi'
 import VideoPlayer from './VideoPlayer.vue'
 import { addToFavorites, removeFromFavorites } from '../services/favoritesApi'
+
+const VIDEO_EXTENSIONS = ['mp4', 'webm', 'ogg', 'ts', 'avi', 'wmv', 'm3u8', 'mov', 'm4v']
+const IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'heic', 'heif']
+const AUDIO_EXTENSIONS = ['mp3', 'wav', 'ogg', 'flac', 'aac']
+const TEXT_EXTENSIONS = ['txt', 'log', 'md', 'json', 'xml', 'csv']
+const ARCHIVE_EXTENSIONS = ['zip', 'rar', '7z', 'tar', 'gz']
 
 const props = defineProps({
   file: {
@@ -164,7 +171,8 @@ const props = defineProps({
   }
 })
 
-const isFavorited = ref(props.favorited)
+const displayFile = ref(props.file)
+const isFavorited = ref(Boolean(props.favorited))
 
 const emit = defineEmits(['rename', 'delete', 'move', 'download', 'unzip', 'viewText', 'convertTs', 'favorite', 'navigate', 'folderCoverUpdated'])
 
@@ -173,13 +181,25 @@ const videoOptions = ref({
  
 })
 
+watch(() => props.file, (newFile) => {
+  displayFile.value = newFile
+  isFavorited.value = Boolean(props.favorited)
+})
+
+watch(() => props.favorited, (newValue) => {
+  if (displayFile.value?.id === props.file?.id) {
+    isFavorited.value = Boolean(newValue)
+  }
+})
+
 // 文件类型判断
 const fileExt = computed(() => {
-  return props.file.filename.split('.').pop().toLowerCase()
+  const filename = displayFile.value?.filename || ''
+  return filename.split('.').pop()?.toLowerCase() || ''
 })
 
 const isVideo = computed(() => {
-  return ['mp4', 'webm', 'ogg', 'ts', 'avi', 'wmv', 'm3u8', 'mov', 'm4v'].includes(fileExt.value)
+  return VIDEO_EXTENSIONS.includes(fileExt.value)
 })
 
 const isTs = computed(() => {
@@ -191,11 +211,11 @@ const isMp4 = computed(() => {
 })
 
 const isImage = computed(() => {
-  return ['jpg', 'jpeg', 'png', 'gif', 'webp', 'heic', 'heif'].includes(fileExt.value)
+  return IMAGE_EXTENSIONS.includes(fileExt.value)
 })
 
 const canSetFolderCover = computed(() => {
-  return isImage.value && props.file.parent_id !== null && props.file.parent_id !== undefined
+  return isImage.value && displayFile.value?.parent_id !== null && displayFile.value?.parent_id !== undefined
 })
 
 const isPdf = computed(() => {
@@ -203,15 +223,15 @@ const isPdf = computed(() => {
 })
 
 const isAudio = computed(() => {
-  return ['mp3', 'wav', 'ogg', 'flac', 'aac'].includes(fileExt.value)
+  return AUDIO_EXTENSIONS.includes(fileExt.value)
 })
 
 const isText = computed(() => {
-  return ['txt', 'log', 'md', 'json', 'xml', 'csv'].includes(fileExt.value)
+  return TEXT_EXTENSIONS.includes(fileExt.value)
 })
 
 const isArchive = computed(() => {
-  return ['zip', 'rar', '7z', 'tar', 'gz'].includes(fileExt.value)
+  return ARCHIVE_EXTENSIONS.includes(fileExt.value)
 })
 
 const isPreviewable = computed(() => {
@@ -220,7 +240,7 @@ const isPreviewable = computed(() => {
 
 const handleConvertToHls = async () => {
   try {
-    const res = await convertToHls(props.file.id)
+    const res = await convertToHls(displayFile.value.id)
     if (res.success) {
       ElMessage.success('转换成功')
     } else {
@@ -234,10 +254,10 @@ const handleConvertToHls = async () => {
 
 const handleSetFolderCover = async () => {
   try {
-    const res = await setFolderCover(props.file.id)
+    const res = await setFolderCover(displayFile.value.id)
     if (res.success) {
       ElMessage.success('已设为文件夹封面')
-      emit('folderCoverUpdated', props.file, res)
+      emit('folderCoverUpdated', displayFile.value, res)
     } else {
       ElMessage.error(res.message || '设置文件夹封面失败')
     }
@@ -264,16 +284,22 @@ const formatDate = (timestamp) => {
   return date.toLocaleDateString()
 }
 
+const handlePlayerActiveFileChange = ({ file }) => {
+  if (!file) return
+  displayFile.value = file
+  isFavorited.value = Boolean(file.favorited)
+}
+
 // 查看文本文件
 const viewTextFile = () => {
-  emit('viewText', props.file)
+  emit('viewText', displayFile.value)
 }
 
 // 解压缩文件
 const unzipArchive = async () => {
   try {
     await ElMessageBox.confirm(
-      `确定要解压 ${props.file.filename} 吗？`,
+      `确定要解压 ${displayFile.value.filename} 吗？`,
       '解压确认',
       {
         confirmButtonText: '确定',
@@ -282,10 +308,10 @@ const unzipArchive = async () => {
       }
     )
     
-    const res = await unzipFile(props.file.id)
+    const res = await unzipFile(displayFile.value.id)
     if (res.success) {
       ElMessage.success('解压成功')
-      emit('unzip', props.file)
+      emit('unzip', displayFile.value)
     } else {
       ElMessage.error(res.message || '解压失败')
     }
@@ -303,21 +329,21 @@ const toggleFavorite = async () => {
   try {
     if (isFavorited.value) {
       // 取消收藏
-      const res = await removeFromFavorites(props.file.id)
+      const res = await removeFromFavorites(displayFile.value.id)
       if (res.success) {
         isFavorited.value = false
         ElMessage.success('已取消收藏')
-        emit('favorite', props.file, isFavorited.value) // 通知父组件刷新收藏列表
+        emit('favorite', displayFile.value, isFavorited.value) // 通知父组件刷新收藏列表
       } else {
         ElMessage.error(res.message || '取消收藏失败')
       }
     } else {
       // 添加收藏
-      const res = await addToFavorites(props.file.id)
+      const res = await addToFavorites(displayFile.value.id)
       if (res.success) {
         isFavorited.value = true
         ElMessage.success('已添加到收藏')
-        emit('favorite', props.file, isFavorited.value) // 通知父组件刷新收藏列表
+        emit('favorite', displayFile.value, isFavorited.value) // 通知父组件刷新收藏列表
       } else {
         ElMessage.error(res.message || '添加收藏失败')
       }

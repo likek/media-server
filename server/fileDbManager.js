@@ -1048,6 +1048,72 @@ const getFileByPath = (filePath) => {
   return fileInfo;
 };
 
+const getNextVideoById = (fileId, req) => {
+  const currentFile = getFileById(fileId);
+  if (!currentFile) {
+    throw new Error("File not found");
+  }
+  if (currentFile.type !== "file") {
+    throw new Error("Only file can query next video");
+  }
+  if (!String(currentFile.mime_type || "").startsWith("video/")) {
+    throw new Error("Only video file can query next video");
+  }
+
+  const sameFolderWhere = currentFile.parent_id === null || currentFile.parent_id === undefined
+    ? `parent_id IS NULL`
+    : `parent_id = ?`;
+  const params = currentFile.parent_id === null || currentFile.parent_id === undefined
+    ? []
+    : [currentFile.parent_id];
+
+  const rows = db.prepare(`
+    SELECT *
+    FROM files
+    WHERE type = 'file'
+      AND mime_type LIKE 'video/%'
+      AND ${sameFolderWhere}
+    ORDER BY last_modified DESC, updated_at DESC, created_at DESC, name ASC
+  `).all(...params);
+
+  if (rows.length === 0) {
+    return null;
+  }
+
+  const currentIndex = rows.findIndex(row => Number(row.id) === Number(fileId));
+  if (currentIndex === -1) {
+    return null;
+  }
+
+  const nextRow = rows[(currentIndex + 1) % rows.length];
+  const nextFile = {
+    id: nextRow.id,
+    type: nextRow.type,
+    filename: nextRow.name,
+    path: nextRow.path,
+    thumbnail: nextRow.thumbnail,
+    lastModified: nextRow.last_modified,
+    size: nextRow.size,
+    parent_id: nextRow.parent_id,
+    mime_type: nextRow.mime_type,
+    m3u8_path: nextRow.m3u8_path,
+    cover_file_id: null,
+    favorited: false
+  };
+
+  const userId = getUserIdByReq(req);
+  if (userId) {
+    try {
+      const favoritesStatus = getFavoritesStatus(userId, [nextFile.id]);
+      nextFile.favorited = favoritesStatus[nextFile.id] || false;
+    } catch (error) {
+      console.error("获取下一个视频收藏状态失败:", error);
+    }
+  }
+
+  return nextFile;
+};
+
 const setFolderCoverByFileId = (fileId) => {
   const { upsert } = getFolderCoverStatements();
   const fileInfo = getFileById(fileId);
@@ -1271,6 +1337,7 @@ export {
   checkFilesTreeByPath,
   cleanDbTreeByPath,
   getFolderContentsById,
+  getNextVideoById,
   getFileById,
   getFileByPath,
   setFolderCoverByFileId,
