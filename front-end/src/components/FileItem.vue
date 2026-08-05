@@ -56,11 +56,11 @@
                 <Position />
               </el-icon>
             </el-tooltip>
-            <!-- <el-tooltip content="下载" placement="top" :auto-close="1000">
-              <el-icon class="action-icon" @click.stop="$emit('download', file)">
+            <el-tooltip content="下载" placement="top" :auto-close="1000" v-if="allowActions.includes('download')">
+              <el-icon class="action-icon" @click.stop="$emit('download', displayFile)">
                 <Download />
               </el-icon>
-            </el-tooltip> -->
+            </el-tooltip>
             <el-tooltip content="删除" placement="top" :auto-close="1000" v-if="allowActions.includes('delete')">
               <el-icon class="action-icon" @click.stop="$emit('delete', displayFile)">
                 <Delete />

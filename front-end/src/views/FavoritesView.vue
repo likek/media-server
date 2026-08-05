@@ -24,7 +24,7 @@
                 :imageList="imageList"
                 :imageIndex="imageList.findIndex(item => item.id === file.id)"
                 :favorited="true"
-                :allow-actions="['favorite', 'viewtext', 'navigateParent', 'setFolderCover']"
+                :allow-actions="['favorite', 'viewtext', 'download', 'navigateParent', 'setFolderCover']"
                 @download="downloadFile"
                 @viewText="viewTextFile"
                 @favorite="refreshFavorites"
@@ -165,7 +165,13 @@ const navigateToFolder = (folderId) => {
 
 // 下载文件
 const downloadFile = (file) => {
-  window.open(`/media/${file.id}`, '_blank')
+  const link = document.createElement('a')
+  link.href = `/media/${file.id}`
+  link.download = file.filename || ''
+  link.rel = 'noopener'
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
 }
 
 // 查看文本文件

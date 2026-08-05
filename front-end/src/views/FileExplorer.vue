@@ -79,7 +79,7 @@
                 @rename="showRenameDialog" @move="showMoveDialog" @delete="confirmDelete" @favorite="refreshFavorites" />
             </template>
             <template v-else>
-              <file-item :allow-actions="['viewtext', 'unzip', 'convertts', 'favorite', 'rename', 'move', 'delete', 'converthls', 'setFolderCover', Number(file.parent_id) !== Number(route.params.id) && 'navigateParent' || '' ]" :key="file.id" :file="file" :imageList="imageList"
+              <file-item :allow-actions="['viewtext', 'unzip', 'convertts', 'favorite', 'rename', 'move', 'download', 'delete', 'converthls', 'setFolderCover', Number(file.parent_id) !== Number(route.params.id) && 'navigateParent' || '' ]" :key="file.id" :file="file" :imageList="imageList"
                 :imageIndex="imageList.findIndex(item => item.id === file.id)" :favorited="file.favorited"
                 @rename="showRenameDialog" @move="showMoveDialog" @download="downloadFile" @delete="confirmDelete"
                 @unzip="refreshCache" @viewText="viewTextFile" @convertTs="convertTsFile" @favorite="refreshFavorites" @navigate="navigateToFolder" @folderCoverUpdated="handleFolderCoverUpdated"/>
@@ -885,12 +885,13 @@ const loadNode = async (node, resolve) => {
 
 // 下载文件
 const downloadFile = (file) => {
-  // const link = document.createElement('a')
-  // link.href = `/media/${file.id}`
-  // link.download = file.filename
-  // document.body.appendChild(link)
-  // link.click()
-  // document.body.removeChild(link)
+  const link = document.createElement('a')
+  link.href = `/media/${file.id}`
+  link.download = file.filename || ''
+  link.rel = 'noopener'
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
 }
 
 // 查看文本文件
