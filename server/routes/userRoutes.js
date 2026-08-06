@@ -38,6 +38,30 @@ const resolveUploadFolderPath = (req) => {
   return normalizeRelativePath(req.query.path || "");
 };
 
+const buildUploadFilename = (uploadPath, originalName) => {
+  const decodedName = Buffer.from(originalName, "latin1").toString("utf-8");
+  const info = path.parse(decodedName);
+  const preferredName = decodedName;
+  const preferredPath = path.join(uploadPath, preferredName);
+
+  if (!fs.existsSync(preferredPath)) {
+    return preferredName;
+  }
+
+  const timestamp = Date.now();
+  let counter = 0;
+
+  while (true) {
+    const suffix = counter === 0 ? `(${timestamp})` : `(${timestamp}_${counter})`;
+    const candidateName = `${info.name}${suffix}${info.ext}`;
+    const candidatePath = path.join(uploadPath, candidateName);
+    if (!fs.existsSync(candidatePath)) {
+      return candidateName;
+    }
+    counter += 1;
+  }
+};
+
 // 配置 multer
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -55,9 +79,14 @@ const storage = multer.diskStorage({
     }
   },
   filename: (req, file, cb) => {
-    const filename = Buffer.from(file.originalname, "latin1").toString("utf-8");
-    const info = path.parse(filename);
-    cb(null, `${info.name}(${Date.now()})${info.ext}`);
+    try {
+      const currentPath = resolveUploadFolderPath(req);
+      const uploadPath = path.join(MEDIA_FULL_PATH, currentPath);
+      const filename = buildUploadFilename(uploadPath, file.originalname);
+      cb(null, filename);
+    } catch (error) {
+      cb(error);
+    }
   },
 });
 
