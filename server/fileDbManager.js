@@ -871,7 +871,7 @@ const getFolderContentsById = async (folderId, searchQuery, filters, page, pageS
   if (folderId !== null) {
     const folderInfo = getFileById(folderId);
     if (!folderInfo) {
-      return resolve({ files: [], total: 0 });
+      return { files: [], total: 0 };
     }
     folderPath = folderInfo.path;
   }
