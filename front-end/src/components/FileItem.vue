@@ -22,7 +22,7 @@
             </el-tooltip>
             <el-tooltip content="解压缩" placement="top" :auto-close="1000" v-if="isArchive && allowActions.includes('unzip')">
               <el-icon class="action-icon" @click.stop="unzipArchive">
-                <FolderOpened />
+                <Box />
               </el-icon>
             </el-tooltip>
             <el-tooltip content="转换为MP4" placement="top" :auto-close="1000" v-if="isTs && allowActions.includes('convertts')">

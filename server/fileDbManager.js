@@ -3,7 +3,7 @@ import path from "path";
 import mime from 'mime-types';
 import sharp from "sharp";
 import ffmpeg from "fluent-ffmpeg";
-import { MEDIA_FULL_PATH, THUMB_FULL_PATH } from "../serverConfig.js";
+import { MEDIA_FULL_PATH, THUMB_FULL_PATH, TRASH_FULL_PATH } from "../serverConfig.js";
 import { isVideoByName, generateThumbnail, getUserIdByReq } from "./utils/index.js";
 import db from "./dbserialize.js";
 import { getFavoritesStatus } from "./favoritesManager.js";
@@ -11,6 +11,74 @@ import { generateSegmentedWhereClause, rankResultsByRelevance } from "./utils/se
 
 const normalizeRelPath = (input = "") => String(input || "").replace(/\\/g, "/").replace(/^\//, "");
 const isImageMimeType = (mimeType = "") => typeof mimeType === "string" && mimeType.startsWith("image/");
+
+const ensureDirSync = (targetPath) => {
+  fs.mkdirSync(targetPath, { recursive: true });
+};
+
+const buildUniquePath = (targetPath) => {
+  if (!fs.existsSync(targetPath)) {
+    return targetPath;
+  }
+
+  const parsed = path.parse(targetPath);
+  const stamp = new Date().toISOString().replace(/[-:.TZ]/g, "");
+  let counter = 1;
+
+  while (true) {
+    const candidate = path.join(parsed.dir, `${parsed.name}__deleted_${stamp}_${counter}${parsed.ext}`);
+    if (!fs.existsSync(candidate)) {
+      return candidate;
+    }
+    counter += 1;
+  }
+};
+
+const movePathSync = (sourcePath, targetPath) => {
+  try {
+    fs.renameSync(sourcePath, targetPath);
+    return;
+  } catch (error) {
+    if (error?.code !== "EXDEV") {
+      throw error;
+    }
+  }
+
+  const sourceStat = fs.lstatSync(sourcePath);
+  if (sourceStat.isDirectory()) {
+    fs.cpSync(sourcePath, targetPath, { recursive: true, errorOnExist: true });
+    fs.rmSync(sourcePath, { recursive: true, force: false });
+    return;
+  }
+
+  fs.copyFileSync(sourcePath, targetPath, fs.constants.COPYFILE_EXCL);
+  fs.unlinkSync(sourcePath);
+};
+
+const moveFileInfoToTrash = (fileInfo) => {
+  const relativePath = normalizeRelPath(fileInfo?.path);
+  if (!relativePath) {
+    throw new Error("Root entry cannot be deleted");
+  }
+
+  const sourceFullPath = path.join(MEDIA_FULL_PATH, relativePath);
+  if (!fs.existsSync(sourceFullPath)) {
+    return {
+      moved: false,
+      trashPath: null
+    };
+  }
+
+  const desiredTrashPath = path.join(TRASH_FULL_PATH, relativePath);
+  ensureDirSync(path.dirname(desiredTrashPath));
+  const actualTrashPath = buildUniquePath(desiredTrashPath);
+  movePathSync(sourceFullPath, actualTrashPath);
+
+  return {
+    moved: true,
+    trashPath: path.relative(TRASH_FULL_PATH, actualTrashPath).replace(/\\/g, "/")
+  };
+};
 
 let folderCoverStatements;
 const getFolderCoverStatements = () => {
@@ -1144,36 +1212,23 @@ const setFolderCoverByFileId = (fileId) => {
 
 // 删除文件或文件夹
 const deleteFileById = (fileId) => {
-  // 首先获取文件信息
   const fileInfo = getFileById(fileId);
   if (!fileInfo) {
-    reject(new Error("File not found"));
-    return;
+    throw new Error("File not found");
   }
-  
-  // 删除物理文件或文件夹
-  const fullPath = path.join(MEDIA_FULL_PATH, fileInfo.path);
-  
-  const deleteRecursively = (filePath) => {
-    if (fs.existsSync(filePath)) {
-      if (fs.lstatSync(filePath).isDirectory()) {
-        fs.readdirSync(filePath).forEach(file => {
-          const curPath = path.join(filePath, file);
-          deleteRecursively(curPath);
-        });
-        fs.rmdirSync(filePath);
-      } else {
-        fs.unlinkSync(filePath);
-      }
-    }
+
+  ensureDirSync(TRASH_FULL_PATH);
+  const trashResult = moveFileInfoToTrash(fileInfo);
+
+  const deleteStmt = db.prepare(`DELETE FROM files WHERE id = ?`);
+  deleteStmt.run(fileId);
+
+  return {
+    success: true,
+    message: `${fileInfo.type} deleted successfully`,
+    movedToTrash: trashResult.moved,
+    trashPath: trashResult.trashPath
   };
-  
-  deleteRecursively(fullPath);
-  
-  // 从数据库中删除记录
-  const stmt = db.prepare(`DELETE FROM files WHERE id = ? OR (parent_id = ? AND type = 'folder')`);
-  stmt.run(fileId, fileId);
-  return { success: true, message: `${fileInfo.type} deleted successfully` }
 };
 
 // 重命名文件或文件夹

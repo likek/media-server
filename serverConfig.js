@@ -4,6 +4,7 @@ import fs from "fs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const PROJECT_FULL_PATH = path.resolve(__dirname);
 
 // 解析命令行参数
 function parseCommandLineArgs() {
@@ -25,6 +26,7 @@ function parseCommandLineArgs() {
 const cmdArgs = parseCommandLineArgs();
 
 // 项目内部固定路径
+const TRASH_FULL_PATH = path.join(PROJECT_FULL_PATH, "./.trash");
 const THUMB_FULL_PATH = path.join(__dirname, "./.thumbnails");
 const TEMP_FULL_PATH = path.join(__dirname, "./.temp");
 const HLS_SOURCE_DIR = path.join(__dirname, "./.hls_source");
@@ -65,7 +67,9 @@ const MEDIA_FULL_PATH = inputPath;
 export {
     MEDIA_ROUTE,
     THUMB_ROUTE,
+    PROJECT_FULL_PATH,
     MEDIA_FULL_PATH,
+    TRASH_FULL_PATH,
     THUMB_FULL_PATH,
     TEMP_FULL_PATH,
     ENTRY_ROUTE_REGEX,

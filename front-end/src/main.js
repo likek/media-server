@@ -38,6 +38,7 @@ import {
   Search,
   FolderChecked,
   List,
+  Box,
   MoreFilled,
 } from '@element-plus/icons-vue'
 
@@ -79,6 +80,7 @@ const icons = [
   Search,
   FolderChecked,
   List,
+  Box,
   MoreFilled,
 ]
 
