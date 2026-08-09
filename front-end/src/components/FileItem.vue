@@ -141,7 +141,7 @@ import VideoPlayer from './VideoPlayer.vue'
 import { addToFavorites, removeFromFavorites } from '../services/favoritesApi'
 
 const VIDEO_EXTENSIONS = ['mp4', 'webm', 'ogg', 'ts', 'avi', 'wmv', 'm3u8', 'mov', 'm4v']
-const IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'heic', 'heif']
+const IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'heic', 'heif', 'bmp']
 const AUDIO_EXTENSIONS = ['mp3', 'wav', 'ogg', 'flac', 'aac']
 const TEXT_EXTENSIONS = ['txt', 'log', 'md', 'json', 'xml', 'csv']
 const ARCHIVE_EXTENSIONS = ['zip', 'rar', '7z', 'tar', 'gz']

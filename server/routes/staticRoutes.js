@@ -5,7 +5,7 @@ import fs from "fs";
 import { HLS_SOURCE_DIR, MEDIA_FULL_PATH, THUMB_FULL_PATH } from "../../serverConfig.js";
 import { aesDecrypt, aesEncrypt } from "../utils/encrypt.js";
 import { getUserIdByReq } from "../utils/index.js";
-import { ensureCachedPreviewImage, isHeifLikeFile } from "../utils/imageLoader.js";
+import { ensureCachedPreviewImage, needsPreviewTranscode } from "../utils/imageLoader.js";
 
 const router = express.Router();
 const userId_audioTokenAndRangesMap_Map = new Map();
@@ -132,7 +132,7 @@ router.get('/preview/:id', async (req, res) => {
 
     res.setHeader('Cache-Control', 'public, max-age=691200');
 
-    if (!isHeifLikeFile(fileInfo.path, fileInfo.mime_type)) {
+    if (!needsPreviewTranscode(fileInfo.path, fileInfo.mime_type)) {
       return res.sendFile(filePath, SEND_FILE_OPTIONS);
     }
 

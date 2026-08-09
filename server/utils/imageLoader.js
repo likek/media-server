@@ -12,24 +12,30 @@ function isHeifLike(filePath = "") {
   return /\.(heic|heif)$/i.test(filePath);
 }
 
-function isHeifUnsupportedError(error) {
+// sharp 无法解码的错误（不支持的格式，如 BMP/HEIC，或 HEIF 编解码未编译进来）
+function isSharpUnsupportedError(error) {
   const message = error?.message || String(error || "");
-  return /heif/i.test(message) || /compression format has not been built in/i.test(message);
+  return (
+    /unsupported image format/i.test(message) ||
+    /heif/i.test(message) ||
+    /compression format has not been built in/i.test(message)
+  );
 }
 
 async function ensureTempDir() {
   await fs.promises.mkdir(TEMP_FULL_PATH, { recursive: true });
 }
 
-async function convertHeifToPngWithSips(filePath) {
+// 用 macOS 自带的 sips 把 sharp 不支持的格式（HEIC/BMP 等）转成 PNG
+async function convertToPngWithSips(filePath) {
   if (process.platform !== "darwin") {
-    throw new Error("HEIC/HEIF decoding is not available in current sharp build");
+    throw new Error(`Image format not supported by sharp, and sips fallback is unavailable on ${process.platform}: ${filePath}`);
   }
 
   await ensureTempDir();
   const tempFilePath = path.join(
     TEMP_FULL_PATH,
-    `heif-${Date.now()}-${crypto.randomBytes(6).toString("hex")}.png`
+    `img-${Date.now()}-${crypto.randomBytes(6).toString("hex")}.png`
   );
 
   try {
@@ -52,16 +58,23 @@ export async function loadImageAsPngBuffer(filePath) {
       .png()
       .toBuffer();
   } catch (error) {
-    if (!isHeifLike(filePath) || !isHeifUnsupportedError(error)) {
+    // sharp 不支持的格式（HEIC/BMP 等），回退到 macOS 系统自带的 sips 转码
+    if (!isSharpUnsupportedError(error)) {
       throw error;
     }
 
-    return await convertHeifToPngWithSips(filePath);
+    return await convertToPngWithSips(filePath);
   }
 }
 
 export function isHeifLikeFile(filePath = "", mimeType = "") {
   return /\.(heic|heif)$/i.test(filePath) || /image\/hei[cf]/i.test(mimeType);
+}
+
+// 浏览器无法直接显示、或原图体积过大不适合直接预览的格式（HEIC/BMP 等），
+// 预览时统一走 ensureCachedPreviewImage 转成缓存 JPG
+export function needsPreviewTranscode(filePath = "", mimeType = "") {
+  return isHeifLikeFile(filePath, mimeType) || /\.bmp$/i.test(filePath) || /image\/(bmp|x-ms-bmp)/i.test(mimeType);
 }
 
 export async function ensureCachedPreviewImage(filePath, cacheDir, cacheKey) {
@@ -82,11 +95,11 @@ export async function loadImageMetadata(filePath) {
   try {
     return await sharp(filePath, { failOn: "none" }).metadata();
   } catch (error) {
-    if (!isHeifLike(filePath) || !isHeifUnsupportedError(error)) {
+    if (!isSharpUnsupportedError(error)) {
       throw error;
     }
 
-    const buffer = await convertHeifToPngWithSips(filePath);
+    const buffer = await convertToPngWithSips(filePath);
     return await sharp(buffer, { failOn: "none" }).metadata();
   }
 }
