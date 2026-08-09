@@ -79,7 +79,7 @@
                 @rename="showRenameDialog" @move="showMoveDialog" @delete="confirmDelete" @favorite="refreshFavorites" />
             </template>
             <template v-else>
-              <file-item :allow-actions="['viewtext', 'unzip', 'convertts', 'favorite', 'rename', 'move', 'download', 'delete', 'converthls', 'setFolderCover']" :key="file.id" :file="file" :imageList="imageList"
+              <file-item :allow-actions="getFileActions(file)" :key="file.id" :file="file" :imageList="imageList"
                 :imageIndex="imageList.findIndex(item => item.id === file.id)" :favorited="file.favorited"
                 @rename="showRenameDialog" @move="showMoveDialog" @download="downloadFile" @delete="confirmDelete"
                 @unzip="refreshCache" @viewText="viewTextFile" @convertTs="convertTsFile" @favorite="refreshFavorites" @navigate="navigateToFolder" @folderCoverUpdated="handleFolderCoverUpdated"/>
@@ -503,12 +503,25 @@ watch(() => hasMoreFiles.value, (hasMore) => {
 })
 
 
+// 文件操作项：仅当文件的父文件夹不是当前正在浏览的文件夹时，才显示"所在文件夹"
+// （收藏/最多收藏等列表由各自视图单独配置 allow-actions，不受此影响）
+const baseFileActions = ['viewtext', 'unzip', 'convertts', 'favorite', 'rename', 'move', 'download', 'delete', 'converthls', 'setFolderCover']
+const getFileActions = (file) => {
+  const parentId = file.parent_id
+  const currentFolderId = route.params.id ?? null
+  // 根目录下 parent_id 为 null 的文件就在当前目录；路由参数是字符串，统一转字符串比较
+  const isInCurrentFolder = parentId === null || typeof parentId === 'undefined' || String(parentId) === String(currentFolderId)
+  return isInCurrentFolder ? baseFileActions : [...baseFileActions, 'navigateParent']
+}
+
 // 搜索文件
 const handleSearch = async () => {
+  const query = searchInput.value?.trim()
   router.push({
     name: 'folder',
     params: { id: route.params.id },
-    query: { query: searchInput.value?.trim() || undefined }
+    // 有搜索词时默认限定在当前目录（含子目录）内搜索；无搜索词时清空条件回到目录浏览
+    query: query ? { query, space: 'children' } : {}
   })
 }
 
