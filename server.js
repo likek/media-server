@@ -36,6 +36,11 @@ const app = express();
 const PORT = process.env.PORT || 7777;
 
 const httpServer = createServer(app);
+const UPLOAD_REQUEST_TIMEOUT_MS = 3 * 60 * 60 * 1000;
+
+// Node.js defaults to a 5 minute request timeout, which interrupts slow large uploads.
+httpServer.requestTimeout = UPLOAD_REQUEST_TIMEOUT_MS;
+httpServer.headersTimeout = UPLOAD_REQUEST_TIMEOUT_MS + 60 * 1000;
 
 app.set("trust proxy", 1);
 
