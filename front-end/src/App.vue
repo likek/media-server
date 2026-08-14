@@ -1,7 +1,11 @@
 <template>
    <el-config-provider :locale="zhCn">
     <div class="app-container" :class="{ 'sidebar-collapsed': isSidebarCollapsed }">
-      <side-menu v-show="!isMobile || !isSidebarCollapsed" :is-collapsed="isSidebarCollapsed || isMobile" />
+      <side-menu
+        v-show="!isMobile || !isSidebarCollapsed"
+        :is-collapsed="isSidebarCollapsed || isMobile"
+        :can-render-hidden-menus="backdoorMenuAccessState.canRenderHiddenMenus"
+      />
       <div class="main-content">
         <el-button size="small" @click="toggleSidebar" class="sidebar-toggle-btn" :icon="isSidebarCollapsed ? Expand : Fold" circle />
         <!-- <el-button size="small" @click="dialogDonateVisible = true" class="btn-donate">付费</el-button> -->
@@ -29,6 +33,7 @@ import { ElButton } from 'element-plus'
 import { Expand, Fold, Sunny, Moon } from '@element-plus/icons-vue'
 import SideMenu from './components/SideMenu.vue'
 import { registerUser } from './services/userApi'
+import { useBackdoorMenuAccess } from './composables/useBackdoorMenuAccess'
 import { useRoute } from 'vue-router'
 import { connectWebSocket } from './services/websocket'
 import { UseDark } from '@vueuse/components'
@@ -37,6 +42,7 @@ import zhCn from 'element-plus/es/locale/lang/zh-cn'
 const dialogDonateVisible = ref(false)
 
 const route = useRoute()
+const { backdoorMenuAccessState, refreshBackdoorMenuAccess } = useBackdoorMenuAccess()
 
 /**
  * 处理WebSocket更新缓存事件
@@ -57,18 +63,12 @@ onBeforeUnmount(() => {
   }
 })
 
-const isSidebarCollapsed = ref(false)
+const isSidebarCollapsed = ref(true)
 const isMobile = ref(false)
 let mediaQueryList = null
 
 const checkScreenSize = () => {
-  if (window.matchMedia('(max-width: 768px)').matches) {
-    isMobile.value = true
-    isSidebarCollapsed.value = true // 移动端默认折叠
-  } else {
-    isMobile.value = false
-    isSidebarCollapsed.value = false // 非移动端默认展开
-  }
+  isMobile.value = window.matchMedia('(max-width: 768px)').matches
 }
 
 const handleResize = (event) => {
@@ -86,6 +86,7 @@ onMounted(() => {
 
   registerUser(route.query.iv)
     .then(() => {
+      refreshBackdoorMenuAccess()
       connectWebSocket()
     })
     .catch((error) => {

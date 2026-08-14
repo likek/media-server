@@ -65,6 +65,7 @@ router.get('/media/:id', (req, res) => {
     try {
       const fileId = req.params.id;
       const fileInfo = getFileById(fileId);
+      const shouldDownload = req.query.download === '1';
       
       if (!fileInfo || fileInfo.type !== 'file') {
         return res.status(404).send('File not found');
@@ -76,31 +77,38 @@ router.get('/media/:id', (req, res) => {
         // 对于视频文件，需要验证令牌
         // return validateVideoToken(req, res, !fileInfo.m3u8_path, () => {
         return validateVideoToken(req, res, false, () => {
-          // 优先使用m3u8文件（如果存在）
-          if (fileInfo.m3u8_path) {
-            const m3u8FilePath = path.join(HLS_SOURCE_DIR, fileInfo.m3u8_path);
-            if (fs.existsSync(m3u8FilePath)) {
-              let m3u8Content = fs.readFileSync(m3u8FilePath, 'utf8');
+          const filePath = path.join(MEDIA_FULL_PATH, fileInfo.path);
 
-              m3u8Content = m3u8Content.split('\n').map(line => {
-                if (line.trim().endsWith('.m3u8') || line.trim().endsWith('.ts')) {
-                  // 避免重复添加参数
-                  if (!line.includes('?')) {
-                    return createEncryptedTsUrl(line, fileId); // Safari浏览器不支持前端videojs的请求拦截，只能后端来处理
+          if (!shouldDownload) {
+            // 优先使用m3u8文件（如果存在）
+            if (fileInfo.m3u8_path) {
+              const m3u8FilePath = path.join(HLS_SOURCE_DIR, fileInfo.m3u8_path);
+              if (fs.existsSync(m3u8FilePath)) {
+                let m3u8Content = fs.readFileSync(m3u8FilePath, 'utf8');
+
+                m3u8Content = m3u8Content.split('\n').map(line => {
+                  if (line.trim().endsWith('.m3u8') || line.trim().endsWith('.ts')) {
+                    // 避免重复添加参数
+                    if (!line.includes('?')) {
+                      return createEncryptedTsUrl(line, fileId); // Safari浏览器不支持前端videojs的请求拦截，只能后端来处理
+                    }
                   }
-                }
-                return line;
-              }).join('\n');
+                  return line;
+                }).join('\n');
 
-              res.setHeader('Content-Type', 'application/vnd.apple.mpegurl');
-              return res.send(m3u8Content);
-            } else {
-              console.log(`m3u8文件不存在: ${m3u8FilePath}`);
-              return res.status(404).send('m3u8文件不存在');
+                res.setHeader('Content-Type', 'application/vnd.apple.mpegurl');
+                return res.send(m3u8Content);
+              } else {
+                console.log(`m3u8文件不存在: ${m3u8FilePath}`);
+                return res.status(404).send('m3u8文件不存在');
+              }
             }
           }
-          // 如果m3u8文件不存在，回退到原始MP4文件
-          const filePath = path.join(MEDIA_FULL_PATH, fileInfo.path);
+
+          if (shouldDownload) {
+            res.attachment(path.basename(fileInfo.path));
+          }
+
           res.sendFile(filePath, SEND_FILE_OPTIONS);
         });
       }

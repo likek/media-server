@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { getBackdoorMenuStatus } from '../services/backdoorApi'
 
 const routes = [
   {
@@ -43,6 +44,23 @@ const routes = [
 const router = createRouter({
   history: createWebHistory(),
   routes
+})
+
+router.beforeEach(async (to) => {
+  if (!['admin', 'log-manager'].includes(to.name)) {
+    return true
+  }
+
+  try {
+    const response = await getBackdoorMenuStatus()
+    if (response?.canRenderHiddenMenus) {
+      return true
+    }
+  } catch (error) {
+    console.error('校验隐藏菜单访问权限失败:', error)
+  }
+
+  return { name: 'home' }
 })
 
 export default router

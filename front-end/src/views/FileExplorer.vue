@@ -232,11 +232,14 @@ import FolderItem from '../components/FolderItem.vue'
 import FileItem from '../components/FileItem.vue'
 import TextViewerDialog from '../components/TextViewerDialog.vue'
 import { getFiles, updateCache, checkFiles, cleanDb, createNewFolder, renameFile, deleteFileOrFolder, uploadFileToServer, downloadFromText, moveFile, convertFileToMp4, getFolderInfo, searchByImage, rebuildImageHash } from '../services/userApi'
+import { useBackdoorMenuAccess } from '../composables/useBackdoorMenuAccess'
+import { createEncryptedUrl } from '../utils/videoMiddleware'
 
 const stateCache = {}
 
 const router = useRouter()
 const route = useRoute()
+const { trackHomeTap } = useBackdoorMenuAccess()
 
 // 状态变量
 const files = ref([])
@@ -574,6 +577,7 @@ const navigateToFolder = (folderId) => {
 
 // 导航到根目录
 const navigateToRoot = () => {
+  trackHomeTap()
   router.push({ name: 'home' })
 }
 
@@ -864,7 +868,11 @@ const loadNode = async (node, resolve) => {
 // 下载文件
 const downloadFile = (file) => {
   const link = document.createElement('a')
-  link.href = `/media/${file.id}`
+  const isVideo = (file.mime_type || '').startsWith('video/') || Boolean(file.m3u8_path)
+  const targetUrl = isVideo
+    ? createEncryptedUrl(`/media/${file.id}?download=1`)
+    : `/media/${file.id}`
+  link.href = targetUrl
   link.download = file.filename || ''
   link.rel = 'noopener'
   document.body.appendChild(link)

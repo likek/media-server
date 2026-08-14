@@ -30,6 +30,9 @@ const TRASH_FULL_PATH = path.join(PROJECT_FULL_PATH, "./.trash");
 const THUMB_FULL_PATH = path.join(__dirname, "./.thumbnails");
 const TEMP_FULL_PATH = path.join(__dirname, "./.temp");
 const HLS_SOURCE_DIR = path.join(__dirname, "./.hls_source");
+const HIDDEN_MENU_HOME_TAP_PASSWORD = String(process.env.HIDDEN_MENU_HOME_TAP_PASSWORD || "4253")
+    .replace(/[^2-9]/g, "")
+    .slice(0, 8) || "4253";
 
 // 路由名称配置
 const MEDIA_ROUTE = "/media";
@@ -73,9 +76,11 @@ export {
     THUMB_FULL_PATH,
     TEMP_FULL_PATH,
     ENTRY_ROUTE_REGEX,
-    HLS_SOURCE_DIR
+    HLS_SOURCE_DIR,
+    HIDDEN_MENU_HOME_TAP_PASSWORD
 };
 export default {
     maxRequestsPerMinute: 8 * 60,
-    blacklistDurationMs: 60 * 60 * 1000
+    blacklistDurationMs: 60 * 60 * 1000,
+    hiddenMenuHomeTapPassword: HIDDEN_MENU_HOME_TAP_PASSWORD
 }

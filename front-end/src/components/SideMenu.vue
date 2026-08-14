@@ -20,7 +20,7 @@
                 <el-icon><Histogram /></el-icon>
                 <span v-if="!isCollapsed">最多收藏</span>
             </div>
-            <div class="menu-item" :class="{ active: activeMenu === 'admin' }" @click="navigateTo('admin')"
+            <div v-if="canRenderHiddenMenus" class="menu-item" :class="{ active: activeMenu === 'admin' }" @click="navigateTo('admin')"
                 :title="isCollapsed ? '用户管理' : ''">
                 <el-icon>
                     <User />
@@ -28,6 +28,7 @@
                 <span v-if="!isCollapsed">用户管理</span>
             </div>
             <div
+                v-if="canRenderHiddenMenus"
                 class="menu-item" :class="{ active: activeMenu === 'log-manager' }" @click="navigateTo('log-manager')"
                 :title="isCollapsed ? '日志管理' : ''">
                 <el-icon>
@@ -42,37 +43,36 @@
 <script setup>
 import { ref, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
+import { useBackdoorMenuAccess } from '../composables/useBackdoorMenuAccess'
 
 const router = useRouter()
 const route = useRoute()
+const { trackHomeTap } = useBackdoorMenuAccess()
 
 const props = defineProps({
     isCollapsed: {
+        type: Boolean,
+        default: false
+    },
+    canRenderHiddenMenus: {
         type: Boolean,
         default: false
     }
 })
 
 const activeMenu = ref('files')
-const favoritesExpanded = ref(false)
 
 // 监听路由变化，更新当前激活的菜单项
 watch(() => route.name, (newRouteName) => {
     activeMenu.value = newRouteName
-    // 如果当前路由是收藏相关的，自动展开收藏子菜单
-    if (['favorites', 'my-favorites', 'most-favorites'].includes(newRouteName)) {
-        favoritesExpanded.value = true
-    }
 }, { immediate: true })
 
 // 导航到指定路由
 const navigateTo = (menuType) => {
+    if (menuType === 'home') {
+        trackHomeTap()
+    }
     router.push({ name: menuType })
-}
-
-// 切换收藏子菜单的展开/折叠状态
-const toggleFavoritesSubmenu = () => {
-    favoritesExpanded.value = !favoritesExpanded.value
 }
 </script>
 

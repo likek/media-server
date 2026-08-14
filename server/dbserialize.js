@@ -1,6 +1,14 @@
 import Database from "better-sqlite3";
 const db = new Database('./database.db');
 
+const ensureColumnExists = (tableName, columnName, columnDefinition) => {
+  const columns = db.prepare(`PRAGMA table_info(${tableName})`).all();
+  const exists = columns.some((column) => column.name === columnName);
+  if (!exists) {
+    db.prepare(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${columnDefinition}`).run();
+  }
+};
+
 const initAll = () => {
   db.prepare(`
     CREATE TABLE IF NOT EXISTS logs_request (
@@ -55,9 +63,11 @@ const initAll = () => {
       device TEXT,
       os TEXT,
       browser TEXT,
-      iv TEXT
+      iv TEXT,
+      home_click_history TEXT DEFAULT '[]'
     );
   `).run();
+  ensureColumnExists("userInfo", "home_click_history", "TEXT DEFAULT '[]'");
 
   db.prepare(`
     CREATE TABLE IF NOT EXISTS logs_file_accessed (

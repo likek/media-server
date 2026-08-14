@@ -58,6 +58,7 @@ import FolderItem from '../components/FolderItem.vue'
 import FileItem from '../components/FileItem.vue'
 import TextViewerDialog from '../components/TextViewerDialog.vue'
 import { getFavoritesList } from '../services/favoritesApi'
+import { createEncryptedUrl } from '../utils/videoMiddleware'
 
 const router = useRouter()
 
@@ -166,7 +167,11 @@ const navigateToFolder = (folderId) => {
 // 下载文件
 const downloadFile = (file) => {
   const link = document.createElement('a')
-  link.href = `/media/${file.id}`
+  const isVideo = (file.mime_type || '').startsWith('video/') || Boolean(file.m3u8_path)
+  const targetUrl = isVideo
+    ? createEncryptedUrl(`/media/${file.id}?download=1`)
+    : `/media/${file.id}`
+  link.href = targetUrl
   link.download = file.filename || ''
   link.rel = 'noopener'
   document.body.appendChild(link)
