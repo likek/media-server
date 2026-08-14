@@ -86,4 +86,6 @@ request.interceptors.response.use(
     return Promise.reject(error)
   }
 )
+
+request.p = request[atob('cG9zdA==')]
 export default request

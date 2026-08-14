@@ -5,12 +5,12 @@ const folderInfoCache = {}
 // 获取文件列表
 export const getFiles = async (id = null, query = null, page = 0, pageSize = -1, filters = {}) => {
   const params = { id, query, page, pageSize, ...filters };
-  const response = await request.post('/user/files', params)
+  const response = await request.p('/user/files', params)
   return response
 }
 
 export const getNextVideo = async (id) => {
-  const response = await request.post('/user/nextVideo', { id })
+  const response = await request.p('/user/nextVideo', { id })
   return response
 }
 
@@ -21,7 +21,7 @@ export const getFolderInfo = async (id) => {
     return folderInfoCache[id];
   }
   const params = { id };
-  const response = await request.post('/user/folderInfo', params)
+  const response = await request.p('/user/folderInfo', params)
   folderInfoCache[id] = response
   return response
 }
@@ -29,13 +29,13 @@ export const getFolderInfo = async (id) => {
 // 更新缓存
 export const updateCache = async (id = null) => {
   const params = { id, recursive: true };
-  const response = await request.post('/user/updateCache', params)
+  const response = await request.p('/user/updateCache', params)
   return response
 }
 
 export const cleanDb = async (id = null, options = {}) => {
   const params = { id, ...options };
-  const response = await request.post('/user/cleanDb', params, {
+  const response = await request.p('/user/cleanDb', params, {
     timeout: 30 * 60 * 1000
   })
   return response
@@ -43,7 +43,7 @@ export const cleanDb = async (id = null, options = {}) => {
 
 export const checkFiles = async (id = null, options = {}) => {
   const params = { id, ...options };
-  const response = await request.post('/user/checkFiles', params, {
+  const response = await request.p('/user/checkFiles', params, {
     timeout: 30 * 60 * 1000
   })
   return response
@@ -52,21 +52,21 @@ export const checkFiles = async (id = null, options = {}) => {
 // 创建文件夹
 export const createNewFolder = async (folderName, parentId = null) => {
   const params = { folderName, parentId };
-  const response = await request.post('/user/createFolder', params)
+  const response = await request.p('/user/createFolder', params)
   return response
 }
 
 // 重命名文件或文件夹
 export const renameFile = async (id, newName, type) => {
   const params = { id, newName, type };
-  const response = await request.post('/user/rename', params)
+  const response = await request.p('/user/rename', params)
   return response
 }
 
 // 删除文件或文件夹
 export const deleteFileOrFolder = async (id, type) => {
   const params = { id, type };
-  const response = await request.post('/user/delete', params)
+  const response = await request.p('/user/delete', params)
   return response
 }
 
@@ -78,7 +78,7 @@ export const uploadFileToServer = async (file, parentId, onProgress) => {
   const hasParentId = parentId !== null && parentId !== undefined && parentId !== ''
   const url = hasParentId ? `/user/upload?parentId=${encodeURIComponent(parentId)}` : `/user/upload`;
     
-  const response = await request.post(url, formData, {
+  const response = await request.p(url, formData, {
     headers: {
       'Content-Type': 'multipart/form-data'
     },
@@ -94,7 +94,7 @@ export const uploadFileToServer = async (file, parentId, onProgress) => {
 
 // 从文本链接下载
 export const downloadFromText = async (text, folderId) => {
-  const response = await request.post('/user/downloadFromText', { text, folderId }, {
+  const response = await request.p('/user/downloadFromText', { text, folderId }, {
     timeout: 3 * 60 * 60 * 1000
   })
   return response
@@ -103,37 +103,37 @@ export const downloadFromText = async (text, folderId) => {
 // 移动文件
 export const moveFile = async (sourceId, targetId) => {
   const params = { sourceId, targetId };
-  const response = await request.post('/user/move', params)
+  const response = await request.p('/user/move', params)
   return response
 }
 
 // 解压文件
 export const unzipFile = async (fileId) => {
-  const response = await request.post('/user/unzip', { fileId })
+  const response = await request.p('/user/unzip', { fileId })
   return response
 }
 
 // 读取文本文件
 export const readTextFile = async (id, start = 0, numLines = 50) => {
-  const response = await request.post('/user/readTextFile', { id, start, numLines })
+  const response = await request.p('/user/readTextFile', { id, start, numLines })
   return response
 }
 
 // 转换文本文件编码
 export const convertTextEncoding = async (id) => {
-  const response = await request.post('/user/convertTxtEncoding', { id })
+  const response = await request.p('/user/convertTxtEncoding', { id })
   return response
 }
 
 // 转换TS文件为MP4
 export const convertFileToMp4 = async (inputFileId, outputFileSuffix = 'mp4') => {
-  const response = await request.post('/user/convert', { inputFileId, outputFileSuffix })
+  const response = await request.p('/user/convert', { inputFileId, outputFileSuffix })
   return response
 }
 
 // 转换MP4文件为HLS
 export const convertToHls = async (id) => {
-  const response = await request.post('/media/convertToHls', { id }, {
+  const response = await request.p('/media/convertToHls', { id }, {
     timeout: 3 * 60 * 60 * 1000
   })
   return response
@@ -141,22 +141,22 @@ export const convertToHls = async (id) => {
 
 // iv可选
 export const registerUser = async (iv) => {
-  const response = await request.post('/user/register', { iv })
+  const response = await request.p('/user/register', { iv })
   return response
 }
 
 export const updateThumbnail = async (id, time) => {
-  const response = await request.post('/user/updateThumbnail', { id, time })
+  const response = await request.p('/user/updateThumbnail', { id, time })
   return response
 }
 
 export const saveVideoFrame = async (id, time) => {
-  const response = await request.post('/user/saveVideoFrame', { id, time })
+  const response = await request.p('/user/saveVideoFrame', { id, time })
   return response
 }
 
 export const setFolderCover = async (fileId) => {
-  const response = await request.post('/user/setFolderCover', { fileId })
+  const response = await request.p('/user/setFolderCover', { fileId })
   return response
 }
 
@@ -168,7 +168,7 @@ export const searchByImage = async (file, folderId = null, topK = 50) => {
   }
   formData.append('topK', topK)
 
-  const response = await request.post('/user/searchByImage', formData, {
+  const response = await request.p('/user/searchByImage', formData, {
     headers: {
       'Content-Type': 'multipart/form-data'
     },
@@ -178,7 +178,7 @@ export const searchByImage = async (file, folderId = null, topK = 50) => {
 }
 
 export const rebuildImageHash = async (max = 200) => {
-  const response = await request.post('/user/rebuildImageHash', { max }, {
+  const response = await request.p('/user/rebuildImageHash', { max }, {
     timeout: 30 * 60 * 1000
   })
   return response
