@@ -137,12 +137,24 @@ html.dark .verification-button {
   html.dark .file-item:hover {
     box-shadow: 0 2px 12px 0 rgba(222, 222, 222, 0.2);
   }
+
+  html.dark .action-icon.is-disabled:hover {
+    color: #4c4d4f;
+  }
 }
 
 html.dark .folder-item:active {
     background-color: #202020;
     transform: translateY(-2px);
     box-shadow: 0 2px 12px 0 rgba(200, 100, 200, 0.1);
+}
+
+html.dark .action-icon {
+  color: #dcdfe6;
+}
+
+html.dark .action-icon.is-disabled {
+  color: #4c4d4f;
 }
 
 html, body {
