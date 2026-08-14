@@ -12,17 +12,17 @@
               </el-icon>
             </el-tooltip>
             <el-tooltip content="重命名" placement="top" :auto-close="1000" v-if="allowActions.includes('rename')">
-              <el-icon class="action-icon" @click.stop="$emit('rename', folder)" >
+              <el-icon class="action-icon" :class="{ 'is-disabled': isActionDisabled('rename') }" @click.stop="emitProtected('rename', folder, 'rename')" >
                 <Edit />
               </el-icon>
             </el-tooltip>
             <el-tooltip content="移动" placement="top" :auto-close="1000" v-if="allowActions.includes('move')">
-              <el-icon class="action-icon" @click.stop="$emit('move', folder)">
+              <el-icon class="action-icon" :class="{ 'is-disabled': isActionDisabled('move') }" @click.stop="emitProtected('move', folder, 'move')">
                 <Position />
               </el-icon>
             </el-tooltip>
             <el-tooltip content="删除" placement="top" :auto-close="1000" v-if="allowActions.includes('delete')">
-              <el-icon class="action-icon" @click.stop="$emit('delete', folder)">
+              <el-icon class="action-icon" :class="{ 'is-disabled': isActionDisabled('delete') }" @click.stop="emitProtected('delete', folder, 'delete')">
                 <Delete />
               </el-icon>
             </el-tooltip>
@@ -63,6 +63,10 @@ const props = defineProps({
   allowActions: {
     type: Array, // 'favorite', 'rename', 'move', 'delete'
     default: true
+  },
+  disabledActions: {
+    type: Array,
+    default: () => []
   }
 })
 
@@ -78,6 +82,17 @@ const isNew = ref(Date.now() - new Date(props.folder.lastModified).getTime() < 1
 const coverSrc = computed(() => props.folder.cover_file_id ? `/preview/${props.folder.cover_file_id}` : '')
 
 const emit = defineEmits(['navigate', 'rename', 'move', 'delete', 'favorite'])
+
+const isActionDisabled = (action) => {
+  return props.disabledActions.includes(action)
+}
+
+const emitProtected = (eventName, payload, action) => {
+  if (isActionDisabled(action)) {
+    return
+  }
+  emit(eventName, payload)
+}
 
 // // 格式化文件大小
 // const formatFileSize = (size) => {
@@ -192,9 +207,18 @@ const toggleFavorite = async () => {
   font-size: 14px;
 }
 
+.action-icon.is-disabled {
+  cursor: not-allowed;
+  color: #c0c4cc;
+}
+
 @media (any-hover: hover) {
   .action-icon:hover {
     color: #409eff;
+  }
+
+  .action-icon.is-disabled:hover {
+    color: #c0c4cc;
   }
 }
 

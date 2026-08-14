@@ -3,10 +3,13 @@ import path from "path";
 import fs from "fs";
 import ffmpeg from "fluent-ffmpeg";
 import { getFileById } from "../fileDbManager.js";
+import { requireBackdoorAccess } from "../middleware/backdoorPermission.js";
 import { MEDIA_FULL_PATH, HLS_SOURCE_DIR } from "../../serverConfig.js";
 import db from "../dbserialize.js";
 
 const router = express.Router();
+router.use("/convertToHls", requireBackdoorAccess);
+router.use("/convertToHlsBatch", requireBackdoorAccess);
 
 const convertList = new Set(); // 正在转换的文件id列表
 

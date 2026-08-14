@@ -31,12 +31,12 @@
               </el-icon>
             </el-tooltip>
             <el-tooltip content="转换为HLS" placement="top" :auto-close="1000" v-if="isMp4 && allowActions.includes('converthls')">
-              <el-icon class="action-icon" @click.stop="handleConvertToHls">
+              <el-icon class="action-icon" :class="{ 'is-disabled': isActionDisabled('converthls') }" @click.stop="handleConvertToHls">
                 <Switch />
               </el-icon>
             </el-tooltip>
             <el-tooltip content="设为文件夹封面" placement="top" :auto-close="1000" v-if="canSetFolderCover && allowActions.includes('setFolderCover')">
-              <el-icon class="action-icon" @click.stop="handleSetFolderCover">
+              <el-icon class="action-icon" :class="{ 'is-disabled': isActionDisabled('setFolderCover') }" @click.stop="handleSetFolderCover">
                 <FolderChecked />
               </el-icon>
             </el-tooltip>
@@ -47,12 +47,12 @@
               </el-icon>
             </el-tooltip>
             <el-tooltip content="重命名" placement="top" :auto-close="1000" v-if="allowActions.includes('rename')">
-              <el-icon class="action-icon" @click.stop="$emit('rename', displayFile)">
+              <el-icon class="action-icon" :class="{ 'is-disabled': isActionDisabled('rename') }" @click.stop="emitProtected('rename', displayFile, 'rename')">
                 <Edit />
               </el-icon>
             </el-tooltip>
             <el-tooltip content="移动" placement="top" :auto-close="1000" v-if="allowActions.includes('move')">
-              <el-icon class="action-icon" @click.stop="$emit('move', displayFile)">
+              <el-icon class="action-icon" :class="{ 'is-disabled': isActionDisabled('move') }" @click.stop="emitProtected('move', displayFile, 'move')">
                 <Position />
               </el-icon>
             </el-tooltip>
@@ -62,7 +62,7 @@
               </el-icon>
             </el-tooltip>
             <el-tooltip content="删除" placement="top" :auto-close="1000" v-if="allowActions.includes('delete')">
-              <el-icon class="action-icon" @click.stop="$emit('delete', displayFile)">
+              <el-icon class="action-icon" :class="{ 'is-disabled': isActionDisabled('delete') }" @click.stop="emitProtected('delete', displayFile, 'delete')">
                 <Delete />
               </el-icon>
             </el-tooltip>
@@ -168,6 +168,10 @@ const props = defineProps({
   allowActions: {
     type: Array, // 'viewtext', 'unzip', 'convertts', 'favorite', 'rename', 'move', 'delete', 'converthls', 'navigateParent', 'setFolderCover'
     default: true
+  },
+  disabledActions: {
+    type: Array,
+    default: () => []
   }
 })
 
@@ -175,6 +179,17 @@ const displayFile = ref(props.file)
 const isFavorited = ref(Boolean(props.favorited))
 
 const emit = defineEmits(['rename', 'delete', 'move', 'download', 'unzip', 'viewText', 'convertTs', 'favorite', 'navigate', 'folderCoverUpdated'])
+
+const isActionDisabled = (action) => {
+  return props.disabledActions.includes(action)
+}
+
+const emitProtected = (eventName, payload, action) => {
+  if (isActionDisabled(action)) {
+    return
+  }
+  emit(eventName, payload)
+}
 
 // 视频播放器配置
 const videoOptions = ref({
@@ -239,6 +254,9 @@ const isPreviewable = computed(() => {
 })
 
 const handleConvertToHls = async () => {
+  if (isActionDisabled('converthls')) {
+    return
+  }
   try {
     const res = await convertToHls(displayFile.value.id)
     if (res.success) {
@@ -253,6 +271,9 @@ const handleConvertToHls = async () => {
 }
 
 const handleSetFolderCover = async () => {
+  if (isActionDisabled('setFolderCover')) {
+    return
+  }
   try {
     const res = await setFolderCover(displayFile.value.id)
     if (res.success) {
@@ -420,9 +441,18 @@ const toggleFavorite = async () => {
   transition: color 0.3s;
 }
 
+.action-icon.is-disabled {
+  cursor: not-allowed;
+  color: #c0c4cc;
+}
+
 @media (any-hover: hover) {
   .action-icon:hover {
     color: #409EFF;
+  }
+
+  .action-icon.is-disabled:hover {
+    color: #c0c4cc;
   }
 }
 

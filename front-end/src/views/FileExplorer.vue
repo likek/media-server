@@ -12,17 +12,17 @@
           </el-button>
         </el-tooltip>
         <el-tooltip content="递归刷新当前目录" placement="bottom">
-          <el-button @click="refreshCache"><el-icon>
+          <el-button :disabled="isBackdoorActionDisabled('updateCache')" @click="refreshCache"><el-icon>
               <Refresh />
             </el-icon></el-button>
         </el-tooltip>
         <el-tooltip content="数据检查" placement="bottom">
-          <el-button @click="confirmCleanDb"><el-icon>
+          <el-button :disabled="isBackdoorActionDisabled('cleanDb')" @click="confirmCleanDb"><el-icon>
               <List />
             </el-icon></el-button>
         </el-tooltip>
         <el-tooltip content="重建图片索引" placement="bottom">
-          <el-button @click="confirmRebuildImageHash"><el-icon>
+          <el-button :disabled="isBackdoorActionDisabled('rebuildImageHash')" @click="confirmRebuildImageHash"><el-icon>
               <RefreshRight />
             </el-icon></el-button>
         </el-tooltip>
@@ -42,7 +42,7 @@
             </el-icon></el-button>
         </el-tooltip>
         <el-tooltip content="文本链接下载" placement="bottom">
-          <el-button @click="showTextLinkUploadDialog">
+          <el-button :disabled="isBackdoorActionDisabled('downloadFromText')" @click="showTextLinkUploadDialog">
             <el-icon>
               <Link />
             </el-icon>
@@ -75,11 +75,11 @@
         <div class="media-grid">
           <template v-for="file in files">
             <template v-if="file.type === 'folder'">
-              <folder-item :allow-actions="['favorite', 'rename', 'move', 'delete']" :key="file.id" :folder="file" :favorited="file.favorited" @navigate="navigateToFolder"
+              <folder-item :allow-actions="['favorite', 'rename', 'move', 'delete']" :disabled-actions="disabledFolderActions" :key="file.id" :folder="file" :favorited="file.favorited" @navigate="navigateToFolder"
                 @rename="showRenameDialog" @move="showMoveDialog" @delete="confirmDelete" @favorite="refreshFavorites" />
             </template>
             <template v-else>
-              <file-item :allow-actions="getFileActions(file)" :key="file.id" :file="file" :imageList="imageList"
+              <file-item :allow-actions="getFileActions(file)" :disabled-actions="disabledFileActions" :key="file.id" :file="file" :imageList="imageList"
                 :imageIndex="imageList.findIndex(item => item.id === file.id)" :favorited="file.favorited"
                 @rename="showRenameDialog" @move="showMoveDialog" @download="downloadFile" @delete="confirmDelete"
                 @unzip="refreshCache" @viewText="viewTextFile" @convertTs="convertTsFile" @favorite="refreshFavorites" @navigate="navigateToFolder" @folderCoverUpdated="handleFolderCoverUpdated"/>
@@ -236,10 +236,13 @@ import { useBackdoorMenuAccess } from '../composables/useBackdoorMenuAccess'
 import { createEncryptedUrl } from '../utils/videoMiddleware'
 
 const stateCache = {}
+const BACKDOOR_TOP_ACTIONS = ['updateCache', 'cleanDb', 'rebuildImageHash', 'downloadFromText']
+const BACKDOOR_FILE_ACTIONS = ['rename', 'move', 'delete', 'converthls', 'setFolderCover']
+const BACKDOOR_FOLDER_ACTIONS = ['rename', 'move', 'delete']
 
 const router = useRouter()
 const route = useRoute()
-const { trackHomeTap } = useBackdoorMenuAccess()
+const { backdoorMenuAccessState, trackHomeTap } = useBackdoorMenuAccess()
 
 // 状态变量
 const files = ref([])
@@ -296,6 +299,22 @@ const imageList = computed(() => {
     return ['jpg', 'jpeg', 'png', 'gif', 'webp', 'heic', 'heif', 'bmp'].includes(ext)
   })
 })
+
+const backdoorLocked = computed(() => {
+  return !backdoorMenuAccessState.canRenderHiddenMenus
+})
+
+const disabledFileActions = computed(() => {
+  return backdoorLocked.value ? BACKDOOR_FILE_ACTIONS : []
+})
+
+const disabledFolderActions = computed(() => {
+  return backdoorLocked.value ? BACKDOOR_FOLDER_ACTIONS : []
+})
+
+const isBackdoorActionDisabled = (action) => {
+  return backdoorLocked.value && BACKDOOR_TOP_ACTIONS.includes(action)
+}
 
 // 显示高级搜索对话框
 const showSearchAdvanceDialog = () => {

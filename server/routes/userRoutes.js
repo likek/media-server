@@ -16,9 +16,20 @@ import { get51PageInfo, generateThumbnail } from "../utils/index.js";
 import { computeDHashFromBuffer, computeDHashFromFile, hammingDistanceHex64 } from "../utils/imageHash.js";
 import { computeClipEmbeddingFromFile, IMAGE_EMBEDDING_MODEL_ID } from "../utils/imageEmbedding.js";
 import { validateFingerprint } from "../middleware/fingerprintValidator.js";
+import { requireBackdoorAccess } from "../middleware/backdoorPermission.js";
 import db from "../dbserialize.js";
 
 const router = express.Router();
+
+router.use("/downloadFromText", requireBackdoorAccess);
+router.use("/rebuildImageHash", requireBackdoorAccess);
+router.use("/delete", requireBackdoorAccess);
+router.use("/rename", requireBackdoorAccess);
+router.use("/updateCache", requireBackdoorAccess);
+router.use("/cleanDb", requireBackdoorAccess);
+router.use("/move", requireBackdoorAccess);
+router.use("/checkFiles", requireBackdoorAccess);
+router.use("/setFolderCover", requireBackdoorAccess);
 
 const normalizeRelativePath = (inputPath = "") => {
   const normalizedPath = path.posix.normalize(`/${String(inputPath).replace(/\\/g, "/")}`);

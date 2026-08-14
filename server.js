@@ -12,6 +12,7 @@ import { getIpByReq, getUserIdByReq } from "./server/utils/index.js";
 import { limiter } from "./server/middleware/limiter.js";
 import { checkBlacklist } from "./server/middleware/blackList.js";
 import { checkPermissions } from "./server/middleware/apiPermission.js";
+import { requireBackdoorAccess } from "./server/middleware/backdoorPermission.js";
 import { validateFingerprint, validateSalt } from "./server/middleware/fingerprintValidator.js";
 import { writeRequestLog, writeFileAccessedLog } from "./server/logManager.js";
 import { MEDIA_FULL_PATH, THUMB_FULL_PATH, MEDIA_ROUTE, ENTRY_ROUTE_REGEX } from "./serverConfig.js";
@@ -115,8 +116,8 @@ app.use(express.static(path.join(__dirname, "static")));
 app.use(encryptResponse);
 
 // API路由
-app.use("/i/admin", adminRoutes);
-app.use("/i/logs", logRoutes);
+app.use("/i/admin", requireBackdoorAccess, adminRoutes);
+app.use("/i/logs", requireBackdoorAccess, logRoutes);
 app.use("/i/user", userRoutes);
 app.use("/i/backdoor", backdoorRoutes);
 app.use("/i/favorites", favoritesRoutes);
