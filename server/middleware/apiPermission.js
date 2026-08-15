@@ -1,16 +1,11 @@
 import { getIpByReq, getUserIdByReq } from "../utils/index.js"
-import { fileURLToPath } from "url";
 import fs from "fs";
-import path from "path";
+import { PERMISSION_FULL_PATH } from "../../serverConfig.js";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-const permissionsFilePath = path.join(__dirname, "../../permission.json");
 let permissions = {};
 const loadPermissions = () => {
     try {
-      const data = fs.readFileSync(permissionsFilePath, "utf8");
+      const data = fs.readFileSync(PERMISSION_FULL_PATH, "utf8");
       permissions = JSON.parse(data);
     } catch (err) {
       console.error(

@@ -1,5 +1,10 @@
 import Database from "better-sqlite3";
-const db = new Database('./database.db');
+import fs from "fs";
+import path from "path";
+import { DB_FULL_PATH } from "../serverConfig.js";
+
+fs.mkdirSync(path.dirname(DB_FULL_PATH), { recursive: true });
+const db = new Database(DB_FULL_PATH);
 
 const ensureColumnExists = (tableName, columnName, columnDefinition) => {
   const columns = db.prepare(`PRAGMA table_info(${tableName})`).all();

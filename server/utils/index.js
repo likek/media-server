@@ -3,16 +3,13 @@ import Searcher from "../ip2region.js";
 import cookie from "cookie";
 import fs from "fs";
 import path from "path";
-import { fileURLToPath } from "url";
 import useragent from "useragent";
 import ffmpeg from "fluent-ffmpeg";
 import { aesDecrypt } from "./encrypt.js";
 import { launchBrowser } from "./browser.js";
+import { IP2REGION_DB_FULL_PATH } from "../../serverConfig.js";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-const regineDBPath = path.join(__dirname, "../ip2region.xdb");
+const regineDBPath = IP2REGION_DB_FULL_PATH;
 const vectorIndex = Searcher.loadVectorIndexFromFile(regineDBPath);
 const searcher = Searcher.newWithVectorIndex(regineDBPath, vectorIndex);
 

@@ -1,18 +1,30 @@
+import fs from "fs";
 import path from "path";
-import { fileURLToPath } from "url";
 import { loadImageAsPngBuffer } from "./imageLoader.js";
+import { APP_MODEL_CACHE_FULL_PATH, MODEL_CACHE_FULL_PATH } from "../../serverConfig.js";
 
 const MODEL_ID = "Xenova/clip-vit-base-patch16";
 let instance;
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+function hasPreparedModelCache(cacheDir) {
+  return fs.existsSync(path.join(cacheDir, MODEL_ID, "onnx", "vision_model.onnx"));
+}
+
+function resolveModelCacheDir() {
+  if (hasPreparedModelCache(MODEL_CACHE_FULL_PATH)) {
+    return MODEL_CACHE_FULL_PATH;
+  }
+  if (hasPreparedModelCache(APP_MODEL_CACHE_FULL_PATH)) {
+    return APP_MODEL_CACHE_FULL_PATH;
+  }
+  return MODEL_CACHE_FULL_PATH;
+}
 
 async function getModel() {
   if (instance) return instance;
   const { env, AutoProcessor, CLIPVisionModelWithProjection, RawImage, LogLevel } = await import("@huggingface/transformers");
   env.logLevel = LogLevel.ERROR;
-  env.cacheDir = path.join(__dirname, "../../.cache");
+  env.cacheDir = resolveModelCacheDir();
   const processor = await AutoProcessor.from_pretrained(MODEL_ID);
   const vision_model = await CLIPVisionModelWithProjection.from_pretrained(MODEL_ID);
   instance = { processor, vision_model, RawImage, modelId: MODEL_ID };

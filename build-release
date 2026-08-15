@@ -1,0 +1,353 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+RELEASE_ROOT="$ROOT_DIR/release"
+SERVER_BUNDLE_SCRIPT="$ROOT_DIR/build-server-bundle"
+SERVER_BUNDLE_DIR="$ROOT_DIR/dist/server"
+BUILD_FIRST=1
+BUILD_CLEAN=0
+CREATE_ARCHIVE=0
+
+usage() {
+  cat <<'EOF'
+用法:
+  ./build-release [选项]
+
+功能:
+  1. 可选执行现有构建流程（Rust wasm + SW + 前端）
+  2. 始终生成一份后端 bundle 入口文件
+  3. 收集 bundle 后端、前端 static、node_modules、权限配置
+  4. 生成 release 目录与 start.sh / start.bat
+  5. 可选打成 tar.gz 压缩包
+
+选项:
+  --skip-build           跳过 build-all，但仍会重新生成后端 bundle
+  --clean-build          构建时不传 --skip-clean，做一次完整清理构建
+  --output-dir <目录>    指定 release 输出目录，默认 ./release
+  --archive              额外生成 tar.gz 压缩包
+  -h, --help             查看帮助
+
+示例:
+  ./build-release
+  ./build-release --skip-build
+  ./build-release --archive --output-dir /tmp/media-server-release
+EOF
+}
+
+log() {
+  printf '\n==> %s\n' "$1"
+}
+
+die() {
+  printf '错误: %s\n' "$1" >&2
+  exit 1
+}
+
+command_exists() {
+  command -v "$1" >/dev/null 2>&1
+}
+
+copy_tree() {
+  local source_path="$1"
+  local target_path="$2"
+  [[ -e "$source_path" ]] || die "缺少文件或目录: $source_path"
+  mkdir -p "$(dirname "$target_path")"
+  cp -R "$source_path" "$target_path"
+}
+
+write_start_scripts() {
+  mkdir -p "$RELEASE_ROOT/bin"
+
+  cat >"$RELEASE_ROOT/bin/start.sh" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+APP_DIR="$ROOT_DIR/app"
+RES_DIR="$ROOT_DIR/resources"
+
+pick_writable_runtime_dir() {
+  local candidate_dir="$1"
+  mkdir -p "$candidate_dir" 2>/dev/null || return 1
+
+  local probe_file="$candidate_dir/.write_test.$$"
+  if ! : >"$probe_file" 2>/dev/null; then
+    return 1
+  fi
+
+  rm -f "$probe_file"
+  return 0
+}
+
+export NODE_ENV=production
+if [[ -z "${MEDIA_SERVER_RUNTIME_DIR:-}" ]]; then
+  DEFAULT_RUNTIME_DIR="$ROOT_DIR/runtime"
+  if pick_writable_runtime_dir "$DEFAULT_RUNTIME_DIR"; then
+    export MEDIA_SERVER_RUNTIME_DIR="$DEFAULT_RUNTIME_DIR"
+  else
+    export MEDIA_SERVER_RUNTIME_DIR="$HOME/.media-server-runtime/$(basename "$ROOT_DIR")"
+    pick_writable_runtime_dir "$MEDIA_SERVER_RUNTIME_DIR" || {
+      echo "错误: 找不到可写的运行时目录" >&2
+      exit 1
+    }
+  fi
+fi
+if [[ -d "$RES_DIR" ]]; then
+  export PATH="$RES_DIR:$PATH"
+fi
+
+cd "$APP_DIR"
+exec node server.js "$@"
+EOF
+
+  cat >"$RELEASE_ROOT/bin/start.bat" <<'EOF'
+@echo off
+setlocal
+set ROOT_DIR=%~dp0..
+set APP_DIR=%ROOT_DIR%\app
+set RES_DIR=%ROOT_DIR%\resources
+set NODE_ENV=production
+if "%MEDIA_SERVER_RUNTIME_DIR%"=="" (
+  set MEDIA_SERVER_RUNTIME_DIR=%ROOT_DIR%\runtime
+  call :ensureWritableRuntimeDir "%MEDIA_SERVER_RUNTIME_DIR%"
+  if errorlevel 1 (
+    set MEDIA_SERVER_RUNTIME_DIR=%USERPROFILE%\.media-server-runtime\media-server
+    call :ensureWritableRuntimeDir "%MEDIA_SERVER_RUNTIME_DIR%"
+    if errorlevel 1 (
+      echo 错误: 找不到可写的运行时目录
+      exit /b 1
+    )
+  )
+)
+if exist "%RES_DIR%" set PATH=%RES_DIR%;%PATH%
+cd /d "%APP_DIR%"
+node server.js %*
+exit /b %ERRORLEVEL%
+
+:ensureWritableRuntimeDir
+set "RUNTIME_DIR=%~1"
+if not exist "%RUNTIME_DIR%" mkdir "%RUNTIME_DIR%" >nul 2>nul
+if not exist "%RUNTIME_DIR%" exit /b 1
+set "PROBE_FILE=%RUNTIME_DIR%\.write_test_%RANDOM%_%RANDOM%"
+break>"%PROBE_FILE%" 2>nul
+if errorlevel 1 exit /b 1
+del /f /q "%PROBE_FILE%" >nul 2>nul
+exit /b 0
+EOF
+
+  chmod +x "$RELEASE_ROOT/bin/start.sh"
+}
+
+write_release_readme() {
+  cat >"$RELEASE_ROOT/README.md" <<'EOF'
+# media-server release
+
+## 启动前准备
+
+- 需要安装 Node.js 20+，并确保 `node` 可执行
+- 建议安装 Google Chrome 或 Chromium
+- 如果 `resources/` 里没有内置 `ffmpeg` / `ffprobe` / `N_m3u8DL-RE`，请自行放入 PATH
+- 启动参数必须传 `--path <媒体目录>`，且媒体目录不能与程序目录互相包含
+- `app/resources/` 内需包含应用资源，例如 `ip2region.xdb`
+- 运行时数据默认写到：
+  - 优先 `release/runtime/`
+  - 如果该目录不可写，则回退到用户目录下的 `.media-server-runtime`
+
+## 启动方式
+
+### macOS / Linux
+
+```bash
+./bin/start.sh --path /your/media/path
+```
+
+### Windows
+
+```bat
+bin\start.bat --path D:\media
+```
+
+## 默认访问地址
+
+- `http://127.0.0.1:7777`
+
+## 目录说明
+
+- `app/`：bundle 后端入口、前端 static、应用资源、node_modules、权限配置
+- `bin/`：启动脚本
+- `resources/`：可选附带的 ffmpeg / ffprobe / N_m3u8DL-RE
+- `runtime/`：预留给日志、缓存等运行时文件
+EOF
+}
+
+copy_optional_tool() {
+  local tool_name="$1"
+  if ! command_exists "$tool_name"; then
+    return
+  fi
+
+  local tool_path
+  tool_path="$(command -v "$tool_name")"
+  if [[ ! -f "$tool_path" ]]; then
+    return
+  fi
+
+  mkdir -p "$RELEASE_ROOT/resources"
+  cp "$tool_path" "$RELEASE_ROOT/resources/"
+}
+
+copy_optional_model_cache() {
+  local source_cache_dir="$ROOT_DIR/.cache/Xenova/clip-vit-base-patch16"
+  local target_cache_dir="$RELEASE_ROOT/app/resources/model-cache/Xenova/clip-vit-base-patch16"
+
+  if [[ ! -f "$source_cache_dir/onnx/vision_model.onnx" ]]; then
+    return
+  fi
+
+  mkdir -p "$(dirname "$target_cache_dir")"
+  cp -R "$source_cache_dir" "$target_cache_dir"
+}
+
+prune_release_artifacts() {
+  log "精简 release 产物"
+
+  rm -f "$RELEASE_ROOT/app/static/report.html"
+  rm -rf "$RELEASE_ROOT/app/node_modules/.bin"
+
+  # 当前 bundle 后端入口未引用这两个顶层依赖，删除可直接减小体积。
+  rm -rf "$RELEASE_ROOT/app/node_modules/axios"
+  rm -rf "$RELEASE_ROOT/app/node_modules/glob"
+}
+
+verify_runtime_inputs() {
+  [[ -f "$SERVER_BUNDLE_DIR/server.js" ]] || die "缺少后端 bundle，请先执行 ./build-server-bundle"
+  [[ -d "$ROOT_DIR/static" ]] || die "缺少 static 目录，请先构建前端"
+  [[ -d "$ROOT_DIR/node_modules" ]] || die "缺少 node_modules，请先安装后端依赖"
+  [[ -f "$ROOT_DIR/package.json" ]] || die "缺少 package.json"
+  [[ -f "$ROOT_DIR/permission.json" ]] || die "缺少 permission.json"
+}
+
+run_build() {
+  local build_args=()
+  if [[ "$BUILD_CLEAN" -eq 0 ]]; then
+    build_args+=(--skip-clean)
+  fi
+
+  log "执行项目构建流程"
+  (
+    cd "$ROOT_DIR"
+    ./build-all "${build_args[@]}"
+  )
+}
+
+run_server_bundle() {
+  [[ -x "$SERVER_BUNDLE_SCRIPT" ]] || die "缺少可执行的 build-server-bundle 脚本"
+
+  log "生成后端 bundle"
+  (
+    cd "$ROOT_DIR"
+    "$SERVER_BUNDLE_SCRIPT"
+  )
+}
+
+prepare_release_tree() {
+  log "清理旧 release 目录"
+  rm -rf "$RELEASE_ROOT"
+  mkdir -p "$RELEASE_ROOT/app/resources" "$RELEASE_ROOT/resources" "$RELEASE_ROOT/runtime/logs" "$RELEASE_ROOT/runtime/data"
+
+  log "复制运行产物"
+  copy_tree "$SERVER_BUNDLE_DIR/server.js" "$RELEASE_ROOT/app/server.js"
+  copy_tree "$ROOT_DIR/package.json" "$RELEASE_ROOT/app/package.json"
+  copy_tree "$ROOT_DIR/permission.json" "$RELEASE_ROOT/app/permission.json"
+  copy_tree "$ROOT_DIR/static" "$RELEASE_ROOT/app/static"
+  copy_tree "$ROOT_DIR/node_modules" "$RELEASE_ROOT/app/node_modules"
+  if [[ -d "$ROOT_DIR/resources" ]]; then
+    cp -R "$ROOT_DIR/resources/." "$RELEASE_ROOT/app/resources/"
+  fi
+  copy_optional_model_cache
+  if [[ ! -f "$RELEASE_ROOT/app/resources/ip2region.xdb" && -f "$ROOT_DIR/server/ip2region.xdb" ]]; then
+    copy_tree "$ROOT_DIR/server/ip2region.xdb" "$RELEASE_ROOT/app/resources/ip2region.xdb"
+  fi
+  chmod 644 "$RELEASE_ROOT/app/permission.json" 2>/dev/null || true
+  if [[ -f "$RELEASE_ROOT/app/resources/ip2region.xdb" ]]; then
+    chmod 644 "$RELEASE_ROOT/app/resources/ip2region.xdb" 2>/dev/null || true
+  fi
+  if [[ -d "$RELEASE_ROOT/app/resources/model-cache" ]]; then
+    chmod -R a+rX "$RELEASE_ROOT/app/resources/model-cache" 2>/dev/null || true
+  fi
+
+  prune_release_artifacts
+
+  printf '%s\n' "$(date '+%Y-%m-%d %H:%M:%S')" >"$RELEASE_ROOT/VERSION"
+
+  log "收集可选外部工具"
+  copy_optional_tool ffmpeg
+  copy_optional_tool ffprobe
+  copy_optional_tool N_m3u8DL-RE
+
+  write_start_scripts
+  write_release_readme
+}
+
+create_archive() {
+  local release_name
+  release_name="$(basename "$RELEASE_ROOT")"
+  local archive_parent
+  archive_parent="$(dirname "$RELEASE_ROOT")"
+  local archive_path="${archive_parent}/${release_name}.tar.gz"
+
+  log "生成压缩包 ${archive_path}"
+  rm -f "$archive_path"
+  (
+    cd "$archive_parent"
+    tar -czf "$archive_path" "$release_name"
+  )
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --skip-build)
+      BUILD_FIRST=0
+      shift
+      ;;
+    --clean-build)
+      BUILD_CLEAN=1
+      shift
+      ;;
+    --output-dir)
+      [[ $# -ge 2 ]] || die "--output-dir 需要一个目录参数"
+      RELEASE_ROOT="$2"
+      shift 2
+      ;;
+    --archive)
+      CREATE_ARCHIVE=1
+      shift
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      die "未知参数: $1"
+      ;;
+  esac
+done
+
+if [[ "$BUILD_FIRST" -eq 1 ]]; then
+  run_build
+fi
+
+run_server_bundle
+verify_runtime_inputs
+prepare_release_tree
+
+if [[ "$CREATE_ARCHIVE" -eq 1 ]]; then
+  create_archive
+fi
+
+log "release 目录已生成"
+printf '输出目录: %s\n' "$RELEASE_ROOT"
+printf '启动命令 (macOS/Linux): %s\n' "./bin/start.sh --path /your/media/path"
+printf '启动命令 (Windows): %s\n' "bin\\start.bat --path D:\\media"

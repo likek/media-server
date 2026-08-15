@@ -5,6 +5,16 @@ import fs from "fs";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const PROJECT_FULL_PATH = path.resolve(__dirname);
+const RUNTIME_FULL_PATH = path.resolve(process.env.MEDIA_SERVER_RUNTIME_DIR || PROJECT_FULL_PATH);
+const DB_FULL_PATH = path.join(RUNTIME_FULL_PATH, "database.db");
+const APP_RESOURCES_FULL_PATH = path.join(PROJECT_FULL_PATH, "resources");
+const APP_MODEL_CACHE_FULL_PATH = path.join(APP_RESOURCES_FULL_PATH, "model-cache");
+const PERMISSION_FULL_PATH = path.join(PROJECT_FULL_PATH, "permission.json");
+const LEGACY_IP2REGION_DB_FULL_PATH = path.join(PROJECT_FULL_PATH, "server", "ip2region.xdb");
+const IP2REGION_DB_FULL_PATH = fs.existsSync(path.join(APP_RESOURCES_FULL_PATH, "ip2region.xdb"))
+    ? path.join(APP_RESOURCES_FULL_PATH, "ip2region.xdb")
+    : LEGACY_IP2REGION_DB_FULL_PATH;
+const MODEL_CACHE_FULL_PATH = path.join(RUNTIME_FULL_PATH, ".cache");
 
 // 解析命令行参数
 function parseCommandLineArgs() {
@@ -26,10 +36,10 @@ function parseCommandLineArgs() {
 const cmdArgs = parseCommandLineArgs();
 
 // 项目内部固定路径
-const TRASH_FULL_PATH = path.join(PROJECT_FULL_PATH, "./.trash");
-const THUMB_FULL_PATH = path.join(__dirname, "./.thumbnails");
-const TEMP_FULL_PATH = path.join(__dirname, "./.temp");
-const HLS_SOURCE_DIR = path.join(__dirname, "./.hls_source");
+const TRASH_FULL_PATH = path.join(RUNTIME_FULL_PATH, "./.trash");
+const THUMB_FULL_PATH = path.join(RUNTIME_FULL_PATH, "./.thumbnails");
+const TEMP_FULL_PATH = path.join(RUNTIME_FULL_PATH, "./.temp");
+const HLS_SOURCE_DIR = path.join(RUNTIME_FULL_PATH, "./.hls_source");
 const HIDDEN_MENU_HOME_TAP_PASSWORD = String(process.env.HIDDEN_MENU_HOME_TAP_PASSWORD || "4253")
     .replace(/[^2-9]/g, "")
     .slice(0, 8) || "4253";
@@ -71,6 +81,13 @@ export {
     MEDIA_ROUTE,
     THUMB_ROUTE,
     PROJECT_FULL_PATH,
+    RUNTIME_FULL_PATH,
+    DB_FULL_PATH,
+    APP_RESOURCES_FULL_PATH,
+    APP_MODEL_CACHE_FULL_PATH,
+    PERMISSION_FULL_PATH,
+    IP2REGION_DB_FULL_PATH,
+    MODEL_CACHE_FULL_PATH,
     MEDIA_FULL_PATH,
     TRASH_FULL_PATH,
     THUMB_FULL_PATH,
