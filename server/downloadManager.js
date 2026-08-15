@@ -3,30 +3,155 @@ import { exec } from "child_process";
 import { v4 as uuidv4 } from "uuid";
 import fs from "fs";
 import path from "path";
+import { Readable } from "stream";
+import { pipeline } from "stream/promises";
 import chalk from "chalk";
 import { TEMP_FULL_PATH, MEDIA_FULL_PATH } from "../serverConfig.js";
 import pLimit from 'p-limit';
-import { launchBrowser } from "./utils/browser.js";
 const limit = pLimit(5) // 最多同时5个
 
-let browser
+const DEFAULT_DOWNLOAD_HEADERS = {
+  'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126 Safari/537.36',
+  accept: '*/*'
+}
 
-async function initBrowser() {
-  if (!browser) {
-    browser = await launchBrowser()
+const CONTENT_TYPE_EXTENSION_MAP = {
+  'application/x-msdownload': '.exe',
+  'application/octet-stream': '.bin',
+  'application/json': '.json',
+  'application/javascript': '.js',
+  'application/pdf': '.pdf',
+  'application/zip': '.zip',
+  'application/x-zip-compressed': '.zip',
+  'application/vnd.android.package-archive': '.apk',
+  'application/xml': '.xml',
+  'application/xhtml+xml': '.html',
+  'image/png': '.png',
+  'image/jpeg': '.jpg',
+  'image/gif': '.gif',
+  'image/webp': '.webp',
+  'image/svg+xml': '.svg',
+  'audio/mpeg': '.mp3',
+  'video/mp4': '.mp4',
+  'text/plain': '.txt',
+  'text/html': '.html',
+  'text/css': '.css',
+  'text/javascript': '.js',
+  'text/xml': '.xml',
+  'text/csv': '.csv'
+}
+
+function normalizeTextDownloadLink(rawLink) {
+  if (!rawLink) {
+    return null
+  }
+
+  const candidate = rawLink.trim().replace(/^['"`]+|['"`]+$/g, '')
+  if (!candidate) {
+    return null
+  }
+
+  const normalizedLink = candidate.startsWith('://') ? `https${candidate}` : candidate
+
+  try {
+    const url = new URL(normalizedLink)
+    if (!['http:', 'https:'].includes(url.protocol)) {
+      return null
+    }
+    return url.toString()
+  } catch {
+    return null
+  }
+}
+
+function getFilenameFromContentDisposition(contentDisposition = '') {
+  if (!contentDisposition) {
+    return ''
+  }
+
+  const utf8Match = contentDisposition.match(/filename\*=UTF-8''([^;]+)/i)
+  if (utf8Match?.[1]) {
+    try {
+      return decodeURIComponent(utf8Match[1])
+    } catch {
+      return utf8Match[1]
+    }
+  }
+
+  const basicMatch = contentDisposition.match(/filename="?([^";]+)"?/i)
+  return basicMatch?.[1] || ''
+}
+
+function resolveDownloadExtension(link, response) {
+  const contentDisposition = response.headers.get('content-disposition') || ''
+  const filenameFromHeader = getFilenameFromContentDisposition(contentDisposition)
+  const extFromHeader = filenameFromHeader ? path.extname(filenameFromHeader) : ''
+
+  if (extFromHeader) {
+    return extFromHeader
+  }
+
+  const pathname = decodeURIComponent(new URL(link).pathname)
+  const extFromPath = path.extname(pathname)
+  if (extFromPath) {
+    return extFromPath
+  }
+
+  const contentType = (response.headers.get('content-type') || '').split(';')[0].trim().toLowerCase()
+  return CONTENT_TYPE_EXTENSION_MAP[contentType] || '.bin'
+}
+
+async function downloadBinaryFile(link, downloadDir, saveName) {
+  const response = await fetch(link, {
+    redirect: 'follow',
+    headers: DEFAULT_DOWNLOAD_HEADERS
+  })
+
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status} ${response.statusText}`)
+  }
+
+  if (!response.body) {
+    throw new Error('响应体为空')
+  }
+
+  const ext = resolveDownloadExtension(link, response)
+  const savePath = path.join(downloadDir, `${saveName}${ext}`)
+  const fileStream = fs.createWriteStream(savePath)
+
+  try {
+    await pipeline(Readable.fromWeb(response.body), fileStream)
+    return savePath
+  } catch (error) {
+    fileStream.destroy()
+    if (fs.existsSync(savePath)) {
+      fs.unlinkSync(savePath)
+    }
+    throw error
   }
 }
 
 async function downloadAllMediaByLinks(text, folder, successItemCb, processLog = '') {
     console.log(`${processLog}开始下载：`, text.length > 300 ? `${text.slice(0, 300)}......` : text, folder)
-    // Match HTTP links
-    const urlRegex = /https?:\/\/[^\s]+/g;
-    const allLinks = text.match(urlRegex) || [];
-    const validLinkRegex =
-      /https?:\/\/[^\s]+?\.(m3u8|mp4|ts|avi|mkv|mov|m4v|wmv|webm|flv|ogv|mpeg|pdf|png|jpg|mp3|txt|zip|exe|apk|webp)(\?[^\s]*)?/i;
-  
-    const links = allLinks.filter((link) => validLinkRegex.test(link));
-    const ignoreLinks = allLinks.filter((link) => !validLinkRegex.test(link));
+    // Accept any HTTP(S) style link and leave file-type handling to download time.
+    const urlCandidateRegex = /(?:https?:\/\/|:\/\/)[^\s]+/g;
+    const urlCandidates = text.match(urlCandidateRegex) || [];
+    const links = [];
+    const ignoreLinks = [];
+    const seenLinks = new Set();
+
+    for (const candidate of urlCandidates) {
+      const normalizedLink = normalizeTextDownloadLink(candidate);
+      if (!normalizedLink) {
+        ignoreLinks.push(candidate);
+        continue;
+      }
+      if (seenLinks.has(normalizedLink)) {
+        continue;
+      }
+      seenLinks.add(normalizedLink);
+      links.push(normalizedLink);
+    }
   
     // Match base64-encoded images
     const base64Regex = /data:image\/(png|jpeg|jpg|gif);base64,([a-zA-Z0-9+/=]+)/g;
@@ -75,7 +200,7 @@ async function downloadAllMediaByLinks(text, folder, successItemCb, processLog =
         'batch_download',
         `${Date.now()}`
       )
-      const m3u8Regex = /https?:\/\/[^\s]+?\.m3u8(\?[^\s]*)?/i
+      const m3u8Regex = /\.m3u8(?:$|[?#])/i
       const saveName = `${Date.now()}${Math.floor(Math.random() * 100000)}`
   
       if (m3u8Regex.test(link)) {
@@ -116,15 +241,8 @@ async function downloadAllMediaByLinks(text, folder, successItemCb, processLog =
         })
       } else {
         try {
-          const urlObj = new URL(link)
-          const pathname = urlObj.pathname
-          const ext = path.extname(pathname) || '.bin' // 没有就默认一个后缀
-          const savePath = path.join(downloadDir, `${saveName}${ext}`)
-
-          const page = await browser.newPage()
-          const response = await page.goto(link, { waitUntil: 'networkidle2' })
-          const buffer = await response.buffer()
-          fs.writeFileSync(savePath, buffer)
+          const savePath = await downloadBinaryFile(link, downloadDir, saveName)
+          console.log(`${processLog}已保存到: ${savePath}`)
           console.log(`${chalk.green(`${processLog}下载成功`)}: ${link}`)
         } catch (err) {
           console.error(`${chalk.red(`${processLog}下载失败`)}: ${link}`, err)
@@ -167,7 +285,6 @@ async function downloadAllMediaByLinks(text, folder, successItemCb, processLog =
       });
     };
   
-    await initBrowser()
     // 并行下载所有 HTTP 链接和保存 base64 图片
     await Promise.all([
       ...links.map(link => limit(() => downloadLink(link))),
