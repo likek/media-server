@@ -36,6 +36,21 @@ const normalizeRelativePath = (inputPath = "") => {
   return normalizedPath.replace(/^\/+/, "").replace(/^(\.\.(\/|$))+/, "");
 };
 
+const sanitizeUploadedFilename = (rawName = "") => {
+  const decodedName = Buffer.from(String(rawName), "latin1").toString("utf-8");
+  const cleanedName = decodedName
+    .replace(/\0/g, "")
+    .replace(/[\\/]/g, "_")
+    .replace(/[\u0001-\u001f\u007f]/g, "")
+    .trim();
+
+  if (!cleanedName || cleanedName === "." || cleanedName === "..") {
+    return `upload_${Date.now()}`;
+  }
+
+  return cleanedName;
+};
+
 const resolveUploadFolderPath = (req) => {
   const parentId = req.query.parentId;
   if (parentId !== undefined && parentId !== null && parentId !== "") {
@@ -50,7 +65,7 @@ const resolveUploadFolderPath = (req) => {
 };
 
 const buildUploadFilename = (uploadPath, originalName) => {
-  const decodedName = Buffer.from(originalName, "latin1").toString("utf-8");
+  const decodedName = sanitizeUploadedFilename(originalName);
   const info = path.parse(decodedName);
   const preferredName = decodedName;
   const preferredPath = path.join(uploadPath, preferredName);
@@ -299,7 +314,7 @@ router.post("/upload", upload.single("file"), async (req, res) => {
   try {
     const folderPath = resolveUploadFolderPath(req);
     
-    const filename = Buffer.from(req.file.filename, "latin1").toString("utf-8");
+    const filename = req.file.filename;
     const filePath = path.join(MEDIA_FULL_PATH, folderPath, filename);
 
     // 确保缩略图目录存在

@@ -201,6 +201,10 @@ const detectImageExtension = async (filePath) => {
 
 const ffprobeAsync = (filePath) =>
   new Promise((resolve, reject) => {
+    if (String(filePath).includes("\0")) {
+      reject(new Error("file path contains null byte"));
+      return;
+    }
     ffmpeg.ffprobe(filePath, (err, metadata) => {
       if (err) return reject(err);
       resolve(metadata);

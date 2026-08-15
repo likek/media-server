@@ -13,6 +13,12 @@ const regineDBPath = IP2REGION_DB_FULL_PATH;
 const vectorIndex = Searcher.loadVectorIndexFromFile(regineDBPath);
 const searcher = Searcher.newWithVectorIndex(regineDBPath, vectorIndex);
 
+const assertNoNullByteInPath = (filePath) => {
+  if (String(filePath).includes("\0")) {
+    throw new Error("file path contains null byte");
+  }
+};
+
 const normalizeIp = (ip) => {
   if (!ip) {
     return "unknown ip";
@@ -142,6 +148,8 @@ const getUserIdByReq = (req, decrypted = true) => {
 
 // 生成视频文件缩略图
 async function generateThumbnail(videoPath, thumbnailPath, time = "80%") {
+  assertNoNullByteInPath(videoPath);
+  assertNoNullByteInPath(thumbnailPath);
   // 确保缩略图目录存在
   const thumbnailDir = path.dirname(thumbnailPath);
   const thumbnailFileName = path.basename(thumbnailPath);
