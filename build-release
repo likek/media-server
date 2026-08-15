@@ -210,6 +210,14 @@ copy_optional_model_cache() {
   cp -R "$source_cache_dir" "$target_cache_dir"
 }
 
+write_release_package_json() {
+  cat >"$RELEASE_ROOT/app/package.json" <<'EOF'
+{
+  "type": "module"
+}
+EOF
+}
+
 prune_release_artifacts() {
   log "精简 release 产物"
 
@@ -259,7 +267,7 @@ prepare_release_tree() {
 
   log "复制运行产物"
   copy_tree "$SERVER_BUNDLE_DIR/server.js" "$RELEASE_ROOT/app/server.js"
-  copy_tree "$ROOT_DIR/package.json" "$RELEASE_ROOT/app/package.json"
+  write_release_package_json
   copy_tree "$ROOT_DIR/permission.json" "$RELEASE_ROOT/app/permission.json"
   copy_tree "$ROOT_DIR/static" "$RELEASE_ROOT/app/static"
   copy_tree "$ROOT_DIR/node_modules" "$RELEASE_ROOT/app/node_modules"
