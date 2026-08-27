@@ -23,7 +23,7 @@
         </el-tooltip>
         <el-tooltip content="重建图片索引" placement="bottom">
           <el-button :disabled="isBackdoorActionDisabled('rebuildImageHash')" @click="confirmRebuildImageHash"><el-icon>
-              <RefreshRight />
+              <Collection />
             </el-icon></el-button>
         </el-tooltip>
         <el-tooltip content="新建文件夹" placement="bottom">
@@ -1100,6 +1100,14 @@ onUnmounted(() => {
 
 .move-dialog-content {
   margin-bottom: 20px;
+  max-height: calc(100vh - 360px);
+  overflow-y: auto;
+  padding-right: 4px;
+  box-sizing: border-box;
+}
+
+.move-dialog-content p {
+  margin-top: 0;
 }
 
 

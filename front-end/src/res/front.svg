@@ -1,0 +1,10 @@
+<svg width="80" height="80" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path d="M6.33835 60.1667L4.9967 37.1503C4.8692 34.963 6.60867 33.1191 8.79977 33.1191H23.1784C24.0695 33.1191 24.8553 33.7028 25.1129 34.5558L26.0349 37.6098C26.2924 38.4628 27.0783 39.0465 27.9694 39.0465H71.1538C73.362 39.0465 75.1076 40.9179 74.9542 43.1207L73.7623 60.2344C73.5433 63.3787 70.9287 65.8176 67.7768 65.8176H12.3282C9.15009 65.8176 6.52329 63.3394 6.33835 60.1667Z" fill="url(#folderFrontGradient)"/>
+<defs>
+<linearGradient id="folderFrontGradient" x1="39.9763" y1="33.1191" x2="39.9763" y2="65.8176" gradientUnits="userSpaceOnUse">
+<stop stop-color="#C7E0FF"/>
+<stop offset="0.4" stop-color="#B3D6FF"/>
+<stop offset="1" stop-color="#79B2F2"/>
+</linearGradient>
+</defs>
+</svg>

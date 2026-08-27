@@ -53,7 +53,7 @@
             </el-tooltip>
             <el-tooltip content="移动" placement="top" :auto-close="1000" v-if="allowActions.includes('move')">
               <el-icon class="action-icon" :class="{ 'is-disabled': isActionDisabled('move') }" @click.stop="emitProtected('move', displayFile, 'move')">
-                <Position />
+                <Right />
               </el-icon>
             </el-tooltip>
             <el-tooltip content="下载" placement="top" :auto-close="1000" v-if="allowActions.includes('download')">

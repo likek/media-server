@@ -18,7 +18,7 @@
             </el-tooltip>
             <el-tooltip content="移动" placement="top" :auto-close="1000" v-if="allowActions.includes('move')">
               <el-icon class="action-icon" :class="{ 'is-disabled': isActionDisabled('move') }" @click.stop="emitProtected('move', folder, 'move')">
-                <Position />
+                <Right />
               </el-icon>
             </el-tooltip>
             <el-tooltip content="删除" placement="top" :auto-close="1000" v-if="allowActions.includes('delete')">
@@ -28,8 +28,16 @@
             </el-tooltip>
           </div>
         </div>
-        <div v-if="coverSrc" class="folder-cover-wrap">
-          <el-image :src="coverSrc" fit="cover" class="folder-cover" />
+        <div class="folder-cover-wrap">
+          <img :src="folderBackSvg" class="folder-cover-back" alt="" aria-hidden="true" />
+          <div class="folder-cover-frame">
+            <div class="folder-cover-sheet" aria-hidden="true"></div>
+            <el-image v-if="coverSrc" :src="coverSrc" fit="cover" class="folder-cover" />
+            <div v-else class="folder-cover folder-cover-placeholder" aria-hidden="true">
+              <el-icon class="folder-cover-placeholder-icon"><Document /></el-icon>
+            </div>
+          </div>
+          <img :src="folderFrontSvg" class="folder-cover-front" alt="" aria-hidden="true" />
         </div>
         <div>
           <span class="folder-name">{{ folder.filename }}</span>
@@ -50,6 +58,8 @@
 import { computed, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { addToFavorites, removeFromFavorites } from '../services/favoritesApi'
+import folderBackSvg from '../res/back.svg'
+import folderFrontSvg from '../res/front.svg'
 
 const props = defineProps({
   folder: {
@@ -168,15 +178,81 @@ const toggleFavorite = async () => {
 }
 
 .folder-cover-wrap {
-  margin-bottom: 12px;
+  position: relative;
+  width: 100%;
+  max-width: 340px;
+  aspect-ratio: 1 / 1;
+  margin: 0 auto 12px;
+  overflow: hidden;
+}
+
+.folder-cover-back,
+.folder-cover-front {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+  transform-origin: center center;
+}
+
+.folder-cover-back {
+  z-index: 1;
+  transform: scale(1.14) translateY(-1%);
+}
+
+.folder-cover-frame {
+  position: absolute;
+  left: 11%;
+  right: 11%;
+  top: 18%;
+  bottom: 24%;
+  z-index: 2;
+  border-radius: 12px;
+}
+
+.folder-cover-sheet,
+.folder-cover {
+  position: absolute;
+  border-radius: 12px;
+}
+
+.folder-cover-sheet {
+  top: 4px;
+  left: 12px;
+  right: 26px;
+  bottom: 12px;
+  background: linear-gradient(180deg, #d8dbdf 0%, #cfd2d6 100%);
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.08);
+  z-index: 1;
 }
 
 .folder-cover {
-  display: block;
-  width: 100%;
-  height: 300px;
-  border-radius: 6px;
-  background-color: #e4e7ed;
+  top: 10px;
+  left: 0;
+  width: calc(100% - 18px);
+  height: calc(100% - 26px);
+  background-color: #dfe8f5;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.12);
+  z-index: 2;
+}
+
+.folder-cover-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(180deg, #eef4fb 0%, #dbe7f6 100%);
+}
+
+.folder-cover-placeholder-icon {
+  font-size: 72px;
+  color: #cfd2d6;
+}
+
+.folder-cover-front {
+  z-index: 3;
+  transform: scale(1.14) translateY(6%);
 }
 
 .folder-icon {

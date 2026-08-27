@@ -40,6 +40,7 @@ import {
   List,
   Box,
   MoreFilled,
+  Right,
 } from '@element-plus/icons-vue'
 
 import { videoMiddlewareInit } from './utils/videoMiddleware.js'
@@ -82,6 +83,7 @@ const icons = [
   List,
   Box,
   MoreFilled,
+  Right,
 ]
 
 icons.forEach(icon => {
