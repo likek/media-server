@@ -71,7 +71,7 @@ export const deleteFileOrFolder = async (id, type) => {
 }
 
 // 上传文件
-export const uploadFileToServer = async (file, parentId, onProgress) => {
+export const uploadFileToServer = async (file, parentId, onProgress, options = {}) => {
   const formData = new FormData()
   formData.append('file', file)
   
@@ -83,6 +83,7 @@ export const uploadFileToServer = async (file, parentId, onProgress) => {
       'Content-Type': 'multipart/form-data'
     },
     timeout: 3 * 60 * 60 * 1000,
+    signal: options.signal,
     onUploadProgress: (progressEvent) => {
       const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total)
       if (onProgress) onProgress(percentCompleted)

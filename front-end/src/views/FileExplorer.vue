@@ -48,9 +48,8 @@
             </el-icon>
           </el-button>
         </el-tooltip>
-        <input ref="fileInput" type="file" style="display: none" @change="uploadFile" />
+        <input ref="fileInput" type="file" multiple style="display: none" @change="uploadFile" />
         <input ref="imageSearchInput" type="file" accept="image/*" style="display: none" @change="searchByImageFile" />
-        <el-progress v-if="uploading" :percentage="uploadProgress" />
       </div>
       <!-- 面包屑导航 -->
       <div class="path-navigation">
@@ -67,7 +66,18 @@
       </div>
     </div>
 
-    <div class="media-container" ref="mediaContainer">
+    <div
+      ref="mediaContainer"
+      :class="['media-container', { 'is-drag-active': isDragActive }]"
+      @dragenter.prevent="handleDragEnter"
+      @dragover.prevent="handleDragOver"
+      @dragleave.prevent="handleDragLeave"
+      @drop.prevent="handleDropUpload"
+    >
+      <div v-if="isDragActive" class="upload-drop-hint">
+        <div class="upload-drop-hint__title">拖拽到这里上传</div>
+        <div class="upload-drop-hint__desc">目标目录：{{ currentFolderLabel }}</div>
+      </div>
       <template v-if="files.length === 0">
         <el-empty :description="'没有文件'" />
       </template>
@@ -88,6 +98,19 @@
         </div>
       </template>
     </div>
+
+    <upload-queue-panel
+      v-if="uploadTasks.length"
+      :tasks="uploadTasks"
+      :summary="uploadPanelSummary"
+      :completed-count="completedUploadCount"
+      :collapsed="isUploadPanelCollapsed"
+      @clear-completed="clearCompletedUploads"
+      @toggle="toggleUploadPanel"
+      @retry="retryUploadTask"
+      @cancel="cancelUploadTask"
+      @remove="removeUploadTask"
+    />
 
     <!-- 创建文件夹对话框 -->
     <el-dialog v-model="createFolderDialogVisible" title="新建文件夹" width="80%">
@@ -231,6 +254,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import FolderItem from '../components/FolderItem.vue'
 import FileItem from '../components/FileItem.vue'
 import TextViewerDialog from '../components/TextViewerDialog.vue'
+import UploadQueuePanel from '../components/UploadQueuePanel.vue'
 import { getFiles, updateCache, checkFiles, cleanDb, createNewFolder, renameFile, deleteFileOrFolder, uploadFileToServer, downloadFromText, moveFile, convertFileToMp4, getFolderInfo, searchByImage, rebuildImageHash } from '../services/userApi'
 import { useBackdoorMenuAccess } from '../composables/useBackdoorMenuAccess'
 import { createEncryptedUrl } from '../utils/videoMiddleware'
@@ -248,10 +272,15 @@ const { backdoorMenuAccessState, trackHomeTap } = useBackdoorMenuAccess()
 const files = ref([])
 const searchInput = ref('')
 const loading = ref(false)
-const uploading = ref(false)
-const uploadProgress = ref(0)
 const fileInput = ref(null)
 const imageSearchInput = ref(null)
+const uploadTasks = ref([])
+const isUploadPanelCollapsed = ref(false)
+const isDragActive = ref(false)
+const dragCounter = ref(0)
+const uploadQueueRunning = ref(false)
+const uploadTaskIdSeed = ref(0)
+let uploadRefreshTimer = null
 const isImageSearchRoute = (query) => {
   return Boolean(query?.img_search)
 }
@@ -290,6 +319,36 @@ const redDotShow = computed(() => {
   return route.query.query || route.query.end_date || route.query.start_date || route.query.mime_type || route.query.type || route.query.space
 })
 
+const currentFolderId = computed(() => route.params.id || null)
+const currentFolderLabel = computed(() => {
+  return breadcrumbPath.value.length > 0 ? breadcrumbPath.value[breadcrumbPath.value.length - 1].name : '根目录'
+})
+
+const queuedUploadCount = computed(() => {
+  return uploadTasks.value.filter(task => task.status === 'queued').length
+})
+
+const activeUploadCount = computed(() => {
+  return uploadTasks.value.filter(task => task.status === 'uploading').length
+})
+
+const failedUploadCount = computed(() => {
+  return uploadTasks.value.filter(task => task.status === 'failed').length
+})
+
+const completedUploadCount = computed(() => {
+  return uploadTasks.value.filter(task => task.status === 'success' || task.status === 'canceled').length
+})
+
+const uploadPanelSummary = computed(() => {
+  const parts = []
+  if (activeUploadCount.value > 0) parts.push(`上传中 ${activeUploadCount.value}`)
+  if (queuedUploadCount.value > 0) parts.push(`等待 ${queuedUploadCount.value}`)
+  if (failedUploadCount.value > 0) parts.push(`失败 ${failedUploadCount.value}`)
+  if (completedUploadCount.value > 0) parts.push(`完成 ${completedUploadCount.value}`)
+  return parts.join('，') || '暂无任务'
+})
+
 // 文本查看对话框状态
 const txtDialogVisible = ref(false)
 
@@ -299,6 +358,170 @@ const imageList = computed(() => {
     return ['jpg', 'jpeg', 'png', 'gif', 'webp', 'heic', 'heif', 'bmp'].includes(ext)
   })
 })
+
+const isCanceledError = (error) => {
+  return error?.code === 'ERR_CANCELED' || error?.name === 'CanceledError'
+}
+
+const normalizeUploadError = (error) => {
+  if (isCanceledError(error)) {
+    return ''
+  }
+  return error?.response?.data?.message || error?.message || '上传失败'
+}
+
+const createUploadTask = (file, parentId, folderName) => {
+  uploadTaskIdSeed.value += 1
+  return {
+    id: `upload-${Date.now()}-${uploadTaskIdSeed.value}`,
+    file,
+    parentId,
+    folderName,
+    progress: 0,
+    status: 'queued',
+    error: '',
+    controller: null
+  }
+}
+
+const scheduleRefreshAfterUpload = (parentId) => {
+  if (String(parentId ?? '') !== String(currentFolderId.value ?? '')) {
+    return
+  }
+  if (uploadRefreshTimer) {
+    clearTimeout(uploadRefreshTimer)
+  }
+  uploadRefreshTimer = setTimeout(() => {
+    loadFiles()
+    uploadRefreshTimer = null
+  }, 500)
+}
+
+const runUploadTask = async (task) => {
+  task.status = 'uploading'
+  task.progress = 0
+  task.error = ''
+  task.controller = new AbortController()
+
+  try {
+    await uploadFileToServer(task.file, task.parentId, (progress) => {
+      task.progress = Math.round(progress)
+    }, {
+      signal: task.controller.signal
+    })
+    task.progress = 100
+    task.status = 'success'
+    scheduleRefreshAfterUpload(task.parentId)
+  } catch (error) {
+    if (isCanceledError(error)) {
+      task.status = 'canceled'
+    } else {
+      task.status = 'failed'
+      task.error = normalizeUploadError(error)
+    }
+  } finally {
+    task.controller = null
+  }
+}
+
+const processUploadQueue = async () => {
+  if (uploadQueueRunning.value) {
+    return
+  }
+  uploadQueueRunning.value = true
+
+  try {
+    while (true) {
+      const nextTask = uploadTasks.value.find(task => task.status === 'queued')
+      if (!nextTask) {
+        break
+      }
+      await runUploadTask(nextTask)
+    }
+  } finally {
+    uploadQueueRunning.value = false
+  }
+}
+
+const enqueueUploadFiles = (fileList, parentId = currentFolderId.value, folderName = currentFolderLabel.value) => {
+  const filesToUpload = Array.from(fileList || []).filter(file => file instanceof File)
+  if (filesToUpload.length === 0) {
+    return
+  }
+
+  const tasks = filesToUpload.map(file => createUploadTask(file, parentId, folderName))
+  uploadTasks.value.push(...tasks)
+  ElMessage.success(`已加入上传队列 ${tasks.length} 个文件`)
+  processUploadQueue()
+}
+
+const cancelUploadTask = (task) => {
+  if (task.status === 'queued') {
+    task.status = 'canceled'
+    return
+  }
+  if (task.status === 'uploading' && task.controller) {
+    task.controller.abort()
+  }
+}
+
+const retryUploadTask = (task) => {
+  task.status = 'queued'
+  task.progress = 0
+  task.error = ''
+  processUploadQueue()
+}
+
+const removeUploadTask = (taskId) => {
+  uploadTasks.value = uploadTasks.value.filter(task => task.id !== taskId)
+}
+
+const clearCompletedUploads = () => {
+  uploadTasks.value = uploadTasks.value.filter(task => !['success', 'canceled'].includes(task.status))
+}
+
+const toggleUploadPanel = () => {
+  isUploadPanelCollapsed.value = !isUploadPanelCollapsed.value
+}
+
+const isFileDragEvent = (event) => {
+  return Array.from(event.dataTransfer?.types || []).includes('Files')
+}
+
+const handleDragEnter = (event) => {
+  if (!isFileDragEvent(event)) {
+    return
+  }
+  dragCounter.value += 1
+  isDragActive.value = true
+}
+
+const handleDragOver = (event) => {
+  if (!isFileDragEvent(event)) {
+    return
+  }
+  isDragActive.value = true
+}
+
+const handleDragLeave = (event) => {
+  if (!isFileDragEvent(event)) {
+    return
+  }
+  dragCounter.value = Math.max(0, dragCounter.value - 1)
+  if (dragCounter.value === 0) {
+    isDragActive.value = false
+  }
+}
+
+const handleDropUpload = (event) => {
+  if (!isFileDragEvent(event)) {
+    return
+  }
+  dragCounter.value = 0
+  isDragActive.value = false
+  const droppedFiles = Array.from(event.dataTransfer?.files || [])
+  enqueueUploadFiles(droppedFiles)
+}
 
 const backdoorLocked = computed(() => {
   return !backdoorMenuAccessState.canRenderHiddenMenus
@@ -665,28 +888,9 @@ const confirmRebuildImageHash = async () => {
 
 // 上传文件
 const uploadFile = async (event) => {
-  const file = event.target.files[0]
-  if (!file) return
-
-  uploading.value = true
-  uploadProgress.value = 0
-
-  try {
-    // 获取当前文件夹ID（如果有）
-    const parentId = route.params.id || null
-
-    await uploadFileToServer(file, parentId, (progress) => {
-      uploadProgress.value = Math.round(progress)
-    })
-
-    ElMessage.success('上传成功')
-    await loadFiles()
-  } catch (error) {
-    ElMessage.error('上传失败')
-    console.error('Error uploading file:', error)
-  } finally {
-    uploading.value = false
-    // 重置文件输入以允许再次上传相同文件
+  const selectedFiles = Array.from(event.target.files || [])
+  enqueueUploadFiles(selectedFiles)
+  if (fileInput.value) {
     fileInput.value.value = ''
   }
 }
@@ -1020,6 +1224,10 @@ onUnmounted(() => {
     mediaContainer.value.removeEventListener('scroll', checkScrollPosition)
     mediaContainer.value.removeEventListener('scroll', cacheScrollPosition)
   }
+  if (uploadRefreshTimer) {
+    clearTimeout(uploadRefreshTimer)
+    uploadRefreshTimer = null
+  }
 })
 </script>
 
@@ -1088,8 +1296,40 @@ onUnmounted(() => {
 
 .media-container {
   flex: 1;
+  position: relative;
   overflow-y: auto;
   padding: 4px;
+}
+
+.media-container.is-drag-active {
+  outline: 2px dashed #409eff;
+  outline-offset: -6px;
+  border-radius: 12px;
+  background: rgba(64, 158, 255, 0.06);
+}
+
+.upload-drop-hint {
+  position: absolute;
+  inset: 12px;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-radius: 12px;
+  background: rgba(64, 158, 255, 0.12);
+  color: #409eff;
+  pointer-events: none;
+}
+
+.upload-drop-hint__title {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.upload-drop-hint__desc {
+  font-size: 13px;
 }
 
 .media-grid {
@@ -1109,8 +1349,6 @@ onUnmounted(() => {
 .move-dialog-content p {
   margin-top: 0;
 }
-
-
 
 .loading-indicator {
   display: flex;

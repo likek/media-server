@@ -78,6 +78,9 @@ request.interceptors.response.use(
   },
   error => {
     console.error(error)
+    if (error?.code === 'ERR_CANCELED' || error?.name === 'CanceledError') {
+      return Promise.reject(error)
+    }
     if (error.response) {
       ElMessage.error(error.response.data.message || '请求失败');
     } else {
