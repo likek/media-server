@@ -36,6 +36,18 @@
               <UploadFilled />
             </el-icon></el-button>
         </el-tooltip>
+        <el-tooltip content="上传文件夹" placement="bottom">
+          <el-button @click="triggerFolderUpload">
+            <span class="folder-upload-icon">
+              <el-icon>
+                <UploadFilled />
+              </el-icon>
+              <el-icon>
+                <FolderOpened />
+              </el-icon>
+            </span>
+          </el-button>
+        </el-tooltip>
         <el-tooltip content="以图搜图" placement="bottom">
           <el-button @click="triggerImageSearch"><el-icon style="font-size: 28px;">
               <Picture /><Search />
@@ -49,6 +61,7 @@
           </el-button>
         </el-tooltip>
         <input ref="fileInput" type="file" multiple style="display: none" @change="uploadFile" />
+        <input ref="folderInput" type="file" webkitdirectory directory multiple style="display: none" @change="uploadFolder" />
         <input ref="imageSearchInput" type="file" accept="image/*" style="display: none" @change="searchByImageFile" />
       </div>
       <!-- 面包屑导航 -->
@@ -255,7 +268,7 @@ import FolderItem from '../components/FolderItem.vue'
 import FileItem from '../components/FileItem.vue'
 import TextViewerDialog from '../components/TextViewerDialog.vue'
 import UploadQueuePanel from '../components/UploadQueuePanel.vue'
-import { getFiles, updateCache, checkFiles, cleanDb, createNewFolder, renameFile, deleteFileOrFolder, uploadFileToServer, downloadFromText, moveFile, convertFileToMp4, getFolderInfo, searchByImage, rebuildImageHash } from '../services/userApi'
+import { getFiles, updateCache, checkFiles, cleanDb, createNewFolder, renameFile, deleteFileOrFolder, uploadFileToServer, uploadFolderTreeToServer, downloadFromText, moveFile, convertFileToMp4, getFolderInfo, searchByImage, rebuildImageHash } from '../services/userApi'
 import { useBackdoorMenuAccess } from '../composables/useBackdoorMenuAccess'
 import { createEncryptedUrl } from '../utils/videoMiddleware'
 
@@ -273,6 +286,7 @@ const files = ref([])
 const searchInput = ref('')
 const loading = ref(false)
 const fileInput = ref(null)
+const folderInput = ref(null)
 const imageSearchInput = ref(null)
 const uploadTasks = ref([])
 const isUploadPanelCollapsed = ref(false)
@@ -370,13 +384,16 @@ const normalizeUploadError = (error) => {
   return error?.response?.data?.message || error?.message || '上传失败'
 }
 
-const createUploadTask = (file, parentId, folderName) => {
+const createUploadTask = (file, parentId, folderName, options = {}) => {
   uploadTaskIdSeed.value += 1
   return {
     id: `upload-${Date.now()}-${uploadTaskIdSeed.value}`,
     file,
     parentId,
     folderName,
+    kind: options.kind || 'file',
+    files: options.files || [],
+    rootFolderName: options.rootFolderName || '',
     progress: 0,
     status: 'queued',
     error: '',
@@ -404,11 +421,19 @@ const runUploadTask = async (task) => {
   task.controller = new AbortController()
 
   try {
-    await uploadFileToServer(task.file, task.parentId, (progress) => {
-      task.progress = Math.round(progress)
-    }, {
-      signal: task.controller.signal
-    })
+    if (task.kind === 'folder') {
+      await uploadFolderTreeToServer(task.files, task.parentId, task.rootFolderName, (progress) => {
+        task.progress = Math.round(progress)
+      }, {
+        signal: task.controller.signal
+      })
+    } else {
+      await uploadFileToServer(task.file, task.parentId, (progress) => {
+        task.progress = Math.round(progress)
+      }, {
+        signal: task.controller.signal
+      })
+    }
     task.progress = 100
     task.status = 'success'
     scheduleRefreshAfterUpload(task.parentId)
@@ -443,16 +468,67 @@ const processUploadQueue = async () => {
   }
 }
 
-const enqueueUploadFiles = (fileList, parentId = currentFolderId.value, folderName = currentFolderLabel.value) => {
+const enqueueUploadFiles = (fileList, parentId = currentFolderId.value, folderName = currentFolderLabel.value, options = {}) => {
   const filesToUpload = Array.from(fileList || []).filter(file => file instanceof File)
   if (filesToUpload.length === 0) {
-    return
+    return 0
   }
 
   const tasks = filesToUpload.map(file => createUploadTask(file, parentId, folderName))
   uploadTasks.value.push(...tasks)
-  ElMessage.success(`已加入上传队列 ${tasks.length} 个文件`)
+  if (!options.silent) {
+    ElMessage.success(`已加入上传队列 ${tasks.length} 个文件`)
+  }
   processUploadQueue()
+  return tasks.length
+}
+
+const normalizeFolderUploadEntries = (fileList) => {
+  return Array.from(fileList || []).map((item) => {
+    if (item instanceof File) {
+      return {
+        file: item,
+        relativePath: item.webkitRelativePath || item.name
+      }
+    }
+    if (item?.file instanceof File) {
+      return {
+        file: item.file,
+        relativePath: item.relativePath || item.file.webkitRelativePath || item.file.name
+      }
+    }
+    return null
+  }).filter(Boolean)
+}
+
+const enqueueUploadFolder = (fileList, parentId = currentFolderId.value, folderName = currentFolderLabel.value, options = {}) => {
+  const fileEntries = normalizeFolderUploadEntries(fileList)
+  if (fileEntries.length === 0) {
+    return null
+  }
+
+  const rootFolderName = fileEntries[0]?.relativePath?.split('/')?.[0]
+  if (!rootFolderName) {
+    ElMessage.warning('当前浏览器不支持文件夹上传')
+    return null
+  }
+
+  const totalSize = fileEntries.reduce((sum, entry) => sum + (entry.file.size || 0), 0)
+  const task = createUploadTask({
+    name: `${rootFolderName} (${fileEntries.length} 个文件)`,
+    size: totalSize
+  }, parentId, folderName, {
+    kind: 'folder',
+    files: fileEntries,
+    rootFolderName
+  })
+
+  uploadTasks.value.push(task)
+  if (!options.silent) {
+    ElMessage.success(`已加入文件夹上传队列：${rootFolderName}`)
+  }
+  processUploadQueue()
+  return task
 }
 
 const cancelUploadTask = (task) => {
@@ -488,6 +564,52 @@ const isFileDragEvent = (event) => {
   return Array.from(event.dataTransfer?.types || []).includes('Files')
 }
 
+const getDragEntries = (event) => {
+  return Array.from(event.dataTransfer?.items || [])
+    .map(item => item.webkitGetAsEntry?.())
+    .filter(Boolean)
+}
+
+const readFileEntry = (entry) => {
+  return new Promise((resolve, reject) => {
+    entry.file(resolve, reject)
+  })
+}
+
+const readDirectoryEntryBatch = (reader) => {
+  return new Promise((resolve, reject) => {
+    reader.readEntries(resolve, reject)
+  })
+}
+
+const collectDroppedDirectoryFiles = async (directoryEntry, basePath = '') => {
+  const currentBasePath = basePath ? `${basePath}/${directoryEntry.name}` : directoryEntry.name
+  const reader = directoryEntry.createReader()
+  const collectedFiles = []
+
+  while (true) {
+    const entries = await readDirectoryEntryBatch(reader)
+    if (!entries.length) {
+      break
+    }
+
+    for (const entry of entries) {
+      if (entry.isFile) {
+        const file = await readFileEntry(entry)
+        collectedFiles.push({
+          file,
+          relativePath: `${currentBasePath}/${file.name}`
+        })
+      } else if (entry.isDirectory) {
+        const childFiles = await collectDroppedDirectoryFiles(entry, currentBasePath)
+        collectedFiles.push(...childFiles)
+      }
+    }
+  }
+
+  return collectedFiles
+}
+
 const handleDragEnter = (event) => {
   if (!isFileDragEvent(event)) {
     return
@@ -513,14 +635,53 @@ const handleDragLeave = (event) => {
   }
 }
 
-const handleDropUpload = (event) => {
+const handleDropUpload = async (event) => {
   if (!isFileDragEvent(event)) {
     return
   }
   dragCounter.value = 0
   isDragActive.value = false
-  const droppedFiles = Array.from(event.dataTransfer?.files || [])
-  enqueueUploadFiles(droppedFiles)
+
+  const dragEntries = getDragEntries(event)
+  const topLevelFolders = dragEntries.filter(entry => entry.isDirectory)
+  const topLevelFileEntries = dragEntries.filter(entry => entry.isFile)
+
+  let queuedFolderCount = 0
+  let queuedFileCount = 0
+
+  for (const folderEntry of topLevelFolders) {
+    try {
+      const folderFiles = await collectDroppedDirectoryFiles(folderEntry)
+      if (folderFiles.length === 0) {
+        continue
+      }
+      const task = enqueueUploadFolder(folderFiles, currentFolderId.value, currentFolderLabel.value, { silent: true })
+      if (task) {
+        queuedFolderCount += 1
+      }
+    } catch (error) {
+      console.error('Error reading dropped folder:', error)
+      ElMessage.error(`读取拖拽文件夹失败：${folderEntry.name}`)
+    }
+  }
+
+  if (topLevelFileEntries.length > 0) {
+    const topLevelFiles = await Promise.all(topLevelFileEntries.map(entry => readFileEntry(entry)))
+    queuedFileCount += enqueueUploadFiles(topLevelFiles, currentFolderId.value, currentFolderLabel.value, { silent: true })
+  } else if (dragEntries.length === 0) {
+    const droppedFiles = Array.from(event.dataTransfer?.files || [])
+    queuedFileCount += enqueueUploadFiles(droppedFiles, currentFolderId.value, currentFolderLabel.value, { silent: true })
+  }
+
+  if (queuedFolderCount === 0 && queuedFileCount === 0) {
+    ElMessage.warning('没有可加入上传队列的内容')
+    return
+  }
+
+  const parts = []
+  if (queuedFolderCount > 0) parts.push(`${queuedFolderCount} 个文件夹`)
+  if (queuedFileCount > 0) parts.push(`${queuedFileCount} 个文件`)
+  ElMessage.success(`已加入上传队列：${parts.join('，')}`)
 }
 
 const backdoorLocked = computed(() => {
@@ -828,6 +989,10 @@ const triggerFileUpload = () => {
   fileInput.value.click()
 }
 
+const triggerFolderUpload = () => {
+  folderInput.value.click()
+}
+
 const triggerImageSearch = () => {
   imageSearchInput.value.click()
 }
@@ -892,6 +1057,14 @@ const uploadFile = async (event) => {
   enqueueUploadFiles(selectedFiles)
   if (fileInput.value) {
     fileInput.value.value = ''
+  }
+}
+
+const uploadFolder = async (event) => {
+  const selectedFiles = Array.from(event.target.files || [])
+  enqueueUploadFolder(selectedFiles)
+  if (folderInput.value) {
+    folderInput.value.value = ''
   }
 }
 
@@ -1255,6 +1428,12 @@ onUnmounted(() => {
 
 .search-input {
   width: 140px;
+}
+
+.folder-upload-icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
 }
 
 .path-navigation {

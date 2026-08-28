@@ -93,6 +93,49 @@ export const uploadFileToServer = async (file, parentId, onProgress, options = {
   return response
 }
 
+export const uploadFolderTreeToServer = async (files, parentId, rootFolderName, onProgress, options = {}) => {
+  const fileEntries = Array.from(files || []).map((item) => {
+    if (item instanceof File) {
+      return {
+        file: item,
+        relativePath: item.webkitRelativePath || item.name
+      }
+    }
+    return {
+      file: item?.file,
+      relativePath: item?.relativePath || item?.file?.webkitRelativePath || item?.file?.name || ''
+    }
+  }).filter(entry => entry.file instanceof File)
+
+  if (fileEntries.length === 0) {
+    throw new Error('请选择文件夹')
+  }
+
+  const formData = new FormData()
+  fileEntries.forEach((entry) => {
+    formData.append('files', entry.file)
+    formData.append('relativePaths', entry.relativePath)
+  })
+  formData.append('rootFolderName', rootFolderName || fileEntries[0]?.relativePath?.split('/')?.[0] || 'folder')
+
+  const hasParentId = parentId !== null && parentId !== undefined && parentId !== ''
+  const url = hasParentId ? `/user/uploadTree?parentId=${encodeURIComponent(parentId)}` : '/user/uploadTree'
+
+  const response = await request.p(url, formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data'
+    },
+    timeout: 3 * 60 * 60 * 1000,
+    signal: options.signal,
+    onUploadProgress: (progressEvent) => {
+      const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total)
+      if (onProgress) onProgress(percentCompleted)
+    }
+  })
+
+  return response
+}
+
 // 从文本链接下载
 export const downloadFromText = async (text, folderId) => {
   const response = await request.p('/user/downloadFromText', { text, folderId }, {

@@ -1,4 +1,5 @@
 import chalk from "chalk";
+import crypto from "crypto";
 import express from "express";
 import fs from "fs";
 import path from "path";
@@ -20,6 +21,7 @@ import { requireBackdoorAccess } from "../middleware/backdoorPermission.js";
 import db from "../dbserialize.js";
 
 const router = express.Router();
+const UPLOAD_STAGING_FULL_PATH = path.join(TEMP_FULL_PATH, "upload-staging");
 
 router.use("/downloadFromText", requireBackdoorAccess);
 router.use("/rebuildImageHash", requireBackdoorAccess);
@@ -51,6 +53,20 @@ const sanitizeUploadedFilename = (rawName = "") => {
   return cleanedName;
 };
 
+const sanitizePathSegment = (rawName = "") => {
+  const cleanedName = String(rawName)
+    .replace(/\0/g, "")
+    .replace(/[\\/]/g, "_")
+    .replace(/[\u0001-\u001f\u007f]/g, "")
+    .trim();
+
+  if (!cleanedName || cleanedName === "." || cleanedName === "..") {
+    return `upload_${Date.now()}`;
+  }
+
+  return cleanedName;
+};
+
 const resolveUploadFolderPath = (req) => {
   const parentId = req.query.parentId;
   if (parentId !== undefined && parentId !== null && parentId !== "") {
@@ -64,10 +80,8 @@ const resolveUploadFolderPath = (req) => {
   return normalizeRelativePath(req.query.path || "");
 };
 
-const buildUploadFilename = (uploadPath, originalName) => {
-  const decodedName = sanitizeUploadedFilename(originalName);
-  const info = path.parse(decodedName);
-  const preferredName = decodedName;
+const buildUniqueFilename = (uploadPath, preferredName) => {
+  const info = path.parse(preferredName);
   const preferredPath = path.join(uploadPath, preferredName);
 
   if (!fs.existsSync(preferredPath)) {
@@ -88,28 +102,151 @@ const buildUploadFilename = (uploadPath, originalName) => {
   }
 };
 
+const buildUploadFilename = (uploadPath, originalName) => {
+  return buildUniqueFilename(uploadPath, sanitizeUploadedFilename(originalName));
+};
+
+const buildUploadFolderName = (uploadPath, originalName) => {
+  const preferredName = sanitizePathSegment(originalName);
+  const safeName = preferredName || `folder_${Date.now()}`;
+  const preferredPath = path.join(uploadPath, safeName);
+
+  if (!fs.existsSync(preferredPath)) {
+    return safeName;
+  }
+
+  const timestamp = Date.now();
+  let counter = 0;
+
+  while (true) {
+    const suffix = counter === 0 ? `(${timestamp})` : `(${timestamp}_${counter})`;
+    const candidateName = `${safeName}${suffix}`;
+    const candidatePath = path.join(uploadPath, candidateName);
+    if (!fs.existsSync(candidatePath)) {
+      return candidateName;
+    }
+    counter += 1;
+  }
+};
+
+const ensureDir = async (dirPath) => {
+  await fs.promises.mkdir(dirPath, { recursive: true });
+};
+
+const createStagingFilename = (originalName = "upload.bin") => {
+  const decodedName = sanitizeUploadedFilename(originalName);
+  const ext = path.extname(decodedName);
+  return `${Date.now()}_${crypto.randomUUID()}${ext}`;
+};
+
+const moveUploadedFile = async (sourcePath, targetPath) => {
+  try {
+    await fs.promises.rename(sourcePath, targetPath);
+    return;
+  } catch (error) {
+    if (error?.code !== "EXDEV") {
+      throw error;
+    }
+  }
+
+  await fs.promises.copyFile(sourcePath, targetPath, fs.constants.COPYFILE_EXCL);
+  await fs.promises.unlink(sourcePath);
+};
+
+const removeFileIfExists = async (targetPath) => {
+  if (!targetPath) return;
+  await fs.promises.unlink(targetPath).catch(() => {});
+};
+
+const cleanupUploadedFiles = async (files = []) => {
+  await Promise.all((files || []).map((file) => removeFileIfExists(file?.path)));
+};
+
+const sanitizeRelativePathSegments = (inputPath = "") => {
+  const normalized = normalizeRelativePath(inputPath);
+  return normalized
+    .split("/")
+    .filter(Boolean)
+    .map((segment) => sanitizePathSegment(segment))
+    .filter((segment) => segment && segment !== "." && segment !== "..");
+};
+
+const normalizeArrayField = (value) => {
+  if (typeof value === "undefined" || value === null) return [];
+  return Array.isArray(value) ? value : [value];
+};
+
+const promoteUploadedFileToMedia = async ({ tempPath, targetFolderPath = "", targetFilename, targetFilenameAlreadySanitized = false }) => {
+  const normalizedFolderPath = normalizeRelativePath(targetFolderPath);
+  const safeFilename = targetFilenameAlreadySanitized ? sanitizePathSegment(targetFilename) : sanitizeUploadedFilename(targetFilename);
+  const finalFolderPath = path.join(MEDIA_FULL_PATH, normalizedFolderPath);
+  await ensureDir(finalFolderPath);
+
+  const finalFilename = buildUniqueFilename(finalFolderPath, safeFilename);
+  const finalPath = path.join(finalFolderPath, finalFilename);
+  await moveUploadedFile(tempPath, finalPath);
+
+  return {
+    filename: finalFilename,
+    folderPath: normalizedFolderPath,
+    absolutePath: finalPath,
+    relativePath: path.join(normalizedFolderPath, finalFilename).replace(/\\/g, "/").replace(/^\//, "")
+  };
+};
+
+const parseUploadTreeEntries = (reqFiles, reqBody) => {
+  const files = Array.isArray(reqFiles) ? reqFiles : [];
+  const relativePaths = normalizeArrayField(reqBody?.relativePaths);
+  if (files.length === 0) {
+    throw new Error("No files uploaded");
+  }
+  if (relativePaths.length !== files.length) {
+    throw new Error("relativePaths mismatch");
+  }
+
+  let sourceRootName = sanitizePathSegment(reqBody?.rootFolderName || "");
+  const entries = files.map((file, index) => {
+    const originalRelativePath = relativePaths[index] || file.originalname;
+    const segments = sanitizeRelativePathSegments(originalRelativePath);
+    if (segments.length < 2) {
+      throw new Error(`Invalid relative path: ${originalRelativePath}`);
+    }
+    if (!sourceRootName) {
+      sourceRootName = segments[0];
+    }
+    if (segments[0] !== sourceRootName) {
+      throw new Error("Folder upload root mismatch");
+    }
+
+    return {
+      file,
+      childSegments: segments.slice(1)
+    };
+  });
+
+  if (!sourceRootName) {
+    throw new Error("Root folder name is required");
+  }
+
+  return {
+    sourceRootName,
+    entries
+  };
+};
+
 // 配置 multer
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     try {
-      const currentPath = resolveUploadFolderPath(req);
-      const uploadPath = path.join(MEDIA_FULL_PATH, currentPath);
-
-      if (!fs.existsSync(uploadPath)) {
-        fs.mkdirSync(uploadPath, { recursive: true });
-      }
-
-      cb(null, uploadPath);
+      fs.mkdirSync(UPLOAD_STAGING_FULL_PATH, { recursive: true });
+      cb(null, UPLOAD_STAGING_FULL_PATH);
     } catch (error) {
       cb(error);
     }
   },
   filename: (req, file, cb) => {
     try {
-      const currentPath = resolveUploadFolderPath(req);
-      const uploadPath = path.join(MEDIA_FULL_PATH, currentPath);
-      const filename = buildUploadFilename(uploadPath, file.originalname);
-      cb(null, filename);
+      cb(null, createStagingFilename(file.originalname));
     } catch (error) {
       cb(error);
     }
@@ -117,6 +254,7 @@ const storage = multer.diskStorage({
 });
 
 const upload = multer({ storage });
+const uploadTree = multer({ storage });
 const searchUpload = multer({
   storage: multer.memoryStorage(),
   limits: {
@@ -313,9 +451,11 @@ router.post("/downloadFromText", async (req, res) => {
 router.post("/upload", upload.single("file"), async (req, res) => {
   try {
     const folderPath = resolveUploadFolderPath(req);
-    
-    const filename = req.file.filename;
-    const filePath = path.join(MEDIA_FULL_PATH, folderPath, filename);
+    const { filename, absolutePath: filePath } = await promoteUploadedFileToMedia({
+      tempPath: req.file.path,
+      targetFolderPath: folderPath,
+      targetFilename: req.file.originalname
+    });
 
     // 确保缩略图目录存在
     const thumbnailDir = path.join(THUMB_FULL_PATH, folderPath);
@@ -394,7 +534,56 @@ router.post("/upload", upload.single("file"), async (req, res) => {
     }
   } catch (err) {
     console.error("Error uploading file:", err);
+    await removeFileIfExists(req.file?.path);
     res.status(500).send({ message: "Failed to upload file" });
+  }
+});
+
+router.post("/uploadTree", uploadTree.array("files"), async (req, res) => {
+  let promotedRootPath = "";
+
+  try {
+    const parentFolderPath = resolveUploadFolderPath(req);
+    const parentFullPath = path.join(MEDIA_FULL_PATH, parentFolderPath);
+    await ensureDir(parentFullPath);
+
+    const { sourceRootName, entries } = parseUploadTreeEntries(req.files, req.body);
+    const targetRootName = buildUploadFolderName(parentFullPath, sourceRootName);
+    promotedRootPath = path.join(parentFolderPath, targetRootName).replace(/\\/g, "/").replace(/^\//, "");
+
+    for (const entry of entries) {
+      const childSegments = [...entry.childSegments];
+      const targetFilename = childSegments.pop();
+      const targetFolderPath = path.join(promotedRootPath, ...childSegments).replace(/\\/g, "/").replace(/^\//, "");
+
+      await promoteUploadedFileToMedia({
+        tempPath: entry.file.path,
+        targetFolderPath,
+        targetFilename,
+        targetFilenameAlreadySanitized: true
+      });
+    }
+
+    await updateFolderByPath(parentFolderPath);
+    await updateFolderTreeByPath(promotedRootPath);
+
+    res.send({
+      rootFolderName: targetRootName,
+      rootFolderPath: promotedRootPath,
+      importedFiles: entries.length
+    });
+  } catch (err) {
+    console.error("Error uploading folder tree:", err);
+    await cleanupUploadedFiles(req.files);
+
+    if (promotedRootPath) {
+      const promotedRootFullPath = path.join(MEDIA_FULL_PATH, promotedRootPath);
+      if (fs.existsSync(promotedRootFullPath)) {
+        await fs.promises.rm(promotedRootFullPath, { recursive: true, force: true }).catch(() => {});
+      }
+    }
+
+    res.status(500).send({ message: "Failed to upload folder tree" });
   }
 });
 

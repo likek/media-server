@@ -20,7 +20,12 @@
     <div v-show="!collapsed" class="upload-panel__list">
       <div v-for="task in displayTasks" :key="task.id" class="upload-task">
         <div class="upload-task__top">
-          <div class="upload-task__name" :title="task.file.name">{{ task.file.name }}</div>
+          <div class="upload-task__name-wrap">
+            <el-icon v-if="task.kind === 'folder'" class="upload-task__kind-icon">
+              <FolderOpened />
+            </el-icon>
+            <div class="upload-task__name" :title="task.file.name">{{ task.file.name }}</div>
+          </div>
           <div class="upload-task__percent">{{ task.status === 'uploading' ? `${task.progress}%` : '' }}</div>
         </div>
         <div class="upload-task__meta">
@@ -165,6 +170,20 @@ const getUploadStatusText = (task) => {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+}
+
+.upload-task__name-wrap {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.upload-task__kind-icon {
+  flex-shrink: 0;
+  color: #409eff;
+  font-size: 14px;
 }
 
 .upload-task__name {
