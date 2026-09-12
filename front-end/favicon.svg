@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="folderBody" x1="10" y1="16" x2="56" y2="50" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#bfe7ff"/>
+      <stop offset="1" stop-color="#67b8ff"/>
+    </linearGradient>
+    <linearGradient id="folderTab" x1="18" y1="10" x2="36" y2="24" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#dff4ff"/>
+      <stop offset="1" stop-color="#9dd4ff"/>
+    </linearGradient>
+    <linearGradient id="folderFront" x1="8" y1="26" x2="54" y2="56" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#8fd3ff"/>
+      <stop offset="1" stop-color="#4aa8ff"/>
+    </linearGradient>
+  </defs>
+  <path
+    d="M12 18c0-2.2 1.8-4 4-4h11.4c1.3 0 2.6.5 3.5 1.4l2.3 2.3c.8.8 1.9 1.3 3 1.3H48c2.2 0 4 1.8 4 4v4H12z"
+    fill="url(#folderTab)"
+  />
+  <path
+    d="M8 24c0-2.2 1.8-4 4-4h40c2.2 0 4 1.8 4 4v4.5H8z"
+    fill="url(#folderBody)"
+  />
+  <path
+    d="M10 26h46c1.6 0 2.8 1.5 2.4 3L53.5 49c-.5 1.8-2.1 3-4 3H14.8c-2 0-3.6-1.4-4-3.3L7.6 29c-.3-1.5.9-3 2.4-3z"
+    fill="url(#folderFront)"
+  />
+  <path
+    d="M14 32.5h34"
+    stroke="#eef9ff"
+    stroke-linecap="round"
+    stroke-opacity=".7"
+    stroke-width="3"
+  />
+</svg>
