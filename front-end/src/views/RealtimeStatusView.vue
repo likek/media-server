@@ -13,16 +13,17 @@
 
     <section class="status-section">
       <div class="status-section__title">在线用户</div>
-      <el-table :data="onlineUsers" stripe empty-text="当前暂无在线用户">
-        <el-table-column prop="userId" label="用户ID" min-width="220" />
+      <div class="table-shell">
+        <el-table :data="onlineUsers" stripe empty-text="当前暂无在线用户">
+        <el-table-column prop="userId" label="用户ID" min-width="220" show-overflow-tooltip />
         <el-table-column prop="ipAddress" label="IP" min-width="120" />
-        <el-table-column prop="region" label="地区" min-width="140" />
-        <el-table-column label="定位" min-width="220">
+        <el-table-column v-if="!isNarrowScreen" prop="region" label="地区" min-width="140" />
+        <el-table-column v-if="!isNarrowScreen" label="定位" min-width="220">
           <template #default="{ row }">
             {{ formatLocation(row.location) }}
           </template>
         </el-table-column>
-        <el-table-column label="连接时间" min-width="160">
+        <el-table-column v-if="!isNarrowScreen" label="连接时间" min-width="160">
           <template #default="{ row }">
             {{ formatTime(row.connectedAt) }}
           </template>
@@ -32,19 +33,21 @@
             {{ formatTime(row.lastSeenAt) }}
           </template>
         </el-table-column>
-      </el-table>
+        </el-table>
+      </div>
     </section>
 
     <section class="status-section">
       <div class="status-section__title">进行中的上传队列</div>
-      <el-table :data="uploadTasks" stripe empty-text="当前暂无进行中的上传任务">
-        <el-table-column prop="userId" label="用户ID" min-width="220" />
-        <el-table-column label="资源名称" min-width="220">
+      <div class="table-shell">
+        <el-table :data="uploadTasks" stripe empty-text="当前暂无进行中的上传任务">
+        <el-table-column v-if="!isNarrowScreen" prop="userId" label="用户ID" min-width="220" show-overflow-tooltip />
+        <el-table-column label="资源名称" min-width="220" show-overflow-tooltip>
           <template #default="{ row }">
             {{ row.resourceName || row.summary || '-' }}
           </template>
         </el-table-column>
-        <el-table-column prop="kind" label="类型" width="100">
+        <el-table-column v-if="!isNarrowScreen" prop="kind" label="类型" width="100">
           <template #default="{ row }">
             {{ row.kind === 'folder' ? '文件夹' : '文件' }}
           </template>
@@ -56,7 +59,7 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="数量" width="90">
+        <el-table-column v-if="!isNarrowScreen" label="数量" width="90">
           <template #default="{ row }">
             {{ row.itemCount || 1 }}
           </template>
@@ -69,8 +72,8 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column prop="parentPath" label="目标目录" min-width="180" />
-        <el-table-column label="开始时间" min-width="160">
+        <el-table-column prop="parentPath" label="目标目录" min-width="180" show-overflow-tooltip />
+        <el-table-column v-if="!isNarrowScreen" label="开始时间" min-width="160">
           <template #default="{ row }">
             {{ formatTime(row.startedAt) }}
           </template>
@@ -89,7 +92,8 @@
             </el-button>
           </template>
         </el-table-column>
-      </el-table>
+        </el-table>
+      </div>
     </section>
   </div>
 </template>
@@ -98,11 +102,13 @@
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { cancelRealtimeUploadTask, getRealtimeStatus } from '../services/userApi'
+import { useNarrowScreen } from '../composables/useNarrowScreen'
 
 const loading = ref(false)
 const onlineUsers = ref([])
 const uploadTasks = ref([])
 const cancelingTaskId = ref('')
+const { isNarrowScreen } = useNarrowScreen()
 
 const applyRealtimeStatus = (payload = {}) => {
   if (Array.isArray(payload.onlineUsers)) {
@@ -242,6 +248,10 @@ onBeforeUnmount(() => {
   color: #303133;
 }
 
+.table-shell {
+  overflow-x: auto;
+}
+
 .progress-cell {
   display: flex;
   flex-direction: column;
@@ -251,5 +261,11 @@ onBeforeUnmount(() => {
 .progress-cell__meta {
   font-size: 12px;
   color: #909399;
+}
+
+@media (max-width: 900px) {
+  .realtime-status-view {
+    padding: 12px;
+  }
 }
 </style>

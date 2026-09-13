@@ -1,14 +1,16 @@
 <template>
-  <el-table :data="logs" v-loading="loading" border style="width: 100%">
+  <div class="table-shell">
+    <el-table :data="logs" v-loading="loading" border style="width: 100%">
     <el-table-column label="触发时间" width="150">
       <template #default="scope">
         {{ formatDate(scope.row.time) }}
       </template>
     </el-table-column>
-    <el-table-column prop="userId" label="用户ID" width="180" />
+    <el-table-column prop="userId" label="用户ID" width="180" show-overflow-tooltip />
     <el-table-column prop="userIp" label="用户IP" width="120" />
-    <el-table-column prop="filePath" label="文件路径" min-width="120" />
-  </el-table>
+    <el-table-column prop="filePath" label="文件路径" min-width="180" show-overflow-tooltip />
+    </el-table>
+  </div>
 </template>
 
 <script setup>
@@ -24,3 +26,9 @@ const formatDate = (dateString) => {
   return date.toLocaleString()
 }
 </script>
+
+<style scoped>
+.table-shell {
+  overflow-x: auto;
+}
+</style>

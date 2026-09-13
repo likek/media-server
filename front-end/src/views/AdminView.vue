@@ -16,12 +16,13 @@
         </el-button>
       </div>
       
-      <el-table
-        :data="userList"
-        style="width: 100%"
-        v-loading="loading"
-        border
-      >
+      <div class="table-shell">
+        <el-table
+          :data="userList"
+          style="width: 100%"
+          v-loading="loading"
+          border
+        >
         <el-table-column label="最后访问时间" width="180">
           <template #default="scope">
             {{ formatDate(scope.row.update_time) }}
@@ -34,11 +35,11 @@
         </el-table-column>
         <el-table-column prop="region" label="地区" width="150" />
         <el-table-column prop="ip" label="IP地址" width="150" />
-        <el-table-column prop="device" label="设备" width="120" />
-        <el-table-column prop="os" label="操作系统" width="120" />
-        <el-table-column prop="browser" label="浏览器" width="120" />
-        <el-table-column prop="userId" label="用户ID" width="280" />
-        <el-table-column prop="iv" label="iv" width="280" />
+        <el-table-column v-if="!isNarrowScreen" prop="device" label="设备" width="120" />
+        <el-table-column v-if="!isNarrowScreen" prop="os" label="操作系统" width="120" />
+        <el-table-column v-if="!isNarrowScreen" prop="browser" label="浏览器" width="120" />
+        <el-table-column prop="userId" label="用户ID" width="280" show-overflow-tooltip />
+        <el-table-column v-if="!isNarrowScreen" prop="iv" label="iv" width="280" show-overflow-tooltip />
         <el-table-column label="操作" width="180" fixed="right">
           <template #default="scope">
             <el-button
@@ -52,7 +53,8 @@
             </el-button>
           </template>
         </el-table-column>
-      </el-table>
+        </el-table>
+      </div>
       
       <div class="pagination-container">
         <el-pagination
@@ -73,6 +75,7 @@
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { addUserToBlacklist, getUserList, removeUserFromBlacklist } from '../services/adminApi'
+import { useNarrowScreen } from '../composables/useNarrowScreen'
 
 const userList = ref([])
 const loading = ref(false)
@@ -82,6 +85,7 @@ const currentPage = ref(1)
 const pageSize = ref(10)
 const total = ref(0)
 const keyword = ref('')
+const { isNarrowScreen } = useNarrowScreen()
 
 // 格式化日期
 const formatDate = (dateString) => {
@@ -186,15 +190,35 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   margin-bottom: 20px;
+  gap: 12px;
 }
 
 .search-input {
   width: 300px;
 }
 
+.table-shell {
+  overflow-x: auto;
+}
+
 .pagination-container {
   margin-top: 20px;
   display: flex;
   justify-content: flex-end;
+}
+
+@media (max-width: 900px) {
+  .admin-view {
+    padding: 12px;
+  }
+
+  .table-operations {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .search-input {
+    width: 100%;
+  }
 }
 </style>
