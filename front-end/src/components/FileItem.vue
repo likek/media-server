@@ -76,6 +76,8 @@
         </div>
         <div>
           <span class="file-name" v-if="isText && allowActions.includes('viewtext')" @click.stop="viewTextFile">{{ displayFile.filename }}</span>
+          <span class="file-name" v-else-if="isPdf" @click.stop="previewPdfFile">{{ displayFile.m3u8_path ? '_' : '' }}{{ displayFile.filename }}</span>
+          <span class="file-name" v-else-if="isOffice" @click.stop="previewOfficeFile">{{ displayFile.m3u8_path ? '_' : '' }}{{ displayFile.filename }}</span>
           <span class="file-name" v-else>{{ displayFile.m3u8_path ? '_' : '' }}{{ displayFile.filename }}</span>
         </div>
         <!-- 文件预览区域 -->
@@ -111,14 +113,23 @@
           <!-- 文本预览 -->
           
           <!-- PDF链接 -->
-          <a 
+          <button
             v-else-if="isPdf" 
-            :href="`/media/${displayFile.id}`" 
-            target="_blank"
+            type="button"
             class="pdf-link"
+            @click.stop="previewPdfFile"
           >
-            查看PDF
-          </a>
+            预览PDF
+          </button>
+
+          <button
+            v-else-if="isOffice"
+            type="button"
+            class="pdf-link"
+            @click.stop="previewOfficeFile"
+          >
+            预览文档
+          </button>
 
           <!-- 音频预览 -->
           <audio 
@@ -149,6 +160,7 @@ import { addToFavorites, removeFromFavorites } from '../services/favoritesApi'
 const VIDEO_EXTENSIONS = ['mp4', 'webm', 'ogg', 'ts', 'avi', 'wmv', 'm3u8', 'mov', 'm4v']
 const IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'heic', 'heif', 'bmp']
 const AUDIO_EXTENSIONS = ['mp3', 'wav', 'ogg', 'flac', 'aac']
+const OFFICE_EXTENSIONS = ['docx', 'xlsx', 'pptx']
 const TEXT_EXTENSIONS = ['txt', 'log', 'md', 'json', 'xml', 'csv']
 const ARCHIVE_EXTENSIONS = ['zip', 'rar', '7z', 'tar', 'gz']
 
@@ -184,7 +196,7 @@ const props = defineProps({
 const displayFile = ref(props.file)
 const isFavorited = ref(Boolean(props.favorited))
 
-const emit = defineEmits(['rename', 'delete', 'move', 'download', 'unzip', 'viewText', 'convertTs', 'favorite', 'navigate', 'folderCoverUpdated', 'searchSimilar'])
+const emit = defineEmits(['rename', 'delete', 'move', 'download', 'unzip', 'viewText', 'convertTs', 'favorite', 'navigate', 'folderCoverUpdated', 'searchSimilar', 'previewPdf', 'previewOffice'])
 
 const isActionDisabled = (action) => {
   return props.disabledActions.includes(action)
@@ -243,6 +255,10 @@ const isPdf = computed(() => {
   return fileExt.value === 'pdf'
 })
 
+const isOffice = computed(() => {
+  return OFFICE_EXTENSIONS.includes(fileExt.value)
+})
+
 const isAudio = computed(() => {
   return AUDIO_EXTENSIONS.includes(fileExt.value)
 })
@@ -256,7 +272,7 @@ const isArchive = computed(() => {
 })
 
 const isPreviewable = computed(() => {
-  return isVideo.value || isImage.value || isPdf.value || isAudio.value
+  return isVideo.value || isImage.value || isPdf.value || isOffice.value || isAudio.value
 })
 
 const handleConvertToHls = async () => {
@@ -324,6 +340,14 @@ const handlePlayerActiveFileChange = ({ file }) => {
 // 查看文本文件
 const viewTextFile = () => {
   emit('viewText', displayFile.value)
+}
+
+const previewPdfFile = () => {
+  emit('previewPdf', displayFile.value)
+}
+
+const previewOfficeFile = () => {
+  emit('previewOffice', displayFile.value)
 }
 
 // 解压缩文件
@@ -516,12 +540,15 @@ const toggleFavorite = async () => {
 
 .pdf-link {
   display: block;
+  width: 100%;
   padding: 10px;
   text-align: center;
   background-color: #f5f7fa;
   color: #409eff;
   text-decoration: none;
+  border: none;
   border-radius: 4px;
+  cursor: pointer;
 }
 
 @media (any-hover: hover) {

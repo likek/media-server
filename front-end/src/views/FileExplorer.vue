@@ -104,7 +104,7 @@
               <file-item :allow-actions="getFileActions(file)" :disabled-actions="disabledFileActions" :key="file.id" :file="file" :imageList="imageList"
                 :imageIndex="imageList.findIndex(item => item.id === file.id)" :favorited="file.favorited"
                 @rename="showRenameDialog" @move="showMoveDialog" @download="downloadFile" @delete="confirmDelete"
-                @unzip="refreshCache" @viewText="viewTextFile" @convertTs="convertTsFile" @favorite="refreshFavorites" @navigate="navigateToFolder" @folderCoverUpdated="handleFolderCoverUpdated" @searchSimilar="searchSimilarByFile"/>
+                @unzip="refreshCache" @viewText="viewTextFile" @previewPdf="previewPdfFile" @previewOffice="previewOfficeFile" @convertTs="convertTsFile" @favorite="refreshFavorites" @navigate="navigateToFolder" @folderCoverUpdated="handleFolderCoverUpdated" @searchSimilar="searchSimilarByFile"/>
             </template>
           </template>
         </div>
@@ -193,6 +193,8 @@
 
     <!-- 文本文件查看对话框 -->
     <text-viewer-dialog v-model:visible="txtDialogVisible" :file="currentItem" v-if="currentItem" :num-lines="30" />
+    <pdf-viewer-dialog v-model:visible="pdfDialogVisible" :file="pdfPreviewItem" />
+    <office-viewer-dialog v-model:visible="officeDialogVisible" :file="officePreviewItem" />
     <!-- 高级过滤对话框 -->
     <el-dialog v-model="dialogSearchAdvanceVisible" title="过滤" width="260px">
       <el-form :model="advanceSearchForm" label-width="0">
@@ -260,7 +262,7 @@
 </template>
 
 <script setup>
-import { ref, watch, onMounted, onUnmounted, nextTick, computed, h } from 'vue'
+import { ref, watch, onMounted, onUnmounted, nextTick, computed, h, defineAsyncComponent } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import FolderItem from '../components/FolderItem.vue'
@@ -280,6 +282,8 @@ const BACKDOOR_FOLDER_ACTIONS = ['rename', 'move', 'delete']
 const router = useRouter()
 const route = useRoute()
 const { backdoorMenuAccessState, trackHomeTap } = useBackdoorMenuAccess()
+const PdfViewerDialog = defineAsyncComponent(() => import('../components/PdfViewerDialog.vue'))
+const OfficeViewerDialog = defineAsyncComponent(() => import('../components/OfficeViewerDialog.vue'))
 
 // 状态变量
 const files = ref([])
@@ -365,6 +369,10 @@ const uploadPanelSummary = computed(() => {
 
 // 文本查看对话框状态
 const txtDialogVisible = ref(false)
+const pdfDialogVisible = ref(false)
+const pdfPreviewItem = ref(null)
+const officeDialogVisible = ref(false)
+const officePreviewItem = ref(null)
 
 const imageList = computed(() => {
   return files.value.filter(file => {
@@ -1365,6 +1373,18 @@ const viewTextFile = async (file) => {
     console.error('Error opening text file:', error)
     ElMessageBox.alert('打开文件失败', '错误', { type: 'error' })
   }
+}
+
+const previewPdfFile = (file) => {
+  if (!file?.id) return
+  pdfPreviewItem.value = file
+  pdfDialogVisible.value = true
+}
+
+const previewOfficeFile = (file) => {
+  if (!file?.id) return
+  officePreviewItem.value = file
+  officeDialogVisible.value = true
 }
 
 

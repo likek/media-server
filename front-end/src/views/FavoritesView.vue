@@ -27,6 +27,8 @@
                 :allow-actions="['favorite', 'viewtext', 'download', 'navigateParent', 'setFolderCover', 'searchSimilar']"
                 @download="downloadFile"
                 @viewText="viewTextFile"
+                @previewPdf="previewPdfFile"
+                @previewOffice="previewOfficeFile"
                 @favorite="refreshFavorites"
                 @navigate="navigateToFolder"
                 @folderCoverUpdated="handleFolderCoverUpdated"
@@ -48,11 +50,13 @@
       :file="currentItem"
       :num-lines="30"
     />
+    <pdf-viewer-dialog v-model:visible="pdfDialogVisible" :file="pdfPreviewItem" />
+    <office-viewer-dialog v-model:visible="officeDialogVisible" :file="officePreviewItem" />
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, nextTick, onBeforeUnmount, onActivated } from 'vue'
+import { ref, computed, onMounted, nextTick, onBeforeUnmount, onActivated, defineAsyncComponent } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import FolderItem from '../components/FolderItem.vue'
@@ -64,6 +68,8 @@ import { createEncryptedUrl } from '../utils/videoMiddleware'
 import { stashImageSearchResult } from '../utils/imageSearchCache'
 
 const router = useRouter()
+const PdfViewerDialog = defineAsyncComponent(() => import('../components/PdfViewerDialog.vue'))
+const OfficeViewerDialog = defineAsyncComponent(() => import('../components/OfficeViewerDialog.vue'))
 
 // 状态变量
 const files = ref([])
@@ -79,6 +85,10 @@ const total = ref(0)
 // 文本查看对话框状态
 const txtDialogVisible = ref(false)
 const currentItem = ref(null)
+const pdfDialogVisible = ref(false)
+const pdfPreviewItem = ref(null)
+const officeDialogVisible = ref(false)
+const officePreviewItem = ref(null)
 
 // 计算图片列表
 const imageList = computed(() => {
@@ -191,6 +201,18 @@ const viewTextFile = async (file) => {
     ElMessage.error('无法查看文件')
     console.error('Error viewing text file:', error)
   }
+}
+
+const previewPdfFile = (file) => {
+  if (!file?.id) return
+  pdfPreviewItem.value = file
+  pdfDialogVisible.value = true
+}
+
+const previewOfficeFile = (file) => {
+  if (!file?.id) return
+  officePreviewItem.value = file
+  officeDialogVisible.value = true
 }
 
 const searchSimilarByFile = async (fileInfo) => {
