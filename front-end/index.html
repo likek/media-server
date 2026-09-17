@@ -1,13 +1,16 @@
 <!DOCTYPE html>
-<html lang="zh-CN" class="dark">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<html lang="zh-CN" class="dark" data-page-node-id="yrMUfgJ0IcWLxO8O1FStNj">
+  <head data-page-node-id="AovzIkuJ8k78dfCC6Lwz4p">
+    <meta charset="UTF-8" data-page-node-id="CHDKPXUofVnbEhUnJYflo1" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2" data-page-node-id="38qAG0kXi0PGbjETyNkyJe" />
+    <link rel="manifest" href="/manifest.json" data-page-node-id="rlSg187VoIibF6FEeecuIj" />
+    <link rel="apple-touch-icon" href="/icon-192.png" data-page-node-id="B2UQbWaEPYSErCi6hSyDQe" />
+    <meta name="theme-color" content="#409eff" data-page-node-id="FtOHUhvzIIyrTghagB9Dhy" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no" data-page-node-id="Kv5NRZtJE1ygfcBvBnLChz" />
     <title>媒体服务器</title>
   </head>
-  <body>
-    <div id="app"></div>
+  <body data-page-node-id="6AY4FKCzcf3Ossg3tSz8eM">
+    <div id="app" data-page-node-id="Hp5k3sLlxThPSvtmXaS1oi"></div>
 
     <script src="/workbox-window.prod.umd.js"></script>
     <script>
@@ -34,6 +37,18 @@
         });
         wb.register();
       }
+
+      // PWA install prompt — 保存事件供后续使用
+      window._deferredPrompt = null;
+      window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        window._deferredPrompt = e;
+        console.log('PWA 可安装');
+      });
+      window.addEventListener('appinstalled', () => {
+        window._deferredPrompt = null;
+        console.log('PWA 已安装');
+      });
     </script>
 
     <script type="module" src="/src/main.js"></script>
