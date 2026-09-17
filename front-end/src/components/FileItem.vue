@@ -7,7 +7,7 @@
               <VideoCamera v-if="isVideo"/>
               <Picture v-else-if="isImage" />
               <Collection v-else-if="isArchive"/>
-              <Reading v-else-if="isText"/>
+              <Reading v-else-if="isText || isEnhancedText"/>
               <Microphone v-else-if="isAudio"/>
               <Document v-else/>
           </el-icon>
@@ -15,8 +15,8 @@
             <el-tooltip content="所在文件夹" placement="top" :auto-close="1000" v-if="allowActions.includes('navigateParent')">
               <el-icon class="action-icon" @click.stop="$emit('navigate', displayFile.parent_id)"><FolderOpened /></el-icon>
             </el-tooltip>
-            <el-tooltip content="查看文本" placement="top" :auto-close="1000" v-if="isText && allowActions.includes('viewtext')">
-              <el-icon class="action-icon" @click.stop="viewTextFile" >
+            <el-tooltip :content="previewTooltipLabel" placement="top" :auto-close="1000" v-if="canUseEyePreview">
+              <el-icon class="action-icon" @click.stop="previewCurrentFile">
                 <View />
               </el-icon>
             </el-tooltip>
@@ -75,13 +75,10 @@
           </div>
         </div>
         <div>
-          <span class="file-name" v-if="isText && allowActions.includes('viewtext')" @click.stop="viewTextFile">{{ displayFile.filename }}</span>
-          <span class="file-name" v-else-if="isPdf" @click.stop="previewPdfFile">{{ displayFile.m3u8_path ? '_' : '' }}{{ displayFile.filename }}</span>
-          <span class="file-name" v-else-if="isOffice" @click.stop="previewOfficeFile">{{ displayFile.m3u8_path ? '_' : '' }}{{ displayFile.filename }}</span>
-          <span class="file-name" v-else>{{ displayFile.m3u8_path ? '_' : '' }}{{ displayFile.filename }}</span>
+          <span class="file-name">{{ displayFile.m3u8_path ? '_' : '' }}{{ displayFile.filename }}</span>
         </div>
         <!-- 文件预览区域 -->
-        <div class="file-preview" v-if="isPreviewable">
+        <div class="file-preview" v-if="hasInlinePreview">
           <!-- 视频预览 - 使用自定义播放器组件， 如果src以/结尾，/media/:id/:id/xxx.ts -->
           <VideoPlayer 
             v-if="isVideo" 
@@ -110,27 +107,6 @@
             :preview-teleported="true"
             :infinite="true"
           />
-          <!-- 文本预览 -->
-          
-          <!-- PDF链接 -->
-          <button
-            v-else-if="isPdf" 
-            type="button"
-            class="pdf-link"
-            @click.stop="previewPdfFile"
-          >
-            预览PDF
-          </button>
-
-          <button
-            v-else-if="isOffice"
-            type="button"
-            class="pdf-link"
-            @click.stop="previewOfficeFile"
-          >
-            预览文档
-          </button>
-
           <!-- 音频预览 -->
           <audio 
             v-else-if="isAudio" 
@@ -161,7 +137,8 @@ const VIDEO_EXTENSIONS = ['mp4', 'webm', 'ogg', 'ts', 'avi', 'wmv', 'm3u8', 'mov
 const IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'heic', 'heif', 'bmp']
 const AUDIO_EXTENSIONS = ['mp3', 'wav', 'ogg', 'flac', 'aac']
 const OFFICE_EXTENSIONS = ['docx', 'xlsx', 'pptx']
-const TEXT_EXTENSIONS = ['txt', 'log', 'md', 'json', 'xml', 'csv']
+const ENHANCED_TEXT_EXTENSIONS = ['md', 'markdown', 'json', 'xml', 'csv']
+const TEXT_EXTENSIONS = ['txt', 'log']
 const ARCHIVE_EXTENSIONS = ['zip', 'rar', '7z', 'tar', 'gz']
 
 const props = defineProps({
@@ -196,7 +173,7 @@ const props = defineProps({
 const displayFile = ref(props.file)
 const isFavorited = ref(Boolean(props.favorited))
 
-const emit = defineEmits(['rename', 'delete', 'move', 'download', 'unzip', 'viewText', 'convertTs', 'favorite', 'navigate', 'folderCoverUpdated', 'searchSimilar', 'previewPdf', 'previewOffice'])
+const emit = defineEmits(['rename', 'delete', 'move', 'download', 'unzip', 'viewText', 'convertTs', 'favorite', 'navigate', 'folderCoverUpdated', 'searchSimilar', 'previewPdf', 'previewOffice', 'previewMarkdown'])
 
 const isActionDisabled = (action) => {
   return props.disabledActions.includes(action)
@@ -259,6 +236,10 @@ const isOffice = computed(() => {
   return OFFICE_EXTENSIONS.includes(fileExt.value)
 })
 
+const isEnhancedText = computed(() => {
+  return ENHANCED_TEXT_EXTENSIONS.includes(fileExt.value)
+})
+
 const isAudio = computed(() => {
   return AUDIO_EXTENSIONS.includes(fileExt.value)
 })
@@ -267,12 +248,32 @@ const isText = computed(() => {
   return TEXT_EXTENSIONS.includes(fileExt.value)
 })
 
+const previewTypeLabel = computed(() => {
+  if (['md', 'markdown'].includes(fileExt.value)) return 'Markdown'
+  if (fileExt.value === 'json') return 'JSON'
+  if (fileExt.value === 'xml') return 'XML'
+  if (fileExt.value === 'csv') return 'CSV'
+  return '文本'
+})
+
+const previewTooltipLabel = computed(() => {
+  return `预览${previewTypeLabel.value}`
+})
+
+const canUseEyePreview = computed(() => {
+  return allowPreviewByEye.value && (isText.value || isEnhancedText.value || isPdf.value || isOffice.value)
+})
+
 const isArchive = computed(() => {
   return ARCHIVE_EXTENSIONS.includes(fileExt.value)
 })
 
-const isPreviewable = computed(() => {
-  return isVideo.value || isImage.value || isPdf.value || isOffice.value || isAudio.value
+const hasInlinePreview = computed(() => {
+  return isVideo.value || isImage.value || isAudio.value
+})
+
+const allowPreviewByEye = computed(() => {
+  return props.allowActions.includes('viewtext')
 })
 
 const handleConvertToHls = async () => {
@@ -348,6 +349,28 @@ const previewPdfFile = () => {
 
 const previewOfficeFile = () => {
   emit('previewOffice', displayFile.value)
+}
+
+const previewEnhancedTextFile = () => {
+  emit('previewMarkdown', displayFile.value)
+}
+
+const previewCurrentFile = () => {
+  if (isText.value) {
+    viewTextFile()
+    return
+  }
+  if (isEnhancedText.value) {
+    previewEnhancedTextFile()
+    return
+  }
+  if (isPdf.value) {
+    previewPdfFile()
+    return
+  }
+  if (isOffice.value) {
+    previewOfficeFile()
+  }
 }
 
 // 解压缩文件
@@ -536,25 +559,6 @@ const toggleFavorite = async () => {
 
 .audio-preview {
   width: 100%;
-}
-
-.pdf-link {
-  display: block;
-  width: 100%;
-  padding: 10px;
-  text-align: center;
-  background-color: #f5f7fa;
-  color: #409eff;
-  text-decoration: none;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-}
-
-@media (any-hover: hover) {
-  .pdf-link:hover {
-    background-color: #ecf5ff;
-  }
 }
 
 .file-info {

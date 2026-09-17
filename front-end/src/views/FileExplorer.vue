@@ -104,7 +104,7 @@
               <file-item :allow-actions="getFileActions(file)" :disabled-actions="disabledFileActions" :key="file.id" :file="file" :imageList="imageList"
                 :imageIndex="imageList.findIndex(item => item.id === file.id)" :favorited="file.favorited"
                 @rename="showRenameDialog" @move="showMoveDialog" @download="downloadFile" @delete="confirmDelete"
-                @unzip="refreshCache" @viewText="viewTextFile" @previewPdf="previewPdfFile" @previewOffice="previewOfficeFile" @convertTs="convertTsFile" @favorite="refreshFavorites" @navigate="navigateToFolder" @folderCoverUpdated="handleFolderCoverUpdated" @searchSimilar="searchSimilarByFile"/>
+                @unzip="refreshCache" @viewText="viewTextFile" @previewPdf="previewPdfFile" @previewOffice="previewOfficeFile" @previewMarkdown="previewMarkdownFile" @convertTs="convertTsFile" @favorite="refreshFavorites" @navigate="navigateToFolder" @folderCoverUpdated="handleFolderCoverUpdated" @searchSimilar="searchSimilarByFile"/>
             </template>
           </template>
         </div>
@@ -195,6 +195,7 @@
     <text-viewer-dialog v-model:visible="txtDialogVisible" :file="currentItem" v-if="currentItem" :num-lines="30" />
     <pdf-viewer-dialog v-model:visible="pdfDialogVisible" :file="pdfPreviewItem" />
     <office-viewer-dialog v-model:visible="officeDialogVisible" :file="officePreviewItem" />
+    <markdown-viewer-dialog v-model:visible="markdownDialogVisible" :file="markdownPreviewItem" />
     <!-- 高级过滤对话框 -->
     <el-dialog v-model="dialogSearchAdvanceVisible" title="过滤" width="260px">
       <el-form :model="advanceSearchForm" label-width="0">
@@ -284,6 +285,7 @@ const route = useRoute()
 const { backdoorMenuAccessState, trackHomeTap } = useBackdoorMenuAccess()
 const PdfViewerDialog = defineAsyncComponent(() => import('../components/PdfViewerDialog.vue'))
 const OfficeViewerDialog = defineAsyncComponent(() => import('../components/OfficeViewerDialog.vue'))
+const MarkdownViewerDialog = defineAsyncComponent(() => import('../components/MarkdownViewerDialog.vue'))
 
 // 状态变量
 const files = ref([])
@@ -373,6 +375,8 @@ const pdfDialogVisible = ref(false)
 const pdfPreviewItem = ref(null)
 const officeDialogVisible = ref(false)
 const officePreviewItem = ref(null)
+const markdownDialogVisible = ref(false)
+const markdownPreviewItem = ref(null)
 
 const imageList = computed(() => {
   return files.value.filter(file => {
@@ -1385,6 +1389,12 @@ const previewOfficeFile = (file) => {
   if (!file?.id) return
   officePreviewItem.value = file
   officeDialogVisible.value = true
+}
+
+const previewMarkdownFile = (file) => {
+  if (!file?.id) return
+  markdownPreviewItem.value = file
+  markdownDialogVisible.value = true
 }
 
 
