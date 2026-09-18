@@ -104,7 +104,7 @@
               <file-item :allow-actions="getFileActions(file)" :disabled-actions="disabledFileActions" :key="file.id" :file="file" :imageList="imageList"
                 :imageIndex="imageList.findIndex(item => item.id === file.id)" :favorited="file.favorited"
                 @rename="showRenameDialog" @move="showMoveDialog" @download="downloadFile" @delete="confirmDelete"
-                @unzip="refreshCache" @viewText="viewTextFile" @previewPdf="previewPdfFile" @previewOffice="previewOfficeFile" @previewMarkdown="previewMarkdownFile" @convertTs="convertTsFile" @favorite="refreshFavorites" @navigate="navigateToFolder" @folderCoverUpdated="handleFolderCoverUpdated" @searchSimilar="searchSimilarByFile"/>
+                @unzip="refreshCache" @viewText="viewTextFile" @previewPdf="previewPdfFile" @previewOffice="previewOfficeFile" @previewMarkdown="previewMarkdownFile" @convertTs="convertTsFile" @favorite="refreshFavorites" @navigate="navigateToFolder" @folderCoverUpdated="handleFolderCoverUpdated" @searchSimilar="searchSimilarByFile" @preview="openImagePreview"/>
             </template>
           </template>
         </div>
@@ -196,6 +196,14 @@
     <pdf-viewer-dialog v-model:visible="pdfDialogVisible" :file="pdfPreviewItem" />
     <office-viewer-dialog v-model:visible="officeDialogVisible" :file="officePreviewItem" />
     <markdown-viewer-dialog v-model:visible="markdownDialogVisible" :file="markdownPreviewItem" />
+    <image-viewer
+      v-model:visible="imagePreviewVisible"
+      :url-list="imageList.map(item => `/preview/${item.id}`)"
+      :initial-index="imagePreviewIndex"
+      :has-more="hasMoreFiles"
+      @load-more="loadMoreFiles"
+      @close="imagePreviewVisible = false"
+    />
     <!-- 高级过滤对话框 -->
     <el-dialog v-model="dialogSearchAdvanceVisible" title="过滤" width="260px">
       <el-form :model="advanceSearchForm" label-width="0">
@@ -268,6 +276,7 @@ import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import FolderItem from '../components/FolderItem.vue'
 import FileItem from '../components/FileItem.vue'
+import ImageViewer from '../components/ImageViewer.vue'
 import TextViewerDialog from '../components/TextViewerDialog.vue'
 import UploadQueuePanel from '../components/UploadQueuePanel.vue'
 import { getFiles, updateCache, checkFiles, cleanDb, createNewFolder, renameFile, deleteFileOrFolder, uploadFileToServer, uploadFolderTreeToServer, downloadFromText, moveFile, convertFileToMp4, getFolderInfo, searchByImage, rebuildImageHash } from '../services/userApi'
@@ -377,6 +386,9 @@ const officeDialogVisible = ref(false)
 const officePreviewItem = ref(null)
 const markdownDialogVisible = ref(false)
 const markdownPreviewItem = ref(null)
+
+const imagePreviewVisible = ref(false)
+const imagePreviewIndex = ref(0)
 
 const imageList = computed(() => {
   return files.value.filter(file => {
@@ -1444,6 +1456,13 @@ const previewMarkdownFile = (file) => {
   if (!file?.id) return
   markdownPreviewItem.value = file
   markdownDialogVisible.value = true
+}
+
+const openImagePreview = (file) => {
+  if (!file?.id) return
+  imagePreviewIndex.value = imageList.value.findIndex(item => item.id === file.id)
+  if (imagePreviewIndex.value < 0) imagePreviewIndex.value = 0
+  imagePreviewVisible.value = true
 }
 
 

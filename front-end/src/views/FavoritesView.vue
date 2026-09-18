@@ -33,6 +33,7 @@
                 @navigate="navigateToFolder"
                 @folderCoverUpdated="handleFolderCoverUpdated"
                 @searchSimilar="searchSimilarByFile"
+                @preview="openImagePreview"
               />
             </template>
           </template>
@@ -52,6 +53,14 @@
     />
     <pdf-viewer-dialog v-model:visible="pdfDialogVisible" :file="pdfPreviewItem" />
     <office-viewer-dialog v-model:visible="officeDialogVisible" :file="officePreviewItem" />
+    <image-viewer
+      v-model:visible="imagePreviewVisible"
+      :url-list="imageList.map(item => `/preview/${item.id}`)"
+      :initial-index="imagePreviewIndex"
+      :has-more="hasMoreFiles"
+      @load-more="loadMoreFiles"
+      @close="imagePreviewVisible = false"
+    />
   </div>
 </template>
 
@@ -61,6 +70,7 @@ import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import FolderItem from '../components/FolderItem.vue'
 import FileItem from '../components/FileItem.vue'
+import ImageViewer from '../components/ImageViewer.vue'
 import TextViewerDialog from '../components/TextViewerDialog.vue'
 import { searchByImage } from '../services/userApi'
 import { getFavoritesList } from '../services/favoritesApi'
@@ -89,6 +99,9 @@ const pdfDialogVisible = ref(false)
 const pdfPreviewItem = ref(null)
 const officeDialogVisible = ref(false)
 const officePreviewItem = ref(null)
+
+const imagePreviewVisible = ref(false)
+const imagePreviewIndex = ref(0)
 
 // 计算图片列表
 const imageList = computed(() => {
@@ -213,6 +226,13 @@ const previewOfficeFile = (file) => {
   if (!file?.id) return
   officePreviewItem.value = file
   officeDialogVisible.value = true
+}
+
+const openImagePreview = (file) => {
+  if (!file?.id) return
+  imagePreviewIndex.value = imageList.value.findIndex(item => item.id === file.id)
+  if (imagePreviewIndex.value < 0) imagePreviewIndex.value = 0
+  imagePreviewVisible.value = true
 }
 
 const searchSimilarByFile = async (fileInfo) => {

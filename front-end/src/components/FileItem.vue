@@ -101,11 +101,8 @@
             :min-scale="0.2"
             show-progress
             fit="contain"
-            :preview-src-list="imageList.map(item => `/preview/${item.id}`)"
-            :initial-index="imageIndex"
-            :hide-on-click-modal="true"
-            :preview-teleported="true"
-            :infinite="true"
+            style="cursor: pointer;"
+            @click="emit('preview', displayFile)"
           />
           <!-- 音频预览 -->
           <audio 
@@ -173,7 +170,7 @@ const props = defineProps({
 const displayFile = ref(props.file)
 const isFavorited = ref(Boolean(props.favorited))
 
-const emit = defineEmits(['rename', 'delete', 'move', 'download', 'unzip', 'viewText', 'convertTs', 'favorite', 'navigate', 'folderCoverUpdated', 'searchSimilar', 'previewPdf', 'previewOffice', 'previewMarkdown'])
+const emit = defineEmits(['rename', 'delete', 'move', 'download', 'unzip', 'viewText', 'convertTs', 'favorite', 'navigate', 'folderCoverUpdated', 'searchSimilar', 'previewPdf', 'previewOffice', 'previewMarkdown', 'preview'])
 
 const isActionDisabled = (action) => {
   return props.disabledActions.includes(action)
