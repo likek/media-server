@@ -696,6 +696,55 @@ const handleDropUpload = async (event) => {
   ElMessage.success(`已加入上传队列：${parts.join('，')}`)
 }
 
+const handlePasteUpload = (event) => {
+  const activeElement = document.activeElement
+  if (activeElement) {
+    const tagName = activeElement.tagName?.toLowerCase()
+    const isTextInput = (tagName === 'input' && !['button', 'checkbox', 'radio', 'submit', 'reset', 'file'].includes(activeElement.type)) ||
+      tagName === 'textarea' ||
+      activeElement.isContentEditable
+    if (isTextInput) {
+      return
+    }
+  }
+
+  const items = event.clipboardData?.items
+  if (!items || items.length === 0) {
+    return
+  }
+
+  const imageFiles = []
+  const formatTimestamp = (date) => {
+    const pad = (n) => String(n).padStart(2, '0')
+    const yyyy = date.getFullYear()
+    const mm = pad(date.getMonth() + 1)
+    const dd = pad(date.getDate())
+    const hh = pad(date.getHours())
+    const mi = pad(date.getMinutes())
+    const ss = pad(date.getSeconds())
+    return `${yyyy}${mm}${dd}_${hh}${mi}${ss}`
+  }
+
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i]
+    if (item.type && item.type.startsWith('image/')) {
+      const blob = item.getAsFile()
+      if (blob) {
+        const extMatch = item.type.match(/image\/(png|jpeg|jpg|webp|gif)/)
+        const ext = extMatch ? (extMatch[1] === 'jpeg' ? 'jpg' : extMatch[1]) : 'png'
+        const baseName = `screenshot_${formatTimestamp(new Date())}${imageFiles.length > 0 ? `_${imageFiles.length + 1}` : ''}.${ext}`
+        const file = new File([blob], baseName, { type: blob.type || 'image/png' })
+        imageFiles.push(file)
+      }
+    }
+  }
+
+  if (imageFiles.length > 0) {
+    event.preventDefault()
+    enqueueUploadFiles(imageFiles, currentFolderId.value, currentFolderLabel.value)
+  }
+}
+
 const backdoorLocked = computed(() => {
   return !backdoorMenuAccessState.canRenderHiddenMenus
 })
@@ -1493,20 +1542,22 @@ const cacheScrollPosition = () => {
   }
 }
 
-// 设置滚动事件监听
+// 设置滚动与粘贴事件监听
 onMounted(() => {
   if (mediaContainer.value) {
     mediaContainer.value.addEventListener('scroll', checkScrollPosition)
     mediaContainer.value.addEventListener('scroll', cacheScrollPosition)
   }
+  window.addEventListener('paste', handlePasteUpload)
 })
 
-// 移除滚动事件监听
+// 移除滚动与粘贴事件监听
 onUnmounted(() => {
   if (mediaContainer.value) {
     mediaContainer.value.removeEventListener('scroll', checkScrollPosition)
     mediaContainer.value.removeEventListener('scroll', cacheScrollPosition)
   }
+  window.removeEventListener('paste', handlePasteUpload)
   if (uploadRefreshTimer) {
     clearTimeout(uploadRefreshTimer)
     uploadRefreshTimer = null
