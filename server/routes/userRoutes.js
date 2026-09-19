@@ -18,6 +18,7 @@ import { computeDHashFromBuffer, computeDHashFromFile, hammingDistanceHex64 } fr
 import { computeClipEmbeddingFromFile, IMAGE_EMBEDDING_MODEL_ID } from "../utils/imageEmbedding.js";
 import { validateFingerprint } from "../middleware/fingerprintValidator.js";
 import { requireBackdoorAccess } from "../middleware/backdoorPermission.js";
+import { lockFolder, unlockFolder, isAdminReq, isLocked, stripLockedFields, getLockedStatusMap } from "../lockManager.js";
 import { decryptMultipartMetaMiddleware } from "../middleware/encryptHttp.js";
 import db from "../dbserialize.js";
 
@@ -34,6 +35,8 @@ router.use("/move", requireBackdoorAccess);
 router.use("/checkFiles", requireBackdoorAccess);
 router.use("/setFolderCover", requireBackdoorAccess);
 router.use("/cancelUploadTask", requireBackdoorAccess);
+router.use("/lockFolder", requireBackdoorAccess);
+router.use("/unlockFolder", requireBackdoorAccess);
 
 const normalizeRelativePath = (inputPath = "") => {
   const normalizedPath = path.posix.normalize(`/${String(inputPath).replace(/\\/g, "/")}`);
@@ -1063,23 +1066,32 @@ router.post("/searchByImage", searchUpload.single("file"), decryptMultipartMetaM
 
         if (candidates.length > 0) {
           candidates.sort((a, b) => b.score - a.score);
+          const admin = isAdminReq(req);
+          let resultFiles = candidates.map((x) => ({
+            id: x.row.id,
+            type: x.row.type,
+            filename: x.row.name,
+            lastModified: x.row.last_modified,
+            size: x.row.size,
+            parent_id: x.row.parent_id,
+            favorited: false,
+            m3u8_path: x.row.m3u8_path,
+            mime_type: x.row.mime_type,
+            thumbnail: x.row.thumbnail,
+            similarity: x.score,
+          }));
+          if (!admin) {
+            const lockStatusMap = getLockedStatusMap(resultFiles.map(f => f.id));
+            resultFiles = resultFiles.filter(f => {
+              const status = lockStatusMap.get(f.id);
+              return !status?.locked;
+            });
+          }
           res.send({
             mode: "semantic",
             model: modelId,
-            files: candidates.map((x) => ({
-              id: x.row.id,
-              type: x.row.type,
-              filename: x.row.name,
-              lastModified: x.row.last_modified,
-              size: x.row.size,
-              parent_id: x.row.parent_id,
-              favorited: false,
-              m3u8_path: x.row.m3u8_path,
-              mime_type: x.row.mime_type,
-              thumbnail: x.row.thumbnail,
-              similarity: x.score,
-            })),
-            total: candidates.length,
+            files: resultFiles,
+            total: resultFiles.length,
           });
           return;
         }
@@ -1135,11 +1147,20 @@ router.post("/searchByImage", searchUpload.single("file"), decryptMultipartMetaM
       .sort((a, b) => a.distance - b.distance || b.score - a.score)
       .slice(0, topK);
 
+    const admin = isAdminReq(req);
+    let resultFiles = ranked.map((x) => ({ ...x.file, similarity: x.score, distance: x.distance }));
+    if (!admin) {
+      const lockStatusMap = getLockedStatusMap(resultFiles.map(f => f.id));
+      resultFiles = resultFiles.filter(f => {
+        const status = lockStatusMap.get(f.id);
+        return !status?.locked;
+      });
+    }
     res.send({
       mode: "hash",
       queryHash,
-      files: ranked.map((x) => ({ ...x.file, similarity: x.score, distance: x.distance })),
-      total: ranked.length,
+      files: resultFiles,
+      total: resultFiles.length,
     });
   } catch (err) {
     console.error("Error searching by image:", err);
@@ -1366,6 +1387,11 @@ router.post("/files", async (req, res) => {
     // 初始化数据库中的文件系统（如果需要）
     await initRootDirectory(req);
     
+    // 如果文件夹本身被上锁且用户不是管理员，阻止进入
+    if (folderId && isLocked(folderId) && !isAdminReq(req)) {
+      return res.send({ files: [], total: 0, locked: true });
+    }
+    
     // 通过ID获取文件列表，传递req对象以获取用户ID和收藏状态
     let result = await getFolderContentsById(folderId, searchQuery, { type, mime_type, space, start_date, end_date }, page, pageSize, req);
     res.send(result); // 返回包含files和total的结果
@@ -1386,6 +1412,10 @@ router.post("/nextVideo", async (req, res) => {
     const nextVideo = getNextVideoById(id, req);
     if (!nextVideo) {
       return res.status(404).json({ message: "Next video not found" });
+    }
+
+    if (isLocked(nextVideo.id) && !isAdminReq(req)) {
+      return res.status(403).json({ message: "Forbidden" });
     }
 
     res.json(nextVideo);
@@ -1478,10 +1508,25 @@ router.post("/folderInfo", async (req, res) => {
     if (!folderInfo || folderInfo.type !== 'folder') {
       return res.status(404).send({ message: "Folder not found" });
     }
+
+    // 检查上锁状态
+    const locked = isLocked(id);
+    const admin = isAdminReq(req);
+
+    if (locked && !admin) {
+      return res.send({
+        id: folderInfo.id,
+        type: folderInfo.type,
+        filename: folderInfo.filename,
+        locked: true
+      });
+    }
     
     res.send({
       ...folderInfo,
-      path: undefined
+      path: undefined,
+      locked,
+      directlyLocked: locked
     });
   } catch (err) {
     console.error("Error getting folder info:", err);
@@ -1563,6 +1608,9 @@ router.post("/convert", async (req, res) => {
     if (!inputFileId) {
       return res.status(400).json({ message: "inputFileId is required" });
     }
+    if (isLocked(inputFileId) && !isAdminReq(req)) {
+      return res.status(403).json({ message: "Forbidden" });
+    }
     const inputFileInfo = await getFileById(inputFileId);
     if (!inputFileInfo) {
       return res.status(404).json({ message: "File not found" });
@@ -1626,6 +1674,9 @@ router.post("/convert", async (req, res) => {
 
 router.post("/unzip", async (req, res) => {
   const { fileId } = req.body;
+  if (isLocked(fileId) && !isAdminReq(req)) {
+    return res.status(403).json({ message: "Forbidden" });
+  }
   const fileInfo = await getFileById(fileId);
   if(!fileInfo) { return res.status(404).json({ message: "文件不存在" }); }
   const zipFilePath = fileInfo.path;
@@ -1658,6 +1709,9 @@ router.post("/unzip", async (req, res) => {
 
 router.post("/readTextFile", async (req, res) => {
   const { id, start = 0, numLines = 50, encoding = "utf8" } = req.body;
+  if (isLocked(id) && !isAdminReq(req)) {
+    return res.status(403).json({ message: "Forbidden" });
+  }
   const { path: filePath } = await getFileById(id);
   const absoluteFilePath = path.join(MEDIA_FULL_PATH, filePath);
 
@@ -1697,6 +1751,9 @@ router.post("/readTextFile", async (req, res) => {
 
 router.post("/convertTxtEncoding", async (req, res) => {
   const { id } = req.body;
+  if (isLocked(id) && !isAdminReq(req)) {
+    return res.status(403).json({ message: "Forbidden" });
+  }
   const { path: filePath  } = getFileById(id);
   const absoluteFilePath = path.join(MEDIA_FULL_PATH, filePath);
 
@@ -1709,6 +1766,9 @@ router.post("/convertTxtEncoding", async (req, res) => {
 
 router.post("/updateThumbnail", async (req, res) => {
   const { id, time } = req.body;
+  if (isLocked(id) && !isAdminReq(req)) {
+    return res.status(403).json({ message: "Forbidden" });
+  }
   const { path: filePath, filename  } = getFileById(id);
   const folderPath = path.dirname(filePath);
   const fullFolderPath = path.join(MEDIA_FULL_PATH, path.dirname(filePath));
@@ -1770,6 +1830,9 @@ router.post("/checkFiles", async (req, res) => {
 
 router.post("/saveVideoFrame", async (req, res) => {
   const { id, time } = req.body;
+  if (isLocked(id) && !isAdminReq(req)) {
+    return res.status(403).json({ success: false, id, time, message: "Forbidden" });
+  }
   const fileInfo = getFileById(id);
   if (!fileInfo) {
     return res.status(404).json({ success: false, id, time, message: "File not found" });
@@ -1827,6 +1890,37 @@ router.post("/setFolderCover", async (req, res) => {
   } catch (error) {
     console.error("Error setting folder cover:", error);
     res.status(400).json({ success: false, message: error?.message || String(error) });
+  }
+});
+
+// 上锁文件夹
+router.post("/lockFolder", async (req, res) => {
+  try {
+    const { id } = req.body;
+    if (!id) {
+      return res.status(400).json({ success: false, message: "缺少文件夹ID" });
+    }
+    const userId = getUserIdByReq(req);
+    const result = lockFolder(id, userId);
+    res.json(result);
+  } catch (error) {
+    console.error("Error locking folder:", error);
+    res.status(500).json({ success: false, message: error?.message || String(error) });
+  }
+});
+
+// 解锁文件夹
+router.post("/unlockFolder", async (req, res) => {
+  try {
+    const { id } = req.body;
+    if (!id) {
+      return res.status(400).json({ success: false, message: "缺少文件夹ID" });
+    }
+    const result = unlockFolder(id);
+    res.json(result);
+  } catch (error) {
+    console.error("Error unlocking folder:", error);
+    res.status(500).json({ success: false, message: error?.message || String(error) });
   }
 });
 

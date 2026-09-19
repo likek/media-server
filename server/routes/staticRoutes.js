@@ -6,16 +6,31 @@ import { HLS_SOURCE_DIR, MEDIA_FULL_PATH, THUMB_FULL_PATH } from "../../serverCo
 import { aesDecrypt, aesEncrypt } from "../utils/encrypt.js";
 import { getUserIdByReq } from "../utils/index.js";
 import { ensureCachedPreviewImage, needsPreviewTranscode } from "../utils/imageLoader.js";
+import { isLocked, isAdminReq } from "../lockManager.js";
 
 const router = express.Router();
 const userId_audioTokenAndRangesMap_Map = new Map();
 const IMAGE_PREVIEW_CACHE_DIR = path.join(THUMB_FULL_PATH, ".image-preview");
 const SEND_FILE_OPTIONS = { dotfiles: "allow" };
 
+/**
+ * Check if a file is locked and the requesting user is not admin.
+ * Returns true if access is allowed, false (and sends 403) if not.
+ */
+const checkFileAccess = (req, res, fileId) => {
+  if (!fileId) return true;
+  if (!isLocked(fileId)) return true;
+  // File is locked — only admin can access
+  if (isAdminReq(req)) return true;
+  res.status(403).send('Forbidden');
+  return false;
+};
+
 // /media/10119/240p/index.m3u8
 // 多码率的ts片段 或 次级m3u8文件
 router.get('/media/:id/:target/:m3u8file', (req, res) => {
   validateVideoToken(req, res, false, () => {
+    if (!checkFileAccess(req, res, req.params.id)) return;
     const realM3u8file = req.params.m3u8file.replace(/\.7a1/, '.m3u8').replace(/\.9n4/, '.ts')
     const m3u8filePath = path.join(HLS_SOURCE_DIR, req.params.id, req.params.target, realM3u8file);
     if (fs.existsSync(m3u8filePath)) {
@@ -49,6 +64,7 @@ router.get('/media/:id/:target/:m3u8file', (req, res) => {
 // ts片段请求,只有单码率的ts片段
 router.get('/media/:id/:segment', (req, res) => {
   validateVideoToken(req, res, false, () => {
+    if (!checkFileAccess(req, res, req.params.id)) return;
     const realSegment = req.params.segment.replace(/\.7a1/, '.m3u8').replace(/\.9n4/, '.ts')
     const segmentPath = path.join(HLS_SOURCE_DIR, req.params.id, realSegment);
     if (fs.existsSync(segmentPath)) {
@@ -70,6 +86,10 @@ router.get('/media/:id', (req, res) => {
       if (!fileInfo || fileInfo.type !== 'file') {
         return res.status(404).send('File not found');
       }
+
+      // 检查上锁状态：非管理员无法访问被锁文件
+      if (!checkFileAccess(req, res, fileId)) return;
+
       res.setHeader('Cache-Control', 'public, max-age=691200');
 
       const isVideo = fileInfo.mime_type.startsWith('video/')
@@ -129,6 +149,10 @@ router.get('/preview/:id', async (req, res) => {
     if (!fileInfo || fileInfo.type !== 'file') {
       return res.status(404).send('File not found');
     }
+
+    // 检查上锁状态：非管理员无法预览被锁图片
+    if (!checkFileAccess(req, res, fileId)) return;
+
     if (!fileInfo.mime_type?.startsWith('image/')) {
       return res.status(400).send('Preview is only supported for images');
     }
@@ -164,7 +188,10 @@ router.get('/thumbnail/:id', async (req, res) => {
     if (!fileInfo || fileInfo.type !== 'file') {
       return res.status(404).send('File not found');
     }
-    
+
+    // 检查上锁状态：非管理员无法查看被锁文件缩略图
+    if (!checkFileAccess(req, res, fileId)) return;
+
     // 对于视频文件，缩略图通常是文件名加.png
     const thumbnailPath = path.join(THUMB_FULL_PATH, fileInfo.path + '.png');
     res.setHeader('Cache-Control', 'public, max-age=691200');

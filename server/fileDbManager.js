@@ -7,7 +7,8 @@ import { MEDIA_FULL_PATH, THUMB_FULL_PATH, TRASH_FULL_PATH } from "../serverConf
 import { isVideoByName, generateThumbnail, getUserIdByReq } from "./utils/index.js";
 import db from "./dbserialize.js";
 import { getFavoritesStatus } from "./favoritesManager.js";
-import { generateSegmentedWhereClause, rankResultsByRelevance } from "./utils/segmentUtils.js"; 
+import { generateSegmentedWhereClause, rankResultsByRelevance } from "./utils/segmentUtils.js";
+import { getLockedStatusMap, stripLockedFields, isAdminReq, isLocked } from "./lockManager.js";
 
 const normalizeRelPath = (input = "") => String(input || "").replace(/\\/g, "/").replace(/^\//, "");
 const isImageMimeType = (mimeType = "") => typeof mimeType === "string" && mimeType.startsWith("image/");
@@ -1029,6 +1030,27 @@ const getFolderContentsById = async (folderId, searchQuery, filters, page, pageS
       console.error('获取收藏状态失败:', error);
       // 出错时继续使用默认的收藏状态
     }
+  }
+
+  // 文件夹上锁状态处理
+  if (fileInfos.length > 0) {
+    const admin = isAdminReq(req);
+    const fileIds = fileInfos.map(f => f.id);
+    const lockStatusMap = getLockedStatusMap(fileIds);
+
+    fileInfos = fileInfos.map(file => {
+      const status = lockStatusMap.get(file.id) || { locked: false, directlyLocked: false };
+      if (status.locked && !admin) {
+        // 非管理员：被锁文件只返回最小信息
+        return stripLockedFields(file);
+      }
+      // 管理员或未锁文件：添加锁状态标记
+      return {
+        ...file,
+        locked: status.locked,
+        directlyLocked: status.directlyLocked
+      };
+    });
   }
   
   // 如果文件夹内容为空，自动刷新缓存

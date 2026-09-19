@@ -1,9 +1,10 @@
 
-import { getRequestInfo, getSaltByReq, getUserIdByReq } from "./utils/index.js";
+import { getRequestInfo, getSaltByReq, getUserIdByReq, getIpByReq } from "./utils/index.js";
 import db from "./dbserialize.js";
 import { FINGERPRINT_PREFIX } from "./middleware/fingerprintValidator.js";
 import { aesEncrypt } from "./utils/encrypt.js";
 import { HIDDEN_MENU_HOME_TAP_PASSWORD } from "../serverConfig.js";
+import { createSession, refreshSession, getSessionUserId, SESSION_MAX_AGE_DAYS, SESSION_COOKIE_NAME, FP_COOKIE_NAME, SALT_COOKIE_NAME, cleanupExpiredSessions } from "./sessionManager.js";
 
 const HOME_TAP_HISTORY_LIMIT = 8;
 
@@ -124,19 +125,54 @@ async function tryRegister(req, res) {
 
     const salt = getSaltByReq(req);
 
-    // 将指纹信息写入cookie
-    res.cookie("fp", aesEncrypt(fp, salt), {
-      httpOnly: false,
+    // 将指纹信息写入cookie（键名混淆：_a = fp）
+    res.cookie(FP_COOKIE_NAME, aesEncrypt(fp, salt), {
+      httpOnly: true,
       sameSite: "strict",
       maxAge: 365 * 24 * 60 * 60 * 1000, // 1 year
     });
 
-    // 将salt信息写入cookie
-    res.cookie("s", aesEncrypt(salt), {
-      httpOnly: false,
+    // 将salt信息写入cookie（键名混淆：_b = s）
+    res.cookie(SALT_COOKIE_NAME, aesEncrypt(salt), {
+      httpOnly: true,
       sameSite: "strict",
       maxAge: 365 * 24 * 60 * 60 * 1000, // 1 year
     });
+
+    // Session token：优先复用已有 session，否则新建（联合绑定 IP + salt 防盗用）
+    const requestIp = getIpByReq(req);
+    const existingSessionToken = req.cookies?.[SESSION_COOKIE_NAME];
+    if (existingSessionToken) {
+      const sessionUserId = getSessionUserId(existingSessionToken, requestIp, salt);
+      if (sessionUserId === fp) {
+        // 同一用户、同 IP、同 salt，刷新过期时间（传入 salt 用于解密 token）
+        refreshSession(existingSessionToken, salt);
+        res.cookie(SESSION_COOKIE_NAME, existingSessionToken, {
+          httpOnly: true,
+          sameSite: "strict",
+          maxAge: SESSION_MAX_AGE_DAYS * 24 * 60 * 60 * 1000,
+        });
+      } else {
+        // session 无效/不匹配/IP 变了/salt 变了，创建新 session
+        const { token: newToken } = createSession(fp, requestIp, salt);
+        res.cookie(SESSION_COOKIE_NAME, newToken, {
+          httpOnly: true,
+          sameSite: "strict",
+          maxAge: SESSION_MAX_AGE_DAYS * 24 * 60 * 60 * 1000,
+        });
+      }
+    } else {
+      // 没有 session cookie，创建新 session
+      const { token: newToken } = createSession(fp, requestIp, salt);
+      res.cookie(SESSION_COOKIE_NAME, newToken, {
+        httpOnly: true,
+        sameSite: "strict",
+        maxAge: SESSION_MAX_AGE_DAYS * 24 * 60 * 60 * 1000,
+      });
+    }
+
+    // 顺手清理过期 session（低概率触发，不阻塞响应）
+    try { cleanupExpiredSessions(); } catch (e) { /* ignore */ }
   
     const userInfo = await getRequestInfo(req);
     const normalizedIv = normalizeIvValue(req.body?.iv ?? req.query?.iv);

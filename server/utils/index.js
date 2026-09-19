@@ -8,6 +8,7 @@ import ffmpeg from "fluent-ffmpeg";
 import { aesDecrypt } from "./encrypt.js";
 import { launchBrowser } from "./browser.js";
 import { IP2REGION_DB_FULL_PATH } from "../../serverConfig.js";
+import { getSessionUserId, SESSION_COOKIE_NAME, SALT_COOKIE_NAME } from "../sessionManager.js";
 
 const regineDBPath = IP2REGION_DB_FULL_PATH;
 const vectorIndex = Searcher.loadVectorIndexFromFile(regineDBPath);
@@ -56,8 +57,8 @@ const getSaltByReq = (req, decrypted = true) => {
   // 检查请求头
   else if (req.headers['x-s']) {
     salt = req.headers['x-s'];
-  } else if (req.cookies && req.cookies?.s) {
-    salt = req.cookies.s;
+  } else if (req.cookies && req.cookies?.[SALT_COOKIE_NAME]) {
+    salt = req.cookies[SALT_COOKIE_NAME];
   }
 
   if (!salt) {
@@ -73,23 +74,44 @@ const getSaltByReq = (req, decrypted = true) => {
 
 const getUserIdByReq = (req, decrypted = true) => {
   try {
-    // 确保fingerprint存在
-    const fp = req.headers['x-fp'] || req.query?.fp || req.cookies?.fp;
+    // 优先检查 session token（联合校验：token + ip + salt）
+    const sessionToken = req.cookies?.[SESSION_COOKIE_NAME];
+    if (sessionToken) {
+      const requestIp = getIpByReq(req);
+      const requestSalt = getSaltByReq(req);
+      const userId = getSessionUserId(sessionToken, requestIp, requestSalt);
+      if (userId) {
+        // 如果请求携带 x-fp header，额外校验指纹是否与 session user_id 一致
+        const headerFp = req.headers['x-fp'];
+        if (headerFp && requestSalt) {
+          try {
+            const decryptedFp = aesDecrypt(headerFp, requestSalt);
+            if (decryptedFp !== userId) {
+              return null;
+            }
+          } catch (e) {
+            return null;
+          }
+        }
+        return userId;
+      }
+    }
+
+    // 回退到指纹识别（仅接受 header 和 query，不接受 cookie —— 防止偷走 fp/s cookie 后绕过 IP 绑定）
+    const fp = req.headers['x-fp'] || req.query?.fp;
     if (!fp) {
-      // console.error("fingerprint is empty", req.headers.upgrade, req.url);
       return null;
     }
 
     const salt = getSaltByReq(req);
     if (!salt) {
-      // console.error("salt is empty");
       return null;
     }
     if (!decrypted) {
       return fp;
     }
     // 用解密后的salt解密fingerprint
-    return aesDecrypt(fp, salt);;
+    return aesDecrypt(fp, salt);
   } catch (e) {
     console.error("解析用户ID失败:", e);
     return null;

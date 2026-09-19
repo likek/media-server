@@ -1,14 +1,27 @@
 <template>
-  <div :class='["folder-item", { "newest": isNew }]' @click="$emit('navigate', folder.id)">
+  <div :class='["folder-item", { "newest": isNew, "folder-item--locked": isLocked }]' @click="handleClick">
     <div class="folder-content">
       <div>
         <div class="folder-header">
-          <el-icon class="folder-icon"><Folder /></el-icon>
-          <div class="folder-actions">
-            <el-tooltip :content="isFavorited ? '取消收藏' : '收藏'" placement="top" :auto-close="1000" v-if="allowActions.includes('favorite')">
+          <el-icon class="folder-icon">
+            <Lock v-if="isLocked" class="lock-icon" />
+            <Folder v-else />
+          </el-icon>
+          <div class="folder-actions" v-if="!isLocked || isAdmin">
+            <el-tooltip :content="isFavorited ? '取消收藏' : '收藏'" placement="top" :auto-close="1000" v-if="!isLocked && allowActions.includes('favorite')">
               <el-icon class="action-icon favorite-icon" @click.stop="toggleFavorite" :class="{ 'is-favorited': isFavorited }">
                 <Star v-if="!isFavorited" />
                 <StarFilled v-else />
+              </el-icon>
+            </el-tooltip>
+            <el-tooltip content="上锁" placement="top" :auto-close="1000" v-if="canLockFolder">
+              <el-icon class="action-icon lock-action-icon" @click.stop="emit('lock', folder)">
+                <Lock />
+              </el-icon>
+            </el-tooltip>
+            <el-tooltip content="解锁" placement="top" :auto-close="1000" v-if="canUnlockFolder">
+              <el-icon class="action-icon unlock-action-icon" @click.stop="emit('unlock', folder)">
+                <Unlock />
               </el-icon>
             </el-tooltip>
             <el-tooltip content="重命名" placement="top" :auto-close="1000" v-if="allowActions.includes('rename')">
@@ -28,7 +41,7 @@
             </el-tooltip>
           </div>
         </div>
-        <div class="folder-cover-wrap">
+        <div class="folder-cover-wrap" v-if="!isLocked || isAdmin">
           <img :src="folderBackSvg" class="folder-cover-back" alt="" aria-hidden="true" />
           <div class="folder-cover-frame">
             <div class="folder-cover-sheet" aria-hidden="true"></div>
@@ -44,11 +57,14 @@
         </div>
       </div>
       <!-- 文件信息 -->
-      <div class="file-info">
+      <div class="file-info" v-if="!isLocked || isAdmin">
         <span>
           <!-- {{ formatFileSize(folder.size) }} -->
         </span>
         <span>{{ formatLastModified }}</span>
+      </div>
+      <div class="file-info" v-else>
+        <span class="locked-label">已上锁</span>
       </div>
     </div>
   </div>
@@ -57,6 +73,7 @@
 <script setup>
 import { computed, ref } from 'vue'
 import { ElMessage } from 'element-plus'
+import { Lock, Unlock } from '@element-plus/icons-vue'
 import { addToFavorites, removeFromFavorites } from '../services/favoritesApi'
 import folderBackSvg from '../res/back.svg'
 import folderFrontSvg from '../res/front.svg'
@@ -77,6 +94,10 @@ const props = defineProps({
   disabledActions: {
     type: Array,
     default: () => []
+  },
+  isAdmin: {
+    type: Boolean,
+    default: false
   }
 })
 
@@ -91,7 +112,16 @@ const isFavorited = ref(props.favorited)
 const isNew = ref(Date.now() - new Date(props.folder.lastModified).getTime() < 1000 * 60 * 60 * 24 * 2)
 const coverSrc = computed(() => props.folder.cover_file_id ? `/preview/${props.folder.cover_file_id}` : '')
 
-const emit = defineEmits(['navigate', 'rename', 'move', 'delete', 'favorite'])
+const emit = defineEmits(['navigate', 'rename', 'move', 'delete', 'favorite', 'lock', 'unlock'])
+
+const isLocked = computed(() => Boolean(props.folder?.locked))
+const canLockFolder = computed(() => props.isAdmin && !isLocked.value)
+const canUnlockFolder = computed(() => props.isAdmin && Boolean(props.folder?.directlyLocked))
+
+const handleClick = () => {
+  if (isLocked.value && !props.isAdmin) return
+  emit('navigate', props.folder.id)
+}
 
 const isActionDisabled = (action) => {
   return props.disabledActions.includes(action)
@@ -304,5 +334,42 @@ const toggleFavorite = async () => {
   font-size: 12px;
   color: #909399;
   margin-top: 10px;
+}
+
+.folder-item--locked {
+  background-color: #f0f0f0;
+  cursor: not-allowed;
+}
+
+.folder-item--locked .folder-icon {
+  color: #c0c4cc;
+}
+
+.lock-icon {
+  font-size: 20px;
+  color: #c0c4cc;
+  margin-right: 8px;
+}
+
+.locked-label {
+  color: #c0c4cc;
+}
+
+.lock-action-icon {
+  color: #e6a23c;
+}
+
+.unlock-action-icon {
+  color: #67c23a;
+}
+
+@media (any-hover: hover) {
+  .lock-action-icon:hover {
+    color: #e6a23c;
+  }
+
+  .unlock-action-icon:hover {
+    color: #67c23a;
+  }
 }
 </style>

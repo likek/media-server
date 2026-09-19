@@ -12,9 +12,12 @@
                 :key="file.id"
                 :folder="file"
                 :favorited="true"
-                :allow-actions="['favorite']" 
+                :allow-actions="['favorite']"
+                :is-admin="isAdmin"
                 @navigate="navigateToFolder"
                 @favorite="refreshFavorites"
+                @lock="handleLockFolder"
+                @unlock="handleUnlockFolder"
               />
             </template>
             <template v-else>
@@ -25,6 +28,7 @@
                 :imageIndex="imageList.findIndex(item => item.id === file.id)"
                 :favorited="true"
                 :allow-actions="['favorite', 'viewtext', 'download', 'navigateParent', 'setFolderCover', 'searchSimilar']"
+                :is-admin="isAdmin"
                 @download="downloadFile"
                 @viewText="viewTextFile"
                 @previewPdf="previewPdfFile"
@@ -34,6 +38,8 @@
                 @folderCoverUpdated="handleFolderCoverUpdated"
                 @searchSimilar="searchSimilarByFile"
                 @preview="openImagePreview"
+                @lock="handleLockFolder"
+                @unlock="handleUnlockFolder"
               />
             </template>
           </template>
@@ -72,12 +78,15 @@ import FolderItem from '../components/FolderItem.vue'
 import FileItem from '../components/FileItem.vue'
 import ImageViewer from '../components/ImageViewer.vue'
 import TextViewerDialog from '../components/TextViewerDialog.vue'
-import { searchByImage } from '../services/userApi'
+import { searchByImage, lockFolderApi, unlockFolderApi } from '../services/userApi'
 import { getFavoritesList } from '../services/favoritesApi'
 import { createEncryptedUrl } from '../utils/videoMiddleware'
 import { stashImageSearchResult } from '../utils/imageSearchCache'
+import { useBackdoorMenuAccess } from '../composables/useBackdoorMenuAccess'
 
 const router = useRouter()
+const { backdoorMenuAccessState } = useBackdoorMenuAccess()
+const isAdmin = computed(() => Boolean(backdoorMenuAccessState.canRenderHiddenMenus))
 const PdfViewerDialog = defineAsyncComponent(() => import('../components/PdfViewerDialog.vue'))
 const OfficeViewerDialog = defineAsyncComponent(() => import('../components/OfficeViewerDialog.vue'))
 
@@ -233,6 +242,40 @@ const openImagePreview = (file) => {
   imagePreviewIndex.value = imageList.value.findIndex(item => item.id === file.id)
   if (imagePreviewIndex.value < 0) imagePreviewIndex.value = 0
   imagePreviewVisible.value = true
+}
+
+// 上锁文件夹
+const handleLockFolder = async (file) => {
+  if (!file?.id) return
+  try {
+    const res = await lockFolderApi(file.id)
+    if (res.success) {
+      ElMessage.success('上锁成功')
+      await loadFavorites()
+    } else {
+      ElMessage.error(res.message || '上锁失败')
+    }
+  } catch (e) {
+    console.error('上锁失败', e)
+    ElMessage.error('上锁失败')
+  }
+}
+
+// 解锁文件夹
+const handleUnlockFolder = async (file) => {
+  if (!file?.id) return
+  try {
+    const res = await unlockFolderApi(file.id)
+    if (res.success) {
+      ElMessage.success('解锁成功')
+      await loadFavorites()
+    } else {
+      ElMessage.error(res.message || '解锁失败')
+    }
+  } catch (e) {
+    console.error('解锁失败', e)
+    ElMessage.error('解锁失败')
+  }
 }
 
 const searchSimilarByFile = async (fileInfo) => {

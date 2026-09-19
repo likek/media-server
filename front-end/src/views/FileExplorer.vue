@@ -97,14 +97,14 @@
         <div class="media-grid">
           <template v-for="file in files">
             <template v-if="file.type === 'folder'">
-              <folder-item :allow-actions="['favorite', 'rename', 'move', 'delete']" :disabled-actions="disabledFolderActions" :key="file.id" :folder="file" :favorited="file.favorited" @navigate="navigateToFolder"
-                @rename="showRenameDialog" @move="showMoveDialog" @delete="confirmDelete" @favorite="refreshFavorites" />
+              <folder-item :allow-actions="['favorite', 'rename', 'move', 'delete']" :disabled-actions="disabledFolderActions" :key="file.id" :folder="file" :favorited="file.favorited" :is-admin="isAdmin" @navigate="navigateToFolder"
+                @rename="showRenameDialog" @move="showMoveDialog" @delete="confirmDelete" @favorite="refreshFavorites" @lock="handleLockFolder" @unlock="handleUnlockFolder" />
             </template>
             <template v-else>
               <file-item :allow-actions="getFileActions(file)" :disabled-actions="disabledFileActions" :key="file.id" :file="file" :imageList="imageList"
-                :imageIndex="imageList.findIndex(item => item.id === file.id)" :favorited="file.favorited"
+                :imageIndex="imageList.findIndex(item => item.id === file.id)" :favorited="file.favorited" :is-admin="isAdmin"
                 @rename="showRenameDialog" @move="showMoveDialog" @download="downloadFile" @delete="confirmDelete"
-                @unzip="refreshCache" @viewText="viewTextFile" @previewPdf="previewPdfFile" @previewOffice="previewOfficeFile" @previewMarkdown="previewMarkdownFile" @convertTs="convertTsFile" @favorite="refreshFavorites" @navigate="navigateToFolder" @folderCoverUpdated="handleFolderCoverUpdated" @searchSimilar="searchSimilarByFile" @preview="openImagePreview"/>
+                @unzip="refreshCache" @viewText="viewTextFile" @previewPdf="previewPdfFile" @previewOffice="previewOfficeFile" @previewMarkdown="previewMarkdownFile" @convertTs="convertTsFile" @favorite="refreshFavorites" @navigate="navigateToFolder" @folderCoverUpdated="handleFolderCoverUpdated" @searchSimilar="searchSimilarByFile" @preview="openImagePreview" @lock="handleLockFolder" @unlock="handleUnlockFolder"/>
             </template>
           </template>
         </div>
@@ -279,7 +279,7 @@ import FileItem from '../components/FileItem.vue'
 import ImageViewer from '../components/ImageViewer.vue'
 import TextViewerDialog from '../components/TextViewerDialog.vue'
 import UploadQueuePanel from '../components/UploadQueuePanel.vue'
-import { getFiles, updateCache, checkFiles, cleanDb, createNewFolder, renameFile, deleteFileOrFolder, uploadFileToServer, uploadFolderTreeToServer, downloadFromText, moveFile, convertFileToMp4, getFolderInfo, searchByImage, rebuildImageHash } from '../services/userApi'
+import { getFiles, updateCache, checkFiles, cleanDb, createNewFolder, renameFile, deleteFileOrFolder, uploadFileToServer, uploadFolderTreeToServer, downloadFromText, moveFile, convertFileToMp4, getFolderInfo, searchByImage, rebuildImageHash, lockFolderApi, unlockFolderApi } from '../services/userApi'
 import { useBackdoorMenuAccess } from '../composables/useBackdoorMenuAccess'
 import { createEncryptedUrl } from '../utils/videoMiddleware'
 import { stashImageSearchResult, takeImageSearchResult } from '../utils/imageSearchCache'
@@ -760,6 +760,8 @@ const handlePasteUpload = (event) => {
 const backdoorLocked = computed(() => {
   return !backdoorMenuAccessState.canRenderHiddenMenus
 })
+
+const isAdmin = computed(() => Boolean(backdoorMenuAccessState.canRenderHiddenMenus))
 
 const disabledFileActions = computed(() => {
   return backdoorLocked.value ? BACKDOOR_FILE_ACTIONS : []
@@ -1463,6 +1465,40 @@ const openImagePreview = (file) => {
   imagePreviewIndex.value = imageList.value.findIndex(item => item.id === file.id)
   if (imagePreviewIndex.value < 0) imagePreviewIndex.value = 0
   imagePreviewVisible.value = true
+}
+
+// 上锁文件夹
+const handleLockFolder = async (file) => {
+  if (!file?.id) return
+  try {
+    const res = await lockFolderApi(file.id)
+    if (res.success) {
+      ElMessage.success('上锁成功')
+      await loadFiles()
+    } else {
+      ElMessage.error(res.message || '上锁失败')
+    }
+  } catch (e) {
+    console.error('上锁失败', e)
+    ElMessage.error('上锁失败')
+  }
+}
+
+// 解锁文件夹
+const handleUnlockFolder = async (file) => {
+  if (!file?.id) return
+  try {
+    const res = await unlockFolderApi(file.id)
+    if (res.success) {
+      ElMessage.success('解锁成功')
+      await loadFiles()
+    } else {
+      ElMessage.error(res.message || '解锁失败')
+    }
+  } catch (e) {
+    console.error('解锁失败', e)
+    ElMessage.error('解锁失败')
+  }
 }
 
 

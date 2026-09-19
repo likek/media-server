@@ -261,3 +261,15 @@ export const rebuildImageHash = async (max = 200) => {
   })
   return response
 }
+
+// 上锁文件夹
+export const lockFolderApi = async (id) => {
+  const response = await request.p('/user/lockFolder', { id })
+  return response
+}
+
+// 解锁文件夹
+export const unlockFolderApi = async (id) => {
+  const response = await request.p('/user/unlockFolder', { id })
+  return response
+}

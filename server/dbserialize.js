@@ -159,6 +159,41 @@ const initAll = () => {
   db.prepare('CREATE INDEX IF NOT EXISTS idx_image_embeddings_model ON image_embeddings (model)').run();
 
   db.prepare(`
+    CREATE TABLE IF NOT EXISTS folder_locks (
+      folder_id INTEGER PRIMARY KEY,
+      locked_by TEXT,
+      locked_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (folder_id) REFERENCES files(id) ON DELETE CASCADE
+    )
+  `).run();
+
+  db.prepare(`
+    CREATE TABLE IF NOT EXISTS sessions (
+      token TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      ip TEXT,
+      salt TEXT,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      expires_at TEXT,
+      FOREIGN KEY (user_id) REFERENCES userInfo(userId) ON DELETE CASCADE
+    )
+  `).run();
+
+  // Migration: ensure ip column exists for existing sessions tables (added for IP binding)
+  try {
+    db.prepare(`ALTER TABLE sessions ADD COLUMN ip TEXT`).run();
+  } catch (e) {
+    // Column already exists — ignore
+  }
+
+  // Migration: ensure salt column exists for existing sessions tables (added for salt binding)
+  try {
+    db.prepare(`ALTER TABLE sessions ADD COLUMN salt TEXT`).run();
+  } catch (e) {
+    // Column already exists — ignore
+  }
+
+  db.prepare(`
     CREATE TRIGGER IF NOT EXISTS limit_logs_request
     AFTER INSERT ON logs_request
     WHEN (SELECT COUNT(*) FROM logs_request) > 100000
