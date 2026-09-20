@@ -107,6 +107,48 @@ const recordHomeTapCount = (userId, count) => {
   };
 };
 
+/**
+ * 写入/更新用户行。
+ *
+ * 注意：必须「先有用户行，再有 session」。
+ * sessions.user_id 上存在外键 REFERENCES userInfo(userId)，且全局开启了
+ * PRAGMA foreign_keys = ON，若先插 sessions 会抛 SQLITE_CONSTRAINT_FOREIGNKEY
+ * （新用户首次访问必现，表现为注册接口 500）。
+ *
+ * 这里用 INSERT ... ON CONFLICT 做 upsert，避免并发首访时的主键冲突。
+ * iv 为空时保留旧值；home_click_history 更新时保留原值。
+ */
+const upsertUserInfo = (userId, userInfo, normalizedIv) => {
+  const stmt = db.prepare(`
+    INSERT INTO userInfo (userId, ip, create_time, update_time, userAgent, region, device, os, browser, iv, home_click_history)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(userId) DO UPDATE SET
+      ip = excluded.ip,
+      update_time = excluded.update_time,
+      userAgent = excluded.userAgent,
+      region = excluded.region,
+      device = excluded.device,
+      os = excluded.os,
+      browser = excluded.browser,
+      iv = COALESCE(excluded.iv, userInfo.iv),
+      home_click_history = COALESCE(userInfo.home_click_history, '[]')
+  `);
+
+  stmt.run(
+    userId,
+    userInfo.userIp,
+    userInfo.requestTime,
+    userInfo.requestTime,
+    userInfo.userAgent,
+    userInfo.region,
+    userInfo.device,
+    userInfo.os,
+    userInfo.browser,
+    normalizedIv,
+    "[]"
+  );
+};
+
 async function tryRegister(req, res) {
     // 从请求头获取指纹，而不是使用cookie
     const fp = getUserIdByReq(req);
@@ -139,7 +181,18 @@ async function tryRegister(req, res) {
       maxAge: 365 * 24 * 60 * 60 * 1000, // 1 year
     });
 
-    // Session token：优先复用已有 session，否则新建（联合绑定 IP + salt 防盗用）
+    const userInfo = await getRequestInfo(req);
+    const normalizedIv = normalizeIvValue(req.body?.iv ?? req.query?.iv);
+
+    // 1) 先落地用户行：sessions.user_id 外键指向 userInfo.userId，父行必须先存在
+    try {
+      upsertUserInfo(fp, userInfo, normalizedIv);
+    } catch (err) {
+      console.error('Error in tryRegister:', err);
+      throw err;
+    }
+
+    // 2) 用户行就绪后，再创建/复用 session（联合绑定 IP + salt 防盗用）
     const requestIp = getIpByReq(req);
     const existingSessionToken = req.cookies?.[SESSION_COOKIE_NAME];
     if (existingSessionToken) {
@@ -173,56 +226,8 @@ async function tryRegister(req, res) {
 
     // 顺手清理过期 session（低概率触发，不阻塞响应）
     try { cleanupExpiredSessions(); } catch (e) { /* ignore */ }
-  
-    const userInfo = await getRequestInfo(req);
-    const normalizedIv = normalizeIvValue(req.body?.iv ?? req.query?.iv);
-    try {
-      // 查询用户是否存在
-      const stmt = db.prepare(`SELECT * FROM userInfo WHERE userId = ?`);
-      const user = stmt.get(fp);
 
-      // 如果用户不存在，则插入新用户
-      if (!user) {
-        const insertStmt = db.prepare(
-          `INSERT INTO userInfo (userId, ip, create_time, update_time, userAgent, region, device, os, browser, iv, home_click_history) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-        );
-        insertStmt.run(
-          fp,
-          userInfo.userIp,
-          userInfo.requestTime,
-          userInfo.requestTime,
-          userInfo.userAgent,
-          userInfo.region,
-          userInfo.device,
-          userInfo.os,
-          userInfo.browser,
-          normalizedIv,
-          "[]"
-        );
-      } else {
-        // 如果用户存在，则更新用户信息
-        // 修改除create_time外的其他所有字段
-        const updateStmt = db.prepare(
-          `UPDATE userInfo SET ip = ?, update_time = ?, userAgent = ?, region = ?, device = ?, os = ?, browser = ?, iv = ?, home_click_history = ? WHERE userId = ?`
-        );
-        updateStmt.run(
-          userInfo.userIp,
-          userInfo.requestTime,
-          userInfo.userAgent,
-          userInfo.region,
-          userInfo.device,
-          userInfo.os,
-          userInfo.browser,
-          normalizedIv !== null ? normalizedIv : user.iv,
-          user.home_click_history || "[]",
-          fp
-        );
-      }
-      return fp;
-    } catch (err) {
-      console.error('Error in tryRegister:', err);
-      throw err;
-    }
+    return fp;
   }
 
 export {
