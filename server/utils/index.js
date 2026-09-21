@@ -65,10 +65,15 @@ const getSaltByReq = (req, decrypted = true) => {
     return null;
   }
   
-  if (decrypted) {
-    return aesDecrypt(salt);
-  } else {
+  if (!decrypted) {
     return salt;
+  }
+  // salt 由客户端提供，可能是被篡改/过期的值，解密失败时按“无 salt”处理，
+  // 让上层走 401 分支，而不是把异常抛成 500
+  try {
+    return aesDecrypt(salt);
+  } catch (e) {
+    return null;
   }
 }
 

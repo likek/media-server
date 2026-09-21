@@ -26,13 +26,17 @@ fn get_iv(key: &str) -> Vec<u8> {
     result[..16].to_vec()
 }
 
+// 注意：这里按「字节」补齐/截断，不能按 char 截断。
+// key_salt 由外部传入（HTTP 头 / query / cookie），可能包含多字节字符；
+// 直接对 String 做 truncate(32) 一旦落在 UTF-8 字符中间就会 panic。
 fn combine_key(key_salt: &str, base_key: Option<&str>) -> String {
     let mut key = format!("{}{}", key_salt, base_key.unwrap_or(DEFAULT_BASE_KEY));
-    while key.len() < 32 {
-        key.push('0');
+    let mut bytes = std::mem::take(&mut key).into_bytes();
+    while bytes.len() < 32 {
+        bytes.push(b'0');
     }
-    key.truncate(32);
-    key
+    bytes.truncate(32);
+    String::from_utf8_lossy(&bytes).into_owned()
 }
 
 #[wasm_bindgen]
@@ -41,28 +45,46 @@ pub fn encrypt(data: &str, key_salt: &str, base_key: Option<String>) -> String {
     let cipher_key = get_key(&key);
     let iv = get_iv(&key);
 
-    let cipher = Encryptor::<Aes256>::new_from_slices(&cipher_key, &iv).unwrap();
+    let cipher = match Encryptor::<Aes256>::new_from_slices(&cipher_key, &iv) {
+        Ok(c) => c,
+        Err(_) => return String::new(),
+    };
 
     let mut buffer = data.as_bytes().to_vec();
     buffer.resize(buffer.len() + 16, 0); // extra space for padding
 
-    let ciphertext = cipher.encrypt_padded_mut::<Pkcs7>(&mut buffer, data.len()).unwrap();
-    general_purpose::STANDARD.encode(ciphertext)
+    match cipher.encrypt_padded_mut::<Pkcs7>(&mut buffer, data.len()) {
+        Ok(ciphertext) => general_purpose::STANDARD.encode(ciphertext),
+        Err(_) => String::new(),
+    }
 }
 
+/// 解密失败时返回空串，绝不 panic。
+///
+/// 原因：wasm32-unknown-unknown 没有栈展开，Rust panic 会直接触发 trap，
+/// `__stack_pointer` 无法回滚，每次 panic 都会永久泄漏一块影子栈。
+/// 泄漏累积到栈指针下溢后，模块内所有函数入口都会 trap
+/// ("memory access out of bounds")，整个 wasm 实例彻底失效。
 #[wasm_bindgen]
 pub fn decrypt(data: &str, key_salt: &str, base_key: Option<String>) -> String {
     let key = combine_key(key_salt, base_key.as_deref());
     let cipher_key = get_key(&key);
     let iv = get_iv(&key);
 
-    match general_purpose::STANDARD.decode(data) {
-        Ok(mut decoded) => {
-            let cipher = Decryptor::<Aes256>::new_from_slices(&cipher_key, &iv).unwrap();
-            let decrypted = cipher.decrypt_padded_mut::<Pkcs7>(&mut decoded).unwrap();
-            String::from_utf8(decrypted.to_vec()).unwrap()
-        }
-        Err(_) => "Invalid base64".to_string(),
+    let mut decoded = match general_purpose::STANDARD.decode(data) {
+        Ok(decoded) => decoded,
+        Err(_) => return "Invalid base64".to_string(),
+    };
+
+    // Pkcs7 解填充要求密文非空且长度为块大小的整数倍，否则返回 Err
+    let cipher = match Decryptor::<Aes256>::new_from_slices(&cipher_key, &iv) {
+        Ok(c) => c,
+        Err(_) => return String::new(),
+    };
+
+    match cipher.decrypt_padded_mut::<Pkcs7>(&mut decoded) {
+        Ok(decrypted) => String::from_utf8_lossy(decrypted).into_owned(),
+        Err(_) => String::new(),
     }
 }
 
@@ -107,6 +129,32 @@ mod tests {
     fn test_default_key() {
         let plain = "test-default-key";
         let salt = "123abc";
+        let enc = encrypt(plain, salt, None);
+        let dec = decrypt(&enc, salt, None);
+        assert_eq!(plain, dec);
+    }
+
+    // 非法输入必须优雅返回，不能 panic —— panic 会污染 wasm 影子栈
+    #[test]
+    fn test_decrypt_never_panics() {
+        let salt = "362544s2pfk05";
+        for bad in [
+            "",
+            "!!!",
+            "YQ==",                          // 1 字节，非 16 倍数
+            "AAAAAAAAAAAAAAAAAAAAAA==",      // 16 倍数但填充非法
+            "中文不是base64",
+        ] {
+            // 只要不 panic 即可；返回值不做断言
+            let _ = decrypt(bad, salt, None);
+        }
+    }
+
+    // 多字节 key_salt 不能让 combine_key panic
+    #[test]
+    fn test_multibyte_salt() {
+        let plain = "hello";
+        let salt = "中文盐值";
         let enc = encrypt(plain, salt, None);
         let dec = decrypt(&enc, salt, None);
         assert_eq!(plain, dec);

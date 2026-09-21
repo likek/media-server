@@ -54,8 +54,14 @@ function validateFingerprint(req, res, next) {
     return res.status(401).json({ message: "缺少指纹信息" });
   }
 
-  fingerprint = aesDecrypt(fingerprint, salt);
-  
+  try {
+    fingerprint = aesDecrypt(fingerprint, salt);
+  } catch (e) {
+    // 解密失败（salt 与指纹不匹配等）不是服务端错误，按身份校验失败处理
+    console.log("验证指纹失败，指纹解密失败");
+    return res.status(401).json({ message: "指纹格式不合法" });
+  }
+
   // 检查指纹格式是否合法（以特定前缀开头）
   if (!fingerprint.startsWith(FINGERPRINT_PREFIX)) {
     console.log("验证指纹失败，指纹格式不合法");
