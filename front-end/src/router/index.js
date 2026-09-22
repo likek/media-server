@@ -1,5 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import { getBackdoorMenuStatus } from '../services/backdoorApi'
+import { refreshBackdoorMenuAccess } from '../composables/useBackdoorMenuAccess'
 
 const routes = [
   {
@@ -57,8 +57,9 @@ router.beforeEach(async (to) => {
   }
 
   try {
-    const response = await getBackdoorMenuStatus()
-    if (response?.canRenderHiddenMenus) {
+    // 返回值已经叠加了本地管理员权限开关：服务端认可 + 开关打开才放行
+    const granted = await refreshBackdoorMenuAccess()
+    if (granted) {
       return true
     }
   } catch (error) {

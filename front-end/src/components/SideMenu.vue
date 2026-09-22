@@ -48,11 +48,14 @@
 <script setup>
 import { ref, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
+import { ElMessage } from 'element-plus'
 import { useBackdoorMenuAccess } from '../composables/useBackdoorMenuAccess'
+import { useAdminPrivilegeSwitch } from '../composables/useAdminPrivilegeSwitch'
 
 const router = useRouter()
 const route = useRoute()
 const { trackHomeTap } = useBackdoorMenuAccess()
+const { adminPrivilegeSwitchEnabled, trackAdminPrivilegeTap } = useAdminPrivilegeSwitch()
 
 const props = defineProps({
     isCollapsed: {
@@ -76,6 +79,22 @@ watch(() => route.name, (newRouteName) => {
 const navigateTo = (menuType) => {
     if (menuType === 'home') {
         trackHomeTap()
+    }
+    // 快速连点“我的收藏”3 下：切换本地管理员权限总开关
+    if (menuType === 'my-favorites') {
+        const toggled = trackAdminPrivilegeTap()
+        if (toggled) {
+            ElMessage({
+                message: adminPrivilegeSwitchEnabled.value ? '管理员权限已开启' : '管理员权限已关闭',
+                type: 'success',
+                duration: 1500
+            })
+            // 关闭开关时若正停留在管理员页面，立即退回普通页面
+            if (!adminPrivilegeSwitchEnabled.value && ['admin', 'log-manager'].includes(route.name)) {
+                router.push({ name: 'home' })
+                return
+            }
+        }
     }
     router.push({ name: menuType })
 }
