@@ -9,6 +9,7 @@ SERVER_BUNDLE_DIR="$ROOT_DIR/dist/server"
 BUILD_FIRST=1
 BUILD_CLEAN=0
 CREATE_ARCHIVE=0
+RUNTIME_BACKUP_DIR=""
 
 usage() {
   cat <<'EOF'
@@ -56,6 +57,31 @@ copy_tree() {
   mkdir -p "$(dirname "$target_path")"
   cp -R "$source_path" "$target_path"
 }
+
+backup_runtime() {
+  local runtime_dir="$RELEASE_ROOT/runtime"
+  if [[ -d "$runtime_dir" ]]; then
+    log "备份 runtime 目录 → $RUNTIME_BACKUP_DIR"
+    rm -rf "$RUNTIME_BACKUP_DIR"
+    cp -R "$runtime_dir" "$RUNTIME_BACKUP_DIR"
+  fi
+}
+
+restore_runtime() {
+  if [[ -z "${RUNTIME_BACKUP_DIR:-}" ]]; then
+    return
+  fi
+  if [[ -d "$RUNTIME_BACKUP_DIR" ]]; then
+    log "恢复 runtime 目录 ← $RUNTIME_BACKUP_DIR"
+    local runtime_dir="$RELEASE_ROOT/runtime"
+    rm -rf "$runtime_dir"
+    cp -R "$RUNTIME_BACKUP_DIR" "$runtime_dir"
+    rm -rf "$RUNTIME_BACKUP_DIR"
+  fi
+  RUNTIME_BACKUP_DIR=""
+}
+
+trap 'restore_runtime' EXIT
 
 write_start_scripts() {
   mkdir -p "$RELEASE_ROOT/bin"
@@ -343,6 +369,9 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+RUNTIME_BACKUP_DIR="$ROOT_DIR/.runtime-backup.tmp"
+backup_runtime
+
 if [[ "$BUILD_FIRST" -eq 1 ]]; then
   run_build
 fi
@@ -350,6 +379,7 @@ fi
 run_server_bundle
 verify_runtime_inputs
 prepare_release_tree
+restore_runtime
 
 if [[ "$CREATE_ARCHIVE" -eq 1 ]]; then
   create_archive
